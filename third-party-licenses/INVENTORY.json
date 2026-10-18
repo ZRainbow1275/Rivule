@@ -1,0 +1,103 @@
+[
+  {
+    "package": "@cloudflare/workers-oauth-provider",
+    "installed_version": "1.2.3",
+    "declared_license": "MIT",
+    "notices": [
+      "third-party-licenses/@cloudflare__workers-oauth-provider/LICENSE.txt"
+    ],
+    "evidence": "package marker in preserved production bundle; notice from locally installed locked dependency"
+  },
+  {
+    "package": "@modelcontextprotocol/sdk",
+    "installed_version": "1.32.1",
+    "declared_license": "MIT",
+    "notices": [
+      "third-party-licenses/@modelcontextprotocol__sdk/LICENSE"
+    ],
+    "evidence": "package marker in preserved production bundle; notice from locally installed locked dependency"
+  },
+  {
+    "package": "@resvg/resvg-wasm",
+    "installed_version": "2.6.2",
+    "declared_license": "MPL-2.0",
+    "notices": [
+      "third-party-licenses/@resvg__resvg-wasm/LICENSE"
+    ],
+    "evidence": "package marker in preserved production bundle; notice from locally installed locked dependency",
+    "source_url": "https://github.com/thx/resvg-js/tree/v2.6.2",
+    "wasm_exact_published_package_match": true
+  },
+  {
+    "package": "ajv",
+    "installed_version": "8.20.0",
+    "declared_license": "MIT",
+    "notices": [
+      "third-party-licenses/ajv/LICENSE"
+    ],
+    "evidence": "package marker in preserved production bundle; notice from locally installed locked dependency"
+  },
+  {
+    "package": "ajv-formats",
+    "installed_version": "3.0.1",
+    "declared_license": "MIT",
+    "notices": [
+      "third-party-licenses/ajv-formats/LICENSE"
+    ],
+    "evidence": "package marker in preserved production bundle; notice from locally installed locked dependency"
+  },
+  {
+    "package": "content-type",
+    "installed_version": "1.0.5",
+    "declared_license": "MIT",
+    "notices": [
+      "third-party-licenses/content-type/LICENSE"
+    ],
+    "evidence": "package marker in preserved production bundle; notice from locally installed locked dependency"
+  },
+  {
+    "package": "fast-deep-equal",
+    "installed_version": "3.1.3",
+    "declared_license": "MIT",
+    "notices": [
+      "third-party-licenses/fast-deep-equal/LICENSE"
+    ],
+    "evidence": "package marker in preserved production bundle; notice from locally installed locked dependency"
+  },
+  {
+    "package": "fast-uri",
+    "installed_version": "3.1.8",
+    "declared_license": "BSD-3-Clause",
+    "notices": [
+      "third-party-licenses/fast-uri/LICENSE"
+    ],
+    "evidence": "package marker in preserved production bundle; notice from locally installed locked dependency"
+  },
+  {
+    "package": "json-schema-traverse",
+    "installed_version": "1.0.0",
+    "declared_license": "MIT",
+    "notices": [
+      "third-party-licenses/json-schema-traverse/LICENSE"
+    ],
+    "evidence": "package marker in preserved production bundle; notice from locally installed locked dependency"
+  },
+  {
+    "package": "zod",
+    "installed_version": "4.6.5",
+    "declared_license": "MIT",
+    "notices": [
+      "third-party-licenses/zod/LICENSE"
+    ],
+    "evidence": "package marker in preserved production bundle; notice from locally installed locked dependency"
+  },
+  {
+    "package": "zod-to-json-schema",
+    "installed_version": "3.25.2",
+    "declared_license": "ISC",
+    "notices": [
+      "third-party-licenses/zod-to-json-schema/LICENSE"
+    ],
+    "evidence": "package marker in preserved production bundle; notice from locally installed locked dependency"
+  }
+]

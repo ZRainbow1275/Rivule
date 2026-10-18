@@ -1,0 +1,17 @@
+[
+  {
+    "name": "classify_five_known_transport_rejections",
+    "before": "reason: r.status === 429 || code === 40034100 ? \"rate_limited\" : \"provider_rejected\",",
+    "after": "reason: qqRejectionReason(r.status, code),"
+  },
+  {
+    "name": "preserve_exact_allowlisted_bridge_pairs",
+    "before": "else if ([\"not_sent\", \"blocked\"].includes(result?.state)) receipt = { state: result.state, reason: \"provider_rejected\" };",
+    "after": "else if ([\"not_sent\", \"blocked\"].includes(result?.state)) receipt = qqBridgeRejectedReceipt(result);"
+  },
+  {
+    "name": "add_private_diagnostic_helpers",
+    "before": "async function qqGateKey(appId, userOpenId) {",
+    "after": "// Exact, fixed-vocabulary rejection diagnostics only. No capability or retry changes.\nfunction qqRejectionReason(status, code) {\n  if (status === 429 || code === 40034100) return \"rate_limited\";\n  if (!Number.isSafeInteger(code)) return \"provider_rejected\";\n  return { 40034105: \"proactive_permission_denied\", 40054004: \"friendship_missing\", 40054013: \"recipient_refused\", 40054016: \"bot_offline\" }[code] ?? \"provider_rejected\";\n}\nfunction qqBridgeRejectedReceipt(result) {\n  const reason = Number.isSafeInteger(result?.providerCode) ? qqRejectionReason(0, result.providerCode) : \"provider_rejected\";\n  if (result.state === \"not_sent\" && reason !== \"provider_rejected\" && result.reason === reason) {\n    return { state: \"not_sent\", reason, providerCode: result.providerCode };\n  }\n  return { state: result.state, reason: \"provider_rejected\" };\n}\nasync function qqGateKey(appId, userOpenId) {"
+  }
+]

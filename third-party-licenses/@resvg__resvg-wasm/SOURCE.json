@@ -1,0 +1,5 @@
+{
+  "url": "https://raw.githubusercontent.com/thx/resvg-js/v2.6.2/LICENSE",
+  "sha256": "4b89d4518bd135ab4ee154a7bce722246b57a98c3d7efc1a09409898160c2bd1",
+  "note": "Upstream package license, not a complete Rust/WASM transitive license inventory"
+}

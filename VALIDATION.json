@@ -1,0 +1,47 @@
+{
+  "status": "local public-neutral source candidate; not uploaded or deployed by this packaging task",
+  "node": "24.19.0",
+  "dependency_validation": "Independent clean tar extraction: npm ci --ignore-scripts --no-audit --no-fund with a new cache installed 139 lockfile dependencies; rebuild and all pinned-file checks passed on 2026-10-18.",
+  "public_owner_sha256": "e948d83cb0131173a986c61c86629445df212566c7ea11509d914ecf8f7f9bcd",
+  "gateway_sha256": "323adc966dd5fa639d8adeedb55ed437ed9ce646bcadca1f8fa7aa5fd58780d5",
+  "owner_exact_private_production_bytes": false,
+  "owner_exact_private_production_after_masking_only_two_asset_declarations": true,
+  "normalized_owner_sha256": "26bb6eb5f4f917e508e65056c75f5239da8dd5bb5598effa0acc2aef40483f98",
+  "middle_snapshot_node_tests": {
+    "pass": 39,
+    "fail": 0
+  },
+  "final_owner_snapshot_and_readability_tests": {
+    "pass": 59,
+    "fail": 0,
+    "snapshot": 39,
+    "readability": 20
+  },
+  "qq_error_node_tests": {
+    "pass": 20,
+    "fail": 0
+  },
+  "qq_active_probe_tests": {
+    "pass": 129,
+    "fail": 0
+  },
+  "repeated_rebuild_same_output_hashes": true,
+  "actual_workerd_persisted_seed_and_restart": true,
+  "provider_requests": 0,
+  "removed_artwork_full_and_signature_scan_matches": 0,
+  "distributable_wasm_binaries": 0,
+  "visual_preview": "docs/screenshots/neutral-multi-source-demo.png",
+  "public_release_blockers": [
+    "Fresh-account Cloudflare/Discord end-to-end acceptance has not been performed",
+    "Repository creation and publication have not yet been performed",
+    "Retain disclosed third-party corresponding-source and dependency-review limits"
+  ],
+  "excluded": [
+    "private deployment configurations and version IDs",
+    "credentials and production identities",
+    "user task records",
+    "official Muse PNG and Spark logo geometry",
+    "node_modules and WASM binaries"
+  ],
+  "live_active_probe_acceptance": "Deployment owner explicitly confirmed receiving the one-shot active QQ test on 2026-10-18; this does not activate continuous delivery."
+}

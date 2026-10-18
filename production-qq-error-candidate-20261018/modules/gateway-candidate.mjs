@@ -1,0 +1,1504 @@
+// qq-cloudflare/diagnostics.mjs
+var CODES = {
+  token: ["request_started", "credential_unavailable", "http_rejected", "invalid_response", "json_invalid", "response_shape_invalid", "token_missing", "ttl_type_invalid", "ttl_range_invalid", "business_rejected", "network_failed", "accepted"],
+  gateway: ["request_started", "http_rejected", "invalid_response", "network_failed", "accepted"],
+  socket: ["upgrade_started", "upgrade_http_rejected", "upgrade_invalid_response", "upgrade_failed", "opened", "closed", "transport_error", "protocol_error", "frame_backpressure", "heartbeat_timeout"],
+  auth: ["identify_sent", "resume_sent", "invalid_session", "hello_timeout", "ready_timeout", "ready", "resumed"],
+  alarm: ["started", "completed", "failed"]
+};
+var FAILURE = /* @__PURE__ */ new Set(["credential_unavailable", "http_rejected", "invalid_response", "json_invalid", "response_shape_invalid", "token_missing", "ttl_type_invalid", "ttl_range_invalid", "business_rejected", "network_failed", "upgrade_http_rejected", "upgrade_invalid_response", "upgrade_failed", "closed", "transport_error", "protocol_error", "frame_backpressure", "heartbeat_timeout", "invalid_session", "hello_timeout", "ready_timeout", "failed"]);
+function diagnosticRecord(stage, code, at, httpStatus, businessCode) {
+  if (typeof stage !== "string" || typeof code !== "string" || !Object.hasOwn(CODES, stage) || !CODES[stage].includes(code) || !Number.isSafeInteger(at) || at < 0 || at > 864e13) return null;
+  const record = { stage, code, at };
+  if (Number.isInteger(httpStatus) && httpStatus >= 100 && httpStatus <= 599) record.httpStatus = httpStatus;
+  if (stage === "token" && code === "business_rejected" && Number.isSafeInteger(businessCode) && businessCode !== 0 && Math.abs(businessCode) <= 99999999) record.businessCode = businessCode;
+  return record;
+}
+function diagnosticSnapshot(value) {
+  const result = { schemaVersion: 1, last: {} };
+  for (const stage of Object.keys(CODES)) {
+    const r = value?.last?.[stage], clean = r && diagnosticRecord(stage, r.code, r.at, r.httpStatus, r.businessCode);
+    if (clean) result.last[stage] = clean;
+  }
+  for (const key2 of ["firstFailure", "lastFailure"]) {
+    const r = value?.[key2], clean = r && diagnosticRecord(r.stage, r.code, r.at, r.httpStatus, r.businessCode);
+    if (clean && FAILURE.has(clean.code)) result[key2] = clean;
+  }
+  return result;
+}
+function appendDiagnostic(value, record) {
+  const clean = record && diagnosticRecord(record.stage, record.code, record.at, record.httpStatus, record.businessCode);
+  const result = diagnosticSnapshot(value);
+  if (!clean) return result;
+  result.last[clean.stage] = clean;
+  if (FAILURE.has(clean.code)) {
+    result.firstFailure ??= clean;
+    result.lastFailure = clean;
+  }
+  return result;
+}
+function diagnosticTime(value) {
+  return Number.isSafeInteger(value) && value >= 0 && value <= 864e13 ? value : null;
+}
+function connectionDiagnosticLines(status) {
+  const startedAt = diagnosticTime(status?.connectionStartedAt), snapshot = diagnosticSnapshot(status?.connectionDiagnostics);
+  const scope = (at) => startedAt === null ? "\u5F52\u5C5E\u672A\u786E\u8BA4" : at >= startedAt ? "\u672C\u8F6E" : "\u5386\u53F2";
+  const when = (at) => new Date(at).toISOString();
+  const lines = [startedAt === null ? "\u672C\u8F6E\u542F\u52A8\u65F6\u95F4\uFF1A\u672A\u8BB0\u5F55\uFF08\u65E7\u72B6\u6001\uFF09" : `\u672C\u8F6E\u542F\u52A8\u65F6\u95F4\uFF1A${when(startedAt)}`];
+  for (const stage of Object.keys(CODES)) {
+    const record = snapshot.last[stage];
+    lines.push(record ? `${stage}\uFF1A${record.code}\uFF0C${when(record.at)}\uFF08${scope(record.at)}\uFF09` : `${stage}\uFF1A\u5C1A\u65E0\u8BB0\u5F55`);
+  }
+  const failure = snapshot.lastFailure;
+  if (failure) lines.push(`${scope(failure.at)}\u6700\u8FD1\u5931\u8D25\uFF1A${failure.stage}/${failure.code}${failure.httpStatus === void 0 ? "" : `\uFF08HTTP ${failure.httpStatus}\uFF09`}\uFF0C${when(failure.at)}${failure.businessCode === void 0 ? "" : `\uFF1B\u4E1A\u52A1\u7801 ${failure.businessCode}`}\u3002\u5931\u8D25\u8BB0\u5F55\u4E0D\u4EE3\u8868\u5F53\u524D\u9636\u6BB5\u3002`);
+  return lines;
+}
+
+// src/qq-transport.ts
+var QQ_API_ORIGIN = "https://api.bot.qq.com";
+var QQDurableLedger = class {
+  storage;
+  constructor(storage) {
+    this.storage = storage;
+  }
+  reserve(key2, fingerprint, replySlot, gateKey) {
+    return this.storage.transaction(async (tx) => {
+      if (gateKey && await tx.get(gateKey)) return { state: "blocked", reason: "permission_revoked" };
+      const old = await tx.get(key2);
+      if (old) return old.fingerprint === fingerprint ? old.receipt : { state: "blocked", reason: "idempotency_conflict" };
+      if (replySlot && await tx.get(replySlot)) return { state: "blocked", reason: "reply_sequence_used" };
+      await tx.put(key2, { fingerprint, receipt: { state: "uncertain", reason: "reserved_before_send" } });
+      if (replySlot) await tx.put(replySlot, true);
+      return "new";
+    });
+  }
+  async isRevoked(gateKey) {
+    return this.storage.transaction(async (tx) => Boolean(await tx.get(gateKey)));
+  }
+  async finish(key2, fingerprint, receipt) {
+    await this.storage.transaction(async (tx) => {
+      const old = await tx.get(key2);
+      if (!old || old.fingerprint !== fingerprint) throw Error("qq_ledger_conflict");
+      await tx.put(key2, { fingerprint, receipt });
+    });
+  }
+};
+var text = (v, max = 256) => typeof v === "string" && v.length > 0 && v.length <= max && !/[\r\n\0]/.test(v);
+var blocked = (reason) => ({ state: "blocked", reason });
+async function qqReadBytes(body, limit) {
+  if (!body) throw Error("empty_body");
+  const reader = body.getReader(), parts = [];
+  let size = 0;
+  try {
+    while (true) {
+      const r = await reader.read();
+      if (r.done) break;
+      size += r.value.length;
+      if (size > limit) throw Error("body_too_large");
+      parts.push(r.value);
+    }
+  } catch (e) {
+    await reader.cancel().catch(() => {
+    });
+    throw e;
+  } finally {
+    reader.releaseLock();
+  }
+  const out = new Uint8Array(size);
+  let p = 0;
+  for (const part of parts) {
+    out.set(part, p);
+    p += part.length;
+  }
+  return out;
+}
+async function json(r) {
+  return JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(await qqReadBytes(r.body, 262144)));
+}
+async function qqHash(s) {
+  return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+var QQC2CTransport = class {
+  config;
+  token;
+  refreshing;
+  ledger;
+  transport;
+  now;
+  constructor(config, ledger, transport = fetch, now = Date.now) {
+    this.ledger = ledger;
+    this.transport = (input, init) => transport(input, init);
+    this.now = now;
+    this.config = { ...config, allowedSources: [...config.allowedSources], allowedProjects: [...config.allowedProjects], allowedImageOrigins: [...config.allowedImageOrigins] };
+    if (!/^\d{1,32}$/.test(config.appId) || !/^[A-Za-z0-9_-]{1,256}$/.test(config.userOpenId) || !text(config.ownerId)) throw Error("qq_invalid_config");
+  }
+  async accessToken() {
+    if (this.token && this.token.expiresAt - this.now() > 6e4) return this.token.value;
+    if (this.refreshing) return this.refreshing;
+    this.refreshing = (async () => {
+      const secret = this.config.appSecret();
+      if (!text(secret, 1024)) throw Error("qq_credentials_missing");
+      const r = await this.transport(QQ_API_ORIGIN + "/app/getAppAccessToken", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ appId: this.config.appId, clientSecret: secret }), redirect: "manual", signal: AbortSignal.timeout(1e4) });
+      if (!r.ok) throw Error("qq_token_failed");
+      const d = await json(r), seconds = Number(d?.expires_in);
+      if (d?.code !== void 0 && d.code !== 0 || !text(d?.access_token, 8192) || !Number.isFinite(seconds) || seconds <= 0 || seconds > 7200) throw Error("qq_token_failed");
+      this.token = { value: d.access_token, expiresAt: this.now() + seconds * 1e3 };
+      return d.access_token;
+    })();
+    try {
+      return await this.refreshing;
+    } finally {
+      this.refreshing = void 0;
+    }
+  }
+  async post(path, payload) {
+    const send = async (token2) => this.transport(QQ_API_ORIGIN + path, { method: "POST", headers: { Authorization: "QQBot " + token2, "content-type": "application/json", "X-Union-Appid": this.config.appId }, body: JSON.stringify(payload), redirect: "manual", signal: AbortSignal.timeout(15e3) });
+    const token = await this.accessToken();
+    let r = await send(token);
+    if (r.status === 401) {
+      await r.body?.cancel();
+      if (this.token?.value === token) this.token = void 0;
+      r = await send(await this.accessToken());
+    }
+    return r;
+  }
+  async send(intent) {
+    try {
+      intent = structuredClone(intent);
+    } catch {
+      return blocked("invalid_intent");
+    }
+    const c = this.config, now = this.now();
+    if (c.enabled !== true) return blocked("disabled");
+    if (!intent || intent.ownerId !== c.ownerId || !c.allowedSources.includes(intent.sourceId) || !c.allowedProjects.includes(intent.projectId)) return blocked("binding_not_authorized");
+    if (!text(intent.eventId) || !text(intent.sourceId) || !text(intent.projectId) || typeof intent.content !== "string" || intent.content.length > 4e3 || !intent.content.trim() && !intent.image) return blocked("invalid_intent");
+    let e;
+    try {
+      e = c.evidence();
+    } catch {
+      return blocked("evidence_unavailable");
+    }
+    if (!e || !Number.isFinite(e.checkedAt) || !Number.isFinite(e.validUntil) || e.checkedAt > now || e.validUntil <= now || e.checkedAt >= e.validUntil) return blocked("evidence_expired");
+    if (e.identity !== true) return blocked("identity_unverified");
+    if (intent.reply) {
+      const r = intent.reply;
+      if (e.reply !== true || !text(r.messageId) || !Number.isFinite(r.validUntil) || r.validUntil <= now || !Number.isSafeInteger(r.sequence) || r.sequence < 1 || r.sequence > 4) return blocked("reply_unverified");
+    } else if (e.proactive !== true) return blocked("proactive_unverified");
+    let imageUrl;
+    if (intent.image) {
+      if (e.image !== true) return blocked("image_unverified");
+      try {
+        const u = new URL(intent.image.url);
+        if (u.protocol !== "https:" || u.username || u.password || u.hash || !c.allowedImageOrigins.includes(u.origin)) return blocked("image_origin_not_authorized");
+        imageUrl = u.href;
+      } catch {
+        return blocked("invalid_image");
+      }
+    }
+    const gateKey = await qqGateKey(c.appId, c.userOpenId);
+    const key2 = "qq:out:" + await qqHash(JSON.stringify([c.ownerId, c.appId, c.userOpenId, intent.sourceId, intent.projectId, intent.eventId]));
+    const fingerprint = await qqHash(JSON.stringify([intent.content, imageUrl ?? null, intent.reply ?? null]));
+    const replySlot = intent.reply ? "qq:reply:" + await qqHash(JSON.stringify([c.appId, c.userOpenId, intent.reply.messageId, intent.reply.sequence])) : void 0;
+    let reserved;
+    try {
+      reserved = await this.ledger.reserve(key2, fingerprint, replySlot, gateKey);
+    } catch {
+      return blocked("ledger_unavailable");
+    }
+    if (reserved !== "new") return reserved;
+    let receipt = { state: "not_sent", reason: "preflight_failed" };
+    let sending = false;
+    try {
+      await this.accessToken();
+      const payload = { msg_type: 0, content: intent.content };
+      if (intent.reply) {
+        payload.msg_id = intent.reply.messageId;
+        payload.msg_seq = intent.reply.sequence;
+      }
+      const path = "/v2/users/" + encodeURIComponent(c.userOpenId);
+      if (imageUrl) {
+        const upload = await this.post(path + "/files", { file_type: 1, url: imageUrl, srv_send_msg: false });
+        const d2 = await json(upload);
+        if (!upload.ok || d2?.code !== void 0 && d2.code !== 0 || !text(d2?.file_info, 65536) || !Number.isFinite(d2.ttl) || d2.ttl < 0) throw Error("qq_upload_failed");
+        payload.msg_type = 7;
+        payload.media = { file_info: d2.file_info };
+      }
+      const latest = c.evidence();
+      if (!latest || !Number.isFinite(latest.checkedAt) || !Number.isFinite(latest.validUntil) || latest.checkedAt > this.now() || latest.checkedAt >= latest.validUntil || latest.validUntil <= this.now() || latest.identity !== true || !intent.reply && latest.proactive !== true || intent.reply && (latest.reply !== true || intent.reply.validUntil <= this.now()) || imageUrl && latest.image !== true) throw Error("qq_evidence_changed");
+      if (await this.ledger.isRevoked(gateKey)) throw Error("qq_permission_revoked");
+      sending = true;
+      const r = await this.post(path + "/messages", payload);
+      let d;
+      try {
+        d = await json(r);
+      } catch {
+        d = null;
+      }
+      const code = Number.isSafeInteger(d?.code) ? d.code : void 0;
+      if (r.ok && (d?.code === void 0 || d.code === 0) && text(d?.id, 1024)) receipt = { state: "sent", reason: "provider_accepted", messageId: d.id };
+      else if (r.status === 401 || r.status === 403 || r.status === 429 || knownRejections.has(code ?? -1)) receipt = { state: "not_sent", reason: qqRejectionReason(r.status, code), ...code !== void 0 ? { providerCode: code } : {}, ...r.status === 429 && /^\d+$/.test(r.headers.get("retry-after") ?? "") ? { retryAfterSeconds: Number(r.headers.get("retry-after")) } : {} };
+      else receipt = { state: "uncertain", reason: "provider_outcome_unknown", ...code !== void 0 ? { providerCode: code } : {} };
+    } catch {
+      receipt = { state: sending ? "uncertain" : "not_sent", reason: sending ? "network_outcome_unknown" : "preflight_failed" };
+    }
+    try {
+      await this.ledger.finish(key2, fingerprint, receipt);
+    } catch {
+      return { state: "uncertain", reason: "receipt_persistence_failed" };
+    }
+    return receipt;
+  }
+};
+var knownRejections = /* @__PURE__ */ new Set([22006, 50059, 304004, 304061, 304062, 304064, 304080, 304103, 40034005, 40034006, 40034008, 40034009, 40034010, 40034011, 40034024, 40034025, 40034026, 40034027, 40034029, 40034100, 40034105, 40034106, 40034108, 40034109, 40034122, 40034123, 40034124, 40034127, 40034128, 40054004, 40054007, 40054013, 40054016, 40054018]);
+// Exact, fixed-vocabulary rejection diagnostics only. No capability or retry changes.
+function qqRejectionReason(status, code) {
+  if (status === 429 || code === 40034100) return "rate_limited";
+  if (!Number.isSafeInteger(code)) return "provider_rejected";
+  return { 40034105: "proactive_permission_denied", 40054004: "friendship_missing", 40054013: "recipient_refused", 40054016: "bot_offline" }[code] ?? "provider_rejected";
+}
+function qqBridgeRejectedReceipt(result) {
+  const reason = Number.isSafeInteger(result?.providerCode) ? qqRejectionReason(0, result.providerCode) : "provider_rejected";
+  if (result.state === "not_sent" && reason !== "provider_rejected" && result.reason === reason) {
+    return { state: "not_sent", reason, providerCode: result.providerCode };
+  }
+  return { state: result.state, reason: "provider_rejected" };
+}
+async function qqGateKey(appId, userOpenId) {
+  return "qq:gate:" + await qqHash(JSON.stringify([appId, userOpenId]));
+}
+
+// qq-cloudflare/proof.mjs
+var PROOF_TEXT = "Rivule QQ \u8FDE\u63A5\u6D4B\u8BD5\uFF0C\u4E0D\u4EE3\u8868\u771F\u5B9E\u9879\u76EE\u8FDB\u5EA6";
+var FRESH = 3e5;
+function proofReply(state, now) {
+  const candidates = [state.binding?.replyMessage, ...state.inbox ?? []].filter((x) => x && typeof x.messageId === "string" && x.messageId.length > 0 && x.messageId.length <= 1024 && Number.isFinite(x.eventAt) && x.eventAt <= now && now - x.eventAt < FRESH);
+  return candidates.sort((a, b) => b.eventAt - a.eventAt)[0] ?? null;
+}
+function eligible(actor, state) {
+  const c = actor.config();
+  return actor.env.QQ_PROOF_ENABLED === "true" && state.control?.running === true && actor.runtime?.client.ready === true && !actor.store.qqIngestionFault && state.qqIngestionHealth?.healthy === true && state.qqRevoked !== true && state.binding?.appId === c.appId && state.binding?.ownerId === c.ownerId && typeof state.binding?.userOpenId === "string" && !!state.binding.userOpenId;
+}
+async function fixedReplyProof(actor) {
+  const reserved = await actor.command(async () => {
+    const budget = await actor.accountBudget();
+    if (budget.exhausted) {
+      await actor.stopInternal("active_budget_exhausted");
+      return { receipt: { state: "blocked", reason: "budget_exhausted" } };
+    }
+    return actor.store.transaction((s) => {
+      if (s.qqProof) return { receipt: s.qqProof.receipt };
+      if (!eligible(actor, s)) return { receipt: { state: "blocked", reason: "proof_not_eligible" } };
+      const reply2 = proofReply(s, actor.now());
+      if (!reply2) return { receipt: { state: "blocked", reason: "fresh_owner_message_required" } };
+      s.qqProof = { kind: "one_shot_reply_test", reservedAt: actor.now(), messageId: reply2.messageId, eventAt: reply2.eventAt, userOpenId: s.binding.userOpenId, receipt: { state: "uncertain", reason: "reserved_before_send" } };
+      return { proof: structuredClone(s.qqProof) };
+    });
+  });
+  if (reserved.receipt) return reserved.receipt;
+  let result = { state: "not_sent", reason: "preflight_failed" }, attempted = false;
+  try {
+    const token = await actor.runtime.client.tokenValue();
+    const permitted = await actor.command(async () => {
+      const budget = await actor.accountBudget();
+      if (budget.exhausted) {
+        await actor.stopInternal("active_budget_exhausted");
+        return false;
+      }
+      return actor.store.transaction((s) => eligible(actor, s) && s.binding.userOpenId === reserved.proof.userOpenId && actor.now() - reserved.proof.eventAt < FRESH && reserved.proof.eventAt <= actor.now());
+    });
+    if (!permitted) result = { state: "not_sent", reason: "permission_changed" };
+    else {
+      attempted = true;
+      const network = actor.network;
+      const response = await network("https://api.bot.qq.com/v2/users/" + encodeURIComponent(reserved.proof.userOpenId) + "/messages", { method: "POST", redirect: "manual", signal: AbortSignal.timeout(1e4), headers: { Authorization: "QQBot " + token, "content-type": "application/json" }, body: JSON.stringify({ msg_type: 0, content: PROOF_TEXT, msg_id: reserved.proof.messageId, msg_seq: 1 }) });
+      let data;
+      try {
+        data = JSON.parse(new TextDecoder().decode(await qqReadBytes(response.body, 65536)));
+      } catch {
+      }
+      if (response.ok && (data?.err_code === void 0 || data.err_code === 0) && (data?.code === void 0 || data.code === 0) && typeof data?.id === "string" && data.id.length > 0 && data.id.length <= 1024) result = { state: "sent", reason: "reply_provider_accepted", messageId: data.id };
+      else if ([401, 403, 429].includes(response.status)) result = { state: "not_sent", reason: "provider_rejected" };
+      else result = { state: "uncertain", reason: "provider_outcome_unknown" };
+    }
+  } catch {
+    result = { state: attempted ? "uncertain" : "not_sent", reason: attempted ? "network_outcome_unknown" : "preflight_failed" };
+  }
+  try {
+    await actor.store.transaction((s) => {
+      s.qqProof.receipt = result;
+    });
+  } catch {
+    return { state: "uncertain", reason: "receipt_persistence_failed" };
+  }
+  return result;
+}
+
+// qq-cloudflare/admin.mjs
+var PREFIX = "qqsetup:";
+var reply = (content, components = []) => ({ type: 4, data: { content, components, flags: 64, allowed_mentions: { parse: [] } } });
+async function ownerSetup(actor, p) {
+  const env = actor.env;
+  if (env.QQ_SETUP_ENABLED !== "true") return reply("QQ \u8BBE\u7F6E\u5C1A\u672A\u542F\u7528");
+  const user = p.user ?? p.member?.user;
+  if (p.type !== 3 || p.application_id !== env.APPLICATION_ID || user?.id !== env.OWNER_DISCORD_ID || user?.bot === true || p.context !== 1 || p.channel_id !== env.DM_CHANNEL_ID || p.guild_id || p.message?.author?.id !== env.APPLICATION_ID || p.data?.component_type !== 2) throw Error("owner_setup_identity_required");
+  const install = p.authorizing_integration_owners;
+  if (!/^\d{1,25}$/.test(p.id ?? "") || !install || !(install["0"] === "0" || install["1"] === env.OWNER_DISCORD_ID) || Object.keys(install).some((k) => !["0", "1"].includes(k))) throw Error("owner_setup_install_required");
+  const ref = p.data?.custom_id;
+  if (typeof ref !== "string" || !ref.startsWith(PREFIX)) throw Error("invalid_setup_control");
+  const action = await actor.store.transaction((s) => {
+    s.adminSeen ??= {};
+    s.adminControls ??= {};
+    const now = actor.now();
+    for (const [id2, until] of Object.entries(s.adminSeen)) if (until < now) delete s.adminSeen[id2];
+    for (const [id2, c2] of Object.entries(s.adminControls)) if (c2.expires < now) delete s.adminControls[id2];
+    if (s.adminSeen[p.id]) return null;
+    if (Object.keys(s.adminSeen).length >= 1e3) throw Error("setup_replay_capacity");
+    s.adminSeen[p.id] = now + 6e5;
+    if (ref === PREFIX + "open") return { action: "status" };
+    const c = s.adminControls[ref];
+    if (!c || c.expires <= now) throw Error("setup_control_expired");
+    s.adminControls = {};
+    return c;
+  });
+  if (!action) return reply("\u6B64\u64CD\u4F5C\u5DF2\u7ECF\u5904\u7406\uFF1B\u8BF7\u91CD\u65B0\u6253\u5F00 QQ \u8BBE\u7F6E\u67E5\u770B\u72B6\u6001");
+  let text2 = "";
+  if (action.action === "start") {
+    const r = await actor.requestStart();
+    text2 = `\u5DF2\u5B89\u6392\u8FDE\u63A5\u3002\u6BCF\u65E5\u8FD0\u884C\u9884\u7B97 ${Math.floor(r.budgetRemainingMs / 6e4)} \u5206\u949F\uFF1B\u4E0D\u4F1A\u81EA\u52A8\u5F00\u542F\u901A\u77E5\u3002`;
+  } else if (action.action === "pair") {
+    const r = await actor.beginBinding();
+    text2 = `\u8BF7\u5728 5 \u5206\u949F\u5185\u79C1\u804A QQ \u673A\u5668\u4EBA\u53D1\u9001\uFF1A/bind ${r.code}
+\u968F\u540E\u70B9\u201C\u67E5\u770B\u5019\u9009\u201D\uFF0C\u6838\u5BF9\u540E\u518D\u786E\u8BA4\u3002\u8BF7\u52FF\u8F6C\u53D1\u6B64\u53E3\u4EE4\u3002`;
+  } else if (action.action === "confirm") {
+    await actor.confirmBinding(action.confirmationId);
+    text2 = "\u5DF2\u786E\u8BA4\u7ED1\u5B9A\uFF1B\u901A\u77E5\u5F00\u5173\u4FDD\u6301\u539F\u914D\u7F6E\u3002";
+  } else if (action.action === "proof") {
+    const r = await fixedReplyProof(actor);
+    text2 = `\u4E00\u6B21\u56DE\u590D\u6D4B\u8BD5\uFF1A${r.state}\uFF08${r.reason}\uFF09\u3002\u8FD9\u4E0D\u8BC1\u660E\u4E3B\u52A8\u901A\u77E5\u6743\u9650\uFF1B\u4E0D\u4F1A\u81EA\u52A8\u91CD\u8BD5\u3002`;
+  } else if (action.action === "stop") {
+    await actor.stop();
+    text2 = "\u5DF2\u505C\u6B62 QQ \u8FDE\u63A5\u3002";
+  } else if (action.action !== "status") throw Error("unknown_setup_action");
+  const status = await actor.status();
+  text2 += (text2 ? "\n" : "") + `\u8FDE\u63A5\uFF1A${status.connected ? "\u5DF2\u8FDE\u63A5" : status.running ? "\u7B49\u5F85\u8FDE\u63A5" : "\u5DF2\u505C\u6B62"}\uFF1B\u7ED1\u5B9A\uFF1A${status.bound ? "\u5DF2\u7ED1\u5B9A" : "\u672A\u7ED1\u5B9A"}\uFF1B\u5065\u5EB7\uFF1A${status.ingestionHealthy ? "\u6B63\u5E38" : "\u6682\u505C\u53D1\u9001"}`;
+  text2 += "\n" + connectionDiagnosticLines(status).join("\n");
+  if (status.pendingPairing) text2 += `
+\u5F85\u786E\u8BA4 QQ OpenID\uFF1A${status.pendingPairing.userOpenId}`;
+  const proof = await actor.store.transaction((s) => ({ receipt: s.qqProof?.receipt, eligible: actor.env.QQ_PROOF_ENABLED === "true" && !s.qqProof && !!proofReply(s, actor.now()) }));
+  if (proof.receipt) text2 += `
+\u4E00\u6B21\u56DE\u590D\u6D4B\u8BD5\u7ED3\u679C\uFF1A${proof.receipt.state}\uFF08${proof.receipt.reason}\uFF09`;
+  else if (status.bound) text2 += "\n\u4E00\u6B21\u56DE\u590D\u6D4B\u8BD5\u9700 5 \u5206\u949F\u5185\u7684 QQ \u6D88\u606F\uFF1B\u5B83\u4E0D\u9A8C\u8BC1\u4E3B\u52A8\u901A\u77E5\u6743\u9650\u3002";
+  const specs = [["status", "\u67E5\u770B\u5019\u9009"], ["stop", "\u505C\u6B62\u8FDE\u63A5"]];
+  if (status.bound && status.connected && status.ingestionHealthy && !status.revoked && proof.eligible) specs.push(["proof", "\u53D1\u9001\u4E00\u6B21\u56FA\u5B9A\u56DE\u590D\u6D4B\u8BD5"]);
+  if (!status.running) specs.push(["start", "\u6309\u914D\u7F6E\u9884\u7B97\u542F\u52A8"]);
+  if (status.connected && !status.bound) specs.push(["pair", "\u751F\u6210\u7ED1\u5B9A\u53E3\u4EE4"]);
+  if (status.pendingPairing) specs.push(["confirm", "\u786E\u8BA4\u6B64\u5019\u9009"]);
+  const components = await actor.store.transaction((s) => {
+    s.adminControls = {};
+    return [{ type: 1, components: specs.map(([action2, label]) => {
+      const ref2 = PREFIX + crypto.randomUUID();
+      s.adminControls[ref2] = { action: action2, expires: actor.now() + 3e5, ...action2 === "confirm" ? { confirmationId: status.pendingPairing.confirmationId } : {} };
+      return { type: 2, style: action2 === "confirm" ? 3 : 2, label, custom_id: ref2 };
+    }) }];
+  });
+  return reply(text2, components);
+}
+
+// qq-cloudflare/worker.mjs
+import { DurableObject } from "cloudflare:workers";
+
+// qq-cloudflare/socket.mjs
+function cloudflareSocket(network = globalThis.fetch) {
+  return class OutboundSocket extends EventTarget {
+    static supportsConnectionDiagnostics = true;
+    constructor(url, { onDiagnostic = () => {
+    } } = {}) {
+      super();
+      this.readyState = 0;
+      this.closed = false;
+      this.onDiagnostic = onDiagnostic;
+      this.opening = this.open(url);
+    }
+    diagnostic(code, status) {
+      if (this.closed) return;
+      this.diagnosticFailure = true;
+      try {
+        this.onDiagnostic(code, status);
+      } catch {
+      }
+    }
+    async open(url) {
+      let failure = "upgrade_failed", httpStatus;
+      const controller = new AbortController();
+      this.handshakeController = controller;
+      let timer = setTimeout(() => controller.abort(new DOMException("WebSocket upgrade timed out", "TimeoutError")), 1e4);
+      const finishHandshake = () => {
+        if (timer !== null) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        if (this.handshakeController === controller) this.handshakeController = null;
+      };
+      try {
+        const target = new URL(url);
+        if (target.protocol !== "wss:") throw Error("wss_required");
+        target.protocol = "https:";
+        const response = await network(target.href, { headers: { Upgrade: "websocket" }, redirect: "manual", signal: controller.signal });
+        httpStatus = response.status;
+        failure = response.status === 101 ? "upgrade_invalid_response" : "upgrade_http_rejected";
+        const socket = response.webSocket;
+        if (response.status !== 101 || !socket) throw Error("upgrade_failed");
+        if (this.closed) {
+          socket.accept();
+          socket.close(1e3, "stopped");
+          return;
+        }
+        this.socket = socket;
+        socket.addEventListener("message", (event) => this.dispatchEvent(new MessageEvent("message", { data: event.data })));
+        socket.addEventListener("close", () => {
+          this.readyState = 3;
+          this.dispatchEvent(new Event("close"));
+        });
+        socket.addEventListener("error", () => this.dispatchEvent(new Event("error")));
+        this.readyState = 1;
+        socket.accept();
+        finishHandshake();
+        this.dispatchEvent(new Event("open"));
+      } catch {
+        if (!this.closed) {
+          this.diagnostic(failure, httpStatus);
+          this.readyState = 3;
+          this.dispatchEvent(new Event("error"));
+        }
+      } finally {
+        finishHandshake();
+      }
+    }
+    send(value) {
+      if (this.readyState !== 1 || !this.socket) throw Error("socket_not_open");
+      this.socket.send(value);
+    }
+    close() {
+      this.closed = true;
+      this.readyState = 3;
+      this.handshakeController?.abort();
+      try {
+        this.socket?.close(1e3, "stopped");
+      } catch {
+      }
+    }
+  };
+}
+
+// qq-cloudflare/store.mjs
+function flatten(state) {
+  const rows = /* @__PURE__ */ new Map();
+  for (const [key2, value] of Object.entries(state)) {
+    if (key2 === "bridge") {
+      for (const [group, items] of Object.entries(value)) for (const [id2, item] of Object.entries(items)) rows.set(JSON.stringify([key2, group, id2]), JSON.stringify(item));
+    } else if (key2 === "qqTransport") {
+      for (const [id2, item] of Object.entries(value)) rows.set(JSON.stringify([key2, id2]), JSON.stringify(item));
+    } else if (key2 === "inbox") {
+      value.forEach((item, i) => rows.set(JSON.stringify([key2, String(i)]), JSON.stringify(item)));
+    } else rows.set(JSON.stringify([key2]), JSON.stringify(value));
+  }
+  return rows;
+}
+function inflate(rows) {
+  const state = {};
+  for (const { k, v } of rows) {
+    const path = JSON.parse(k), value = JSON.parse(v);
+    if (path[0] === "bridge") {
+      state.bridge ??= { receipts: {}, events: {}, nonces: {} };
+      state.bridge[path[1]][path[2]] = value;
+    } else if (path[0] === "inbox") {
+      state.inbox ??= [];
+      state.inbox[Number(path[1])] = value;
+    } else if (path[0] === "qqTransport") {
+      state.qqTransport ??= {};
+      state.qqTransport[path[1]] = value;
+    } else state[path[0]] = value;
+  }
+  return state;
+}
+var DurableStateStore = class {
+  constructor(storage) {
+    this.storage = storage;
+    this.tail = Promise.resolve();
+    this.cache = null;
+    storage.sql.exec("CREATE TABLE IF NOT EXISTS qq_gateway_state(k TEXT PRIMARY KEY,v TEXT NOT NULL)");
+  }
+  transaction(fn) {
+    const run = this.tail.then(async () => {
+      let committed;
+      const result = await this.storage.transaction(async () => {
+        const before = this.cache === null ? new Map(this.storage.sql.exec("SELECT k,v FROM qq_gateway_state").toArray().map((r) => [r.k, r.v])) : flatten(this.cache);
+        const draft = this.cache === null ? inflate([...before].map(([k, v]) => ({ k, v }))) : structuredClone(this.cache);
+        const value = await fn(draft), after = flatten(draft);
+        if (after.size > 45e3) throw Error("durable_state_capacity");
+        for (const [k, v] of after) if (before.get(k) !== v) this.storage.sql.exec("INSERT INTO qq_gateway_state(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", k, v);
+        for (const k of before.keys()) if (!after.has(k)) this.storage.sql.exec("DELETE FROM qq_gateway_state WHERE k=?", k);
+        committed = structuredClone(draft);
+        return value;
+      });
+      this.cache = committed;
+      return result;
+    });
+    this.tail = run.catch(() => {
+    });
+    return run;
+  }
+};
+
+// qq-cloudflare/client.mjs
+var ORIGIN = "https://api.bot.qq.com";
+var QQGateway = class {
+  constructor({ appId, secret, fetch: transport = globalThis.fetch, WebSocket: Socket = globalThis.WebSocket, onDispatch = async () => {
+  }, onStatus = () => {
+  }, onDiagnostic = () => {
+  }, now = Date.now }) {
+    if (!/^\d{1,32}$/.test(appId) || typeof secret !== "function") throw Error("invalid_gateway_config");
+    Object.assign(this, { appId, secret, transport: (input, init) => transport(input, init), Socket, onDispatch, onStatus, onDiagnostic, now });
+    this.generation = 0;
+    this.pendingFrames = 0;
+    this.stopped = true;
+    this.sequence = null;
+    this.session = null;
+    this.backoff = 1e3;
+    this.serial = Promise.resolve();
+  }
+  diagnostic(stage, code, httpStatus, businessCode) {
+    const record = diagnosticRecord(stage, code, this.now(), httpStatus, businessCode);
+    if (!record) return;
+    try {
+      const pending = this.onDiagnostic(record);
+      pending?.catch?.(() => {
+      });
+    } catch {
+    }
+  }
+  async tokenValue() {
+    if (this.token && this.token.until - this.now() > 6e4) return this.token.value;
+    const generation = this.generation;
+    if (this.refresh?.generation === generation) return this.refresh.promise;
+    const refresh = { generation, promise: (async () => {
+      let failure = "credential_unavailable", httpStatus, businessCode;
+      const report = (code) => {
+        if (this.generation === generation) this.diagnostic("token", code, httpStatus, businessCode);
+      };
+      report("request_started");
+      try {
+        const value = await this.secret();
+        if (typeof value !== "string" || !value || value.length > 1024 || /[\r\n\0]/.test(value)) throw Error("credential_unavailable");
+        failure = "network_failed";
+        const r = await this.transport(ORIGIN + "/app/getAppAccessToken", { method: "POST", redirect: "manual", signal: AbortSignal.timeout(1e4), headers: { "content-type": "application/json" }, body: JSON.stringify({ appId: this.appId, clientSecret: value }) });
+        httpStatus = r.status;
+        failure = r.ok ? "invalid_response" : "http_rejected";
+        if (!r.ok) throw Error("token_rejected");
+        failure = "json_invalid";
+        const d = await r.json();
+        failure = "response_shape_invalid";
+        if (!d || typeof d !== "object" || Array.isArray(d)) throw Error("token_rejected");
+        failure = "ttl_type_invalid";
+        const ttl = Number(d.expires_in);
+        if (typeof d.access_token !== "string" || !d.access_token || !Number.isFinite(ttl) || ttl <= 0 || ttl > 7200) {
+          if (Number.isSafeInteger(d.code) && d.code !== 0) {
+            failure = "business_rejected";
+            businessCode = d.code;
+          } else if (typeof d.access_token !== "string" || !d.access_token) failure = "token_missing";
+          else if (!["number", "string"].includes(typeof d.expires_in) || !Number.isFinite(ttl)) failure = "ttl_type_invalid";
+          else failure = "ttl_range_invalid";
+          throw Error("token_rejected");
+        }
+        report("accepted");
+        if (this.generation === generation) this.token = { value: d.access_token, until: this.now() + ttl * 1e3 };
+        return d.access_token;
+      } catch (error) {
+        report(failure);
+        throw error;
+      }
+    })() };
+    this.refresh = refresh;
+    try {
+      return await refresh.promise;
+    } finally {
+      if (this.refresh === refresh) this.refresh = null;
+    }
+  }
+  async start() {
+    if (!this.stopped) return this.connecting?.promise;
+    this.stopped = false;
+    this.generation++;
+    await this.connect();
+  }
+  async connect() {
+    if (this.stopped) return;
+    const generation = this.generation;
+    if (this.connecting?.generation === generation) return this.connecting.promise;
+    const flight = { generation, promise: this.open(generation) };
+    this.connecting = flight;
+    try {
+      return await flight.promise;
+    } finally {
+      if (this.connecting === flight) this.connecting = null;
+    }
+  }
+  async open(generation) {
+    const current = () => !this.stopped && this.generation === generation;
+    let stage = "token", failure = "network_failed", httpStatus;
+    try {
+      const token = await this.tokenValue();
+      if (!current()) return;
+      stage = "gateway";
+      this.diagnostic("gateway", "request_started");
+      const r = await this.transport(ORIGIN + "/gateway", { headers: { Authorization: "QQBot " + token }, redirect: "manual", signal: AbortSignal.timeout(1e4) });
+      if (!current()) return;
+      httpStatus = r.status;
+      failure = r.ok ? "invalid_response" : "http_rejected";
+      if (r.status === 401) {
+        this.token = null;
+        throw Error("gateway_auth_expired");
+      }
+      if (!r.ok) throw Error("invalid_gateway");
+      const d = await r.json();
+      const u = new URL(d.url);
+      if (!r.ok || u.protocol !== "wss:" || u.username || u.password || u.port && u.port !== "443" || !(u.hostname === "qq.com" || u.hostname.endsWith(".qq.com"))) throw Error("invalid_gateway");
+      if (!current()) return;
+      this.diagnostic("gateway", "accepted", httpStatus);
+      stage = "socket";
+      failure = "upgrade_failed";
+      httpStatus = void 0;
+      const attempt = {};
+      this.diagnosticAttempt = attempt;
+      const socketOptions = { onDiagnostic: (code, status) => {
+        if (current() && this.diagnosticAttempt === attempt) this.diagnostic("socket", code, status);
+      } };
+      this.diagnostic("socket", "upgrade_started");
+      const ws = this.Socket.supportsConnectionDiagnostics === true ? new this.Socket(u.href, socketOptions) : new this.Socket(u.href);
+      this.ws = ws;
+      this.resumePending = null;
+      this.ready = false;
+      this.hello = false;
+      this.deadline = this.now() + 15e3;
+      ws.addEventListener("message", (event) => {
+        if (this.pendingFrames >= 1e3) {
+          if (current() && this.ws === ws) this.diagnostic("socket", "frame_backpressure");
+          this.status("frame_backpressure");
+          this.reconnect(ws);
+          return;
+        }
+        this.pendingFrames++;
+        this.serial = this.serial.then(() => this.receive(ws, event.data)).catch(() => {
+          if (current() && this.ws === ws) this.diagnostic("socket", "protocol_error");
+          this.status("protocol_error");
+          this.reconnect(ws);
+        }).finally(() => {
+          this.pendingFrames--;
+        });
+      });
+      ws.addEventListener("open", () => {
+        if (current() && this.ws === ws) this.diagnostic("socket", "opened");
+      });
+      ws.addEventListener("close", () => {
+        if (current() && this.ws === ws) this.diagnostic("socket", "closed");
+        this.reconnect(ws);
+      });
+      ws.addEventListener("error", () => {
+        if (current() && this.ws === ws && !ws.diagnosticFailure) this.diagnostic("socket", "transport_error");
+        this.reconnect(ws);
+      });
+      this.status("connecting");
+    } catch {
+      if (current()) {
+        if (stage !== "token") this.diagnostic(stage, failure, httpStatus);
+        this.status("connection_failed");
+        this.schedule();
+      }
+    }
+  }
+  status(state) {
+    this.onStatus({ state });
+  }
+  // Never include payload, token, URL, secret, or exception text.
+  schedule() {
+    if (!this.stopped) {
+      this.retryAt = this.now() + this.backoff;
+      this.backoff = Math.min(this.backoff * 2, 6e4);
+    }
+  }
+  reconnect(ws) {
+    if (this.ws !== ws) return;
+    this.resumePending = null;
+    this.ws = null;
+    this.ready = false;
+    try {
+      ws.close();
+    } catch {
+    }
+    this.status("connection_unavailable");
+    this.schedule();
+  }
+  send(payload) {
+    if (!this.ws || this.ws.readyState !== 1) throw Error("socket_not_open");
+    this.ws.send(JSON.stringify(payload));
+  }
+  async receive(ws, raw) {
+    if (this.stopped || ws !== this.ws) return;
+    if (typeof raw !== "string" || new TextEncoder().encode(raw).byteLength > 262144) throw Error("invalid_frame");
+    const p = JSON.parse(raw);
+    if (!Number.isInteger(p.op)) throw Error("invalid_opcode");
+    if (p.op === 10) {
+      if (this.hello || !Number.isFinite(p.d?.heartbeat_interval) || p.d.heartbeat_interval < 1e3 || p.d.heartbeat_interval > 3e5) throw Error("invalid_hello");
+      this.hello = true;
+      this.interval = p.d.heartbeat_interval;
+      this.nextBeat = this.now() + this.interval;
+      this.awaitAck = false;
+      const token = await this.tokenValue();
+      if (ws !== this.ws || this.stopped) return;
+      const resume = typeof this.session === "string" && this.session.length > 0 && this.session.length <= 256 && Number.isSafeInteger(this.sequence) && this.sequence >= 0;
+      if (this.session && !resume) throw Error("invalid_resume_context");
+      this.send(resume ? { op: 6, d: { token: "QQBot " + token, session_id: this.session, seq: this.sequence } } : { op: 2, d: { token: "QQBot " + token, intents: 1 << 25, shard: [0, 1] } });
+      this.resumePending = resume ? { ws, generation: this.generation, session: this.session, last: this.sequence, bytes: 0, events: [] } : null;
+      this.diagnostic("auth", resume ? "resume_sent" : "identify_sent");
+      return;
+    }
+    if (!this.hello) throw Error("hello_required");
+    if (p.op === 11) {
+      this.awaitAck = false;
+      return;
+    }
+    if (p.op === 7) {
+      this.reconnect(ws);
+      return;
+    }
+    if (p.op === 9) {
+      this.diagnostic("auth", "invalid_session");
+      this.session = null;
+      this.sequence = null;
+      this.reconnect(ws);
+      return;
+    }
+    if (p.op !== 0) return;
+    if (!Number.isSafeInteger(p.s) || p.s < 0) throw Error("invalid_sequence");
+    if (p.t === "READY") {
+      if (this.resumePending) throw Error("unexpected_ready");
+      if (typeof p.d?.session_id !== "string" || !p.d.session_id || p.d.session_id.length > 256) throw Error("invalid_session");
+      this.session = p.d.session_id;
+      this.ready = true;
+      this.sequence = p.s;
+      this.backoff = 1e3;
+      this.diagnostic("auth", "ready");
+      this.status("ready");
+      return;
+    }
+    if (p.t === "RESUMED") {
+      const replay = this.resumePending;
+      if (!replay || replay.ws !== ws || replay.generation !== this.generation || replay.session !== this.session || this.now() > this.deadline || p.s < replay.last) throw Error("invalid_resume_confirmation");
+      for (const event of replay.events) {
+        if (this.stopped || this.ws !== ws || this.resumePending !== replay) return;
+        await this.onDispatch(event);
+        if (this.stopped || this.ws !== ws || this.resumePending !== replay) return;
+        this.sequence = event.s;
+      }
+      this.resumePending = null;
+      this.ready = true;
+      this.sequence = p.s;
+      this.backoff = 1e3;
+      this.diagnostic("auth", "resumed");
+      this.status("ready");
+      return;
+    }
+    if (!this.ready) {
+      const replay = this.resumePending;
+      if (!replay || replay.ws !== ws || replay.generation !== this.generation || replay.session !== this.session || this.now() > this.deadline) throw Error("ready_required");
+      if (typeof p.t !== "string" || !/^[A-Z][A-Z0-9_]{0,63}$/.test(p.t) || !p.d || typeof p.d !== "object" || Array.isArray(p.d)) throw Error("invalid_replay_dispatch");
+      if (p.s <= replay.last) return;
+      const bytes = new TextEncoder().encode(raw).byteLength;
+      if (replay.events.length >= 64 || replay.bytes + bytes > 262144) throw Error("replay_capacity");
+      replay.events.push(p);
+      replay.bytes += bytes;
+      replay.last = p.s;
+      return;
+    }
+    if (this.sequence !== null && p.s <= this.sequence) return;
+    await this.onDispatch(p);
+    if (ws === this.ws && !this.stopped) this.sequence = p.s;
+  }
+  async tick() {
+    if (this.stopped) return;
+    if (!this.ws) {
+      if (this.retryAt !== void 0 && this.now() >= this.retryAt) {
+        this.retryAt = void 0;
+        await this.connect();
+      }
+      return;
+    }
+    if (!this.ready && this.now() > this.deadline) {
+      this.diagnostic("auth", this.hello ? "ready_timeout" : "hello_timeout");
+      this.reconnect(this.ws);
+      return;
+    }
+    if (this.hello && this.now() >= this.nextBeat) {
+      if (this.awaitAck) {
+        this.diagnostic("socket", "heartbeat_timeout");
+        this.status("heartbeat_timeout");
+        this.reconnect(this.ws);
+        return;
+      }
+      try {
+        this.send({ op: 1, d: this.sequence });
+        this.awaitAck = true;
+        this.nextBeat = this.now() + this.interval;
+      } catch {
+        this.reconnect(this.ws);
+      }
+    }
+  }
+  stop() {
+    this.resumePending = null;
+    this.stopped = true;
+    this.generation++;
+    this.connecting = null;
+    this.refresh = null;
+    this.retryAt = void 0;
+    this.session = null;
+    this.sequence = null;
+    const ws = this.ws;
+    this.ws = null;
+    this.ready = false;
+    this.token = null;
+    try {
+      ws?.close();
+    } catch {
+    }
+  }
+};
+
+// qq-cloudflare/crypto.mjs
+var enc = new TextEncoder();
+var hex = (bytes) => Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
+var randomHex = (n) => hex(crypto.getRandomValues(new Uint8Array(n)));
+var hash = async (text2) => hex(await crypto.subtle.digest("SHA-256", enc.encode(text2)));
+function equalHex(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+async function key(raw) {
+  if (typeof raw !== "string" || raw.length < 32) throw Error("bridge_key_unavailable");
+  return crypto.subtle.importKey("raw", enc.encode(raw), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+}
+var hmac = async (raw, domain, body) => hex(await crypto.subtle.sign("HMAC", await key(raw), enc.encode(domain + "\n" + body)));
+var verifyHmac = async (raw, domain, body, signature) => crypto.subtle.verify("HMAC", await key(raw), Uint8Array.from(signature.match(/../g), (v) => parseInt(v, 16)), enc.encode(domain + "\n" + body));
+
+// qq-cloudflare/binding.mjs
+var valid = (s) => typeof s === "string" && /^[A-Za-z0-9_-]{1,256}$/.test(s);
+var OwnerBinding = class {
+  constructor({ store, appId, ownerId, now = Date.now }) {
+    if (!/^\d{1,32}$/.test(appId) || !valid(ownerId)) throw Error("invalid_binding_config");
+    Object.assign(this, { store, appId, ownerId, now });
+  }
+  async begin() {
+    const code = randomHex(24);
+    const codeHash = await hash(code);
+    await this.store.transaction((state) => {
+      if (state.binding || state.pairing && state.pairing.expiresAt > this.now()) throw Error("binding_or_pairing_exists");
+      state.pairing = { appId: this.appId, ownerId: this.ownerId, digest: codeHash, expiresAt: this.now() + 3e5, attempts: 0 };
+    });
+    return { code, expiresAt: this.now() + 3e5 };
+  }
+  async observe(event) {
+    if (event?.t !== "C2C_MESSAGE_CREATE" || !valid(event?.d?.author?.user_openid) || typeof event.d.content !== "string") return { state: "ignored" };
+    const content = event.d.content.trim();
+    if (!content.startsWith("/bind ")) return { state: "ignored" };
+    const supplied = await hash(content.slice(6));
+    return this.store.transaction((state) => {
+      const p = state.pairing;
+      if (state.binding || !p || p.appId !== this.appId || p.ownerId !== this.ownerId || p.expiresAt <= this.now() || p.attempts >= 5 || p.candidate) return { state: "closed" };
+      p.attempts++;
+      if (!equalHex(supplied, p.digest)) return { state: "rejected" };
+      p.candidate = { userOpenId: event.d.author.user_openid, confirmationId: randomHex(16) };
+      const eventAt = Date.parse(event.d.timestamp);
+      if (typeof event.d.id === "string" && event.d.id.length > 0 && event.d.id.length <= 1024 && Number.isFinite(eventAt) && eventAt <= this.now() && this.now() - eventAt < 3e5) p.candidate.replyMessage = { messageId: event.d.id, eventAt };
+      delete p.digest;
+      return { state: "confirmation_required", ...p.candidate };
+    });
+  }
+  async confirm(confirmationId) {
+    return this.store.transaction((state) => {
+      const p = state.pairing;
+      if (state.binding || !p?.candidate || p.appId !== this.appId || p.ownerId !== this.ownerId || p.expiresAt <= this.now() || p.candidate.confirmationId !== confirmationId) throw Error("confirmation_invalid");
+      state.binding = { appId: this.appId, ownerId: this.ownerId, userOpenId: p.candidate.userOpenId, confirmedAt: this.now(), ...p.candidate.replyMessage ? { replyMessage: p.candidate.replyMessage } : {} };
+      delete state.pairing;
+      return { ...state.binding };
+    });
+  }
+  async cancel() {
+    await this.store.transaction((state) => {
+      delete state.pairing;
+    });
+  }
+};
+
+// qq-cloudflare/runtime.mjs
+function createQQRuntime({ store, appId, ownerId, secret, fetch: fetch2, WebSocket, now = Date.now, onStatus = () => {
+}, onDiagnostic = () => {
+}, setInterval: installTimer = globalThis.setInterval, clearInterval: removeTimer = globalThis.clearInterval }) {
+  const binding = new OwnerBinding({ store, appId, ownerId, now });
+  const client = new QQGateway({ appId, secret, fetch: fetch2, WebSocket, now, onStatus, onDiagnostic, onDispatch: async (event) => {
+    try {
+      if (["FRIEND_DEL", "C2C_MSG_REJECT", "FRIEND_ADD", "C2C_MSG_RECEIVE"].includes(event.t)) {
+        await store.transaction((state) => {
+          const b = state.binding, d2 = event.d;
+          if (b?.appId === appId && b?.ownerId === ownerId && [d2?.openid, d2?.user_openid].includes(b.userOpenId)) {
+            if (["FRIEND_DEL", "C2C_MSG_REJECT"].includes(event.t)) state.qqRevoked = true;
+          }
+        });
+        return;
+      }
+      const result = await binding.observe(event);
+      if (result.state !== "ignored") return;
+      if (event.t !== "C2C_MESSAGE_CREATE") return;
+      const d = event.d;
+      if (typeof d?.id !== "string" || !d.id || d.id.length > 1024 || typeof d.content !== "string" || d.content.length > 16e3) return;
+      await store.transaction((state) => {
+        const b = state.binding;
+        if (!b || b.appId !== appId || b.ownerId !== ownerId || b.userOpenId !== d.author?.user_openid) return;
+        state.inbox ??= [];
+        if (state.inbox.some((item) => item.messageId === d.id)) return;
+        if (state.inbox.length >= 1e3) {
+          state.qqIngestionHealth = { healthy: false, reason: "inbox_full", failedAt: now() };
+          store.qqIngestionFault = true;
+          return;
+        }
+        const eventAt = Date.parse(d.timestamp);
+        state.inbox.push({ messageId: d.id, receivedAt: now(), ...Number.isFinite(eventAt) && eventAt <= now() ? { eventAt } : {} });
+      });
+    } catch (error) {
+      store.qqIngestionFault = true;
+      try {
+        await store.transaction((state) => {
+          state.qqIngestionHealth = { healthy: false, reason: "ingestion_failed", failedAt: now() };
+        });
+      } catch {
+      }
+      throw error;
+    }
+  } });
+  let timer, generation = 0, starting;
+  const drain = async ({ messageIds, confirmReview } = {}) => {
+    if (!client.stopped) throw Error("stop_before_review");
+    await client.serial;
+    if (confirmReview !== true || !Array.isArray(messageIds) || messageIds.some((id2) => typeof id2 !== "string") || new Set(messageIds).size !== messageIds.length) throw Error("review_required");
+    await store.transaction((state) => {
+      if (!state.binding || state.binding.appId !== appId || state.binding.ownerId !== ownerId) throw Error("stored_binding_mismatch");
+      const inbox = state.inbox ?? [];
+      if (messageIds.some((id2) => !inbox.some((item) => item.messageId === id2))) throw Error("unknown_inbox_record");
+      const remaining = inbox.filter((item) => !messageIds.includes(item.messageId));
+      if (remaining.length >= 1e3) throw Error("inbox_still_full");
+      state.inbox = remaining;
+      state.qqIngestionHealth = { healthy: true, reviewedAt: now() };
+    });
+    store.qqIngestionFault = false;
+  };
+  return {
+    binding,
+    client,
+    reviewAndDrainInbox: drain,
+    async start() {
+      if (timer !== void 0) return;
+      if (starting) return starting.promise;
+      const mine = ++generation;
+      const flight = { promise: (async () => {
+        await store.transaction((state) => {
+          if (state.binding && (state.binding.appId !== appId || state.binding.ownerId !== ownerId)) throw Error("stored_binding_mismatch");
+        });
+        if (mine !== generation) return;
+        await client.start();
+        if (mine !== generation) return;
+        timer = installTimer(() => {
+          client.tick().catch(() => onStatus({ state: "tick_failed" }));
+        }, 250);
+      })() };
+      starting = flight;
+      try {
+        await flight.promise;
+      } finally {
+        if (starting === flight) starting = void 0;
+      }
+    },
+    stop() {
+      generation++;
+      starting = void 0;
+      if (timer !== void 0) removeTimer(timer);
+      timer = void 0;
+      client.stop();
+    }
+  };
+}
+
+// src/contracts.ts
+var terminal = /* @__PURE__ */ new Set(["completed", "failed", "cancelled"]);
+var kindStatus = { registered: "proposed", started: "running", needs_input: "needs_input", completed: "completed", failed: "failed", cancelled: "cancelled" };
+var kinds = /* @__PURE__ */ new Set([...Object.keys(kindStatus), "progress", "heartbeat", "correction"]);
+var statuses = /* @__PURE__ */ new Set(["proposed", "running", "needs_input", ...terminal]);
+
+// qq-cloudflare/bridge.mjs
+var storeFault = (store, state) => store.qqIngestionFault === true || state.qqIngestionHealth?.healthy === false;
+var id = (s) => typeof s === "string" && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(s);
+async function check(key2, domain, packet) {
+  if (typeof packet?.body !== "string" || new TextEncoder().encode(packet.body).byteLength > 65536 || typeof packet.signature !== "string" || !/^[a-f0-9]{64}$/.test(packet.signature)) throw Error("bridge_auth_invalid");
+  if (!await verifyHmac(key2, domain, packet.body, packet.signature)) throw Error("bridge_auth_invalid");
+  return JSON.parse(packet.body);
+}
+function exact(obj, keys) {
+  return obj && typeof obj === "object" && !Array.isArray(obj) && Object.keys(obj).every((k) => keys.includes(k));
+}
+var NotificationBridge = class {
+  constructor({ store, key: key2, ownerId, appId, allowedSourceIds, allowedProjectIds, deliver, enabled = false, evidence = () => null, now = Date.now }) {
+    if (!id(ownerId) || !/^\d{1,32}$/.test(appId) || typeof key2 !== "function" || typeof deliver !== "function") throw Error("invalid_bridge_config");
+    for (const list2 of [allowedSourceIds, allowedProjectIds]) if (!Array.isArray(list2) || list2.some((x) => !id(x)) || new Set(list2).size !== list2.length) throw Error("invalid_bridge_scope");
+    Object.assign(this, { store, key: key2, ownerId, appId, allowedSourceIds: [...allowedSourceIds], allowedProjectIds: [...allowedProjectIds], deliver, enabled, evidence, now });
+  }
+  async receive(packet) {
+    const key2 = await this.key();
+    const envelope = await check(key2, "rivule-qq-request-v1", packet);
+    if (!exact(envelope, ["version", "timestamp", "nonce", "job"]) || envelope.version !== 1 || !Number.isSafeInteger(envelope.timestamp) || Math.abs(this.now() - envelope.timestamp) > 6e4 || typeof envelope.nonce !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(envelope.nonce)) throw Error("bridge_envelope_invalid");
+    const job = envelope.job;
+    if (!exact(job, ["ownerId", "appId", "sourceId", "projectId", "eventId", "receiptId", "content"]) || job.ownerId !== this.ownerId || job.appId !== this.appId || !this.allowedSourceIds.includes(job.sourceId) || !this.allowedProjectIds.includes(job.projectId) || !id(job.eventId) || !/^rcpt_[a-f0-9]{32}$/.test(job.receiptId) || typeof job.content !== "string" || !job.content.trim() || job.content.length > 4e3 || job.content.includes("\0")) throw Error("bridge_scope_invalid");
+    const intent = { ownerId: job.ownerId, appId: job.appId, sourceId: job.sourceId, projectId: job.projectId, eventId: job.eventId, receiptId: job.receiptId, content: job.content };
+    const fingerprint = await hash(JSON.stringify(intent));
+    const ledgerKey = await hash(JSON.stringify([job.sourceId, job.receiptId]));
+    const eventKey = await hash(JSON.stringify([job.sourceId, job.eventId]));
+    const requestHash = await hash(packet.body);
+    const response = async (receipt2) => {
+      const body = JSON.stringify({ requestHash, receipt: receipt2 });
+      return { body, signature: await hmac(key2, "rivule-qq-response-v1", body) };
+    };
+    const blocked2 = (reason) => ({ state: "blocked", reason });
+    const reservation = await this.store.transaction((state) => {
+      state.bridge ??= { receipts: {}, events: {}, nonces: {} };
+      const b = state.bridge;
+      for (const [nonce, value] of Object.entries(b.nonces)) if (value.until < this.now()) delete b.nonces[nonce];
+      const seen = b.nonces[envelope.nonce];
+      if (seen && seen.hash !== requestHash) throw Error("nonce_reuse");
+      if (!seen && Object.keys(b.nonces).length >= 1e4) throw Error("nonce_capacity");
+      b.nonces[envelope.nonce] = { hash: requestHash, until: envelope.timestamp + 6e4 };
+      const old = b.receipts[ledgerKey];
+      if (old) {
+        if (old.fingerprint !== fingerprint) throw Error("receipt_conflict");
+        return { receipt: old.receipt };
+      }
+      if (b.events[eventKey]) throw Error("event_already_reserved");
+      if (!this.enabled) return { receipt: blocked2("disabled") };
+      const binding = state.binding;
+      if (!binding || binding.ownerId !== this.ownerId || binding.appId !== this.appId || typeof binding.userOpenId !== "string" || !binding.userOpenId) return { receipt: blocked2("binding_unverified") };
+      if (storeFault(this.store, state)) return { receipt: blocked2("ingestion_unhealthy") };
+      if (state.qqRevoked === true) return { receipt: blocked2("permission_revoked") };
+      const e = this.evidence();
+      if (!e || e.identity !== true || e.proactive !== true || !Number.isFinite(e.checkedAt) || !Number.isFinite(e.validUntil) || e.checkedAt > this.now() || e.checkedAt >= e.validUntil || e.validUntil <= this.now()) return { receipt: blocked2("capability_unverified") };
+      if (Object.values(b.receipts).some((x) => ["uncertain", "not_sent", "blocked"].includes(x.receipt.state))) return { receipt: blocked2("queue_requires_review") };
+      if (Object.keys(b.receipts).length >= 1e4) return { receipt: blocked2("receipt_capacity") };
+      if ((state.qqNextSendAt ?? 0) > this.now()) return { receipt: blocked2("paced") };
+      b.events[eventKey] = ledgerKey;
+      b.receipts[ledgerKey] = { fingerprint, receipt: { state: "uncertain", reason: "reserved_before_send" } };
+      state.qqNextSendAt = this.now() + 3100;
+      return { send: true, userOpenId: binding.userOpenId };
+    });
+    if (!reservation.send) return response(reservation.receipt);
+    let receipt;
+    try {
+      const allowed = await this.store.transaction((state) => !storeFault(this.store, state) && state.qqRevoked !== true && state.binding?.userOpenId === reservation.userOpenId && state.binding?.appId === this.appId && state.binding?.ownerId === this.ownerId);
+      const evidence = this.evidence();
+      if (!allowed || !evidence || evidence.identity !== true || evidence.proactive !== true || !Number.isFinite(evidence.validUntil) || !Number.isFinite(evidence.checkedAt) || evidence.checkedAt >= evidence.validUntil || evidence.validUntil <= this.now() || evidence.checkedAt > this.now()) receipt = blocked2("permission_changed");
+      else {
+        const result = await this.deliver({ ...intent, userOpenId: reservation.userOpenId });
+        if (result?.state === "sent" && typeof result.messageId === "string" && result.messageId.length > 0 && result.messageId.length <= 1024) receipt = { state: "sent", reason: "provider_accepted", messageId: result.messageId };
+        else if (["not_sent", "blocked"].includes(result?.state)) receipt = qqBridgeRejectedReceipt(result);
+        else receipt = { state: "uncertain", reason: "provider_outcome_unknown" };
+      }
+    } catch {
+      receipt = { state: "uncertain", reason: "network_outcome_unknown" };
+    }
+    try {
+      await this.store.transaction((state) => {
+        const old = state.bridge?.receipts[ledgerKey];
+        if (!old || old.fingerprint !== fingerprint) throw Error("receipt_missing");
+        old.receipt = receipt;
+      });
+    } catch {
+      receipt = { state: "uncertain", reason: "receipt_persistence_failed" };
+    }
+    return response(receipt);
+  }
+};
+
+// qq-cloudflare/delivery.mjs
+function createQQDelivery({ store, config, fetch: fetch2, now = Date.now }) {
+  const storage = { transaction: (fn) => store.transaction(async (state) => {
+    state.qqTransport ??= {};
+    return fn({ get: async (key2) => key2.startsWith("qq:gate:") && (state.qqRevoked === true || state.qqIngestionHealth?.healthy === false || store.qqIngestionFault === true) ? true : state.qqTransport[key2], put: async (key2, value) => {
+      state.qqTransport[key2] = structuredClone(value);
+    } });
+  }) };
+  const network = fetch2 ?? globalThis.fetch;
+  const compatibleFetch = async (url, init) => {
+    const response = await network(url, init);
+    if (response.status === 204 || !response.body) return response;
+    const raw = await qqReadBytes(response.body, 262144);
+    let body = raw;
+    try {
+      const data = JSON.parse(new TextDecoder().decode(raw));
+      if (Number.isSafeInteger(data?.err_code) && data.code === void 0) {
+        data.code = data.err_code;
+        body = JSON.stringify(data);
+      }
+    } catch {
+    }
+    return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+  };
+  const client = new QQC2CTransport(config, new QQDurableLedger(storage), compatibleFetch, now);
+  return async (job) => {
+    if (job.appId !== config.appId || job.ownerId !== config.ownerId || job.userOpenId !== config.userOpenId) return { state: "blocked", reason: "binding_not_authorized" };
+    return client.send({ ownerId: job.ownerId, sourceId: job.sourceId, projectId: job.projectId, eventId: job.eventId, content: job.content });
+  };
+}
+
+// qq-cloudflare/actor.mjs
+var DAY = 864e5;
+function list(value) {
+  if (typeof value !== "string") return [];
+  const parsed = JSON.parse(value);
+  if (!Array.isArray(parsed) || parsed.some((v) => typeof v !== "string") || new Set(parsed).size !== parsed.length) throw Error("invalid_scope");
+  return parsed;
+}
+var GatewayActor = class {
+  constructor(ctx, env, { fetch: network = globalThis.fetch, WebSocket: Socket = cloudflareSocket(network), now = Date.now } = {}) {
+    Object.assign(this, { ctx, env, network, Socket, now });
+    this.store = new DurableStateStore(ctx.storage);
+    this.commands = Promise.resolve();
+    this.runtime = null;
+  }
+  command(fn) {
+    const run = this.commands.then(fn);
+    this.commands = run.catch(() => {
+    });
+    return run;
+  }
+  recordDiagnostic(record) {
+    const clean = record && diagnosticRecord(record.stage, record.code, record.at, record.httpStatus, record.businessCode);
+    if (!clean) return;
+    try {
+      this.ctx.waitUntil(this.store.transaction((s) => {
+        s.qqConnectionDiagnostics = appendDiagnostic(s.qqConnectionDiagnostics, clean);
+      }).catch(() => {
+      }));
+    } catch {
+    }
+  }
+  config() {
+    const e = this.env;
+    if (e.QQ_ENABLED !== "true") throw Error("qq_disabled");
+    if (typeof e.QQ_OWNER_ID !== "string" || e.QQ_OWNER_ID !== e.OWNER_ID || !/^\d{1,32}$/.test(e.QQ_APP_ID ?? "")) throw Error("identity_config_invalid");
+    const budget = Number(e.QQ_DAILY_ACTIVE_BUDGET_MS);
+    if (!Number.isSafeInteger(budget) || budget < 1e3 || budget > DAY) throw Error("active_budget_required");
+    return { ownerId: e.QQ_OWNER_ID, appId: e.QQ_APP_ID, allowedSources: list(e.QQ_ALLOWED_SOURCE_IDS), allowedProjects: list(e.QQ_ALLOWED_PROJECT_IDS), budget };
+  }
+  evidence() {
+    try {
+      return JSON.parse(this.env.QQ_CAPABILITIES_JSON ?? "null");
+    } catch {
+      return null;
+    }
+  }
+  async configuredRuntime() {
+    const c = this.config();
+    if (!this.runtime) {
+      const runtime = createQQRuntime({
+        store: this.store,
+        appId: c.appId,
+        ownerId: c.ownerId,
+        secret: () => this.env.QQ_APP_SECRET,
+        fetch: this.network,
+        WebSocket: this.Socket,
+        now: this.now,
+        // These are lifecycle hooks only. There is no Node interval; DO alarms call tick().
+        setInterval: () => 1,
+        clearInterval: () => {
+        },
+        onStatus: (status) => this.ctx.waitUntil(this.handleStatus(status)),
+        onDiagnostic: (record) => this.recordDiagnostic(record)
+      });
+      const dispatch = runtime.client.onDispatch;
+      runtime.client.onDispatch = async (event) => {
+        try {
+          await dispatch(event);
+          await this.store.transaction((state) => {
+            state.gatewaySession = { session: runtime.client.session, sequence: event.s };
+          });
+        } catch (error) {
+          this.store.qqIngestionFault = true;
+          try {
+            await this.store.transaction((state) => {
+              state.qqIngestionHealth = { healthy: false, reason: "session_persistence_failed", failedAt: this.now() };
+            });
+          } catch {
+          }
+          throw error;
+        }
+      };
+      await this.store.transaction((state) => {
+        const session = state.gatewaySession;
+        if (typeof session?.session === "string" && Number.isSafeInteger(session.sequence)) {
+          runtime.client.session = session.session;
+          runtime.client.sequence = session.sequence;
+        }
+      });
+      this.runtime = runtime;
+    }
+    return this.runtime;
+  }
+  async ensureRuntime() {
+    await this.configuredRuntime();
+    await this.runtime.start();
+  }
+  unhealthy(state, reason) {
+    if (state.qqIngestionHealth?.healthy === false && !["connection_not_ready", "connection_unavailable"].includes(state.qqIngestionHealth.reason)) return;
+    state.qqIngestionHealth = { healthy: false, reason, failedAt: this.now() };
+  }
+  async handleStatus(status) {
+    return this.command(async () => {
+      const live = this.runtime?.client;
+      await this.store.transaction((state) => {
+        if (!state.control?.running) return;
+        if (status.state === "ready" && live?.ready) {
+          if (!state.qqIngestionHealth || ["connection_not_ready", "connection_unavailable"].includes(state.qqIngestionHealth.reason)) state.qqIngestionHealth = { healthy: true, connectedAt: this.now() };
+          state.gatewaySession = { session: live.session, sequence: live.sequence };
+        } else if (["connecting", "connection_unavailable", "connection_failed", "protocol_error", "frame_backpressure", "heartbeat_timeout"].includes(status.state)) this.unhealthy(state, "connection_unavailable");
+      });
+      await this.arm();
+    });
+  }
+  async accountBudget() {
+    const c = this.config(), now = this.now(), day = Math.floor(now / DAY);
+    return this.store.transaction((state) => {
+      const running = state.control?.running;
+      let b = state.activeBudget ?? { day, usedMs: 0, lastAt: now };
+      if (b.day !== day) b = { day, usedMs: running ? Math.max(0, now - day * DAY) : 0, lastAt: now };
+      else if (running) b.usedMs += Math.max(0, now - b.lastAt);
+      b.lastAt = now;
+      state.activeBudget = b;
+      return { exhausted: b.usedMs >= c.budget, remaining: Math.max(0, c.budget - b.usedMs) };
+    });
+  }
+  async arm() {
+    try {
+      return await this.planAlarm();
+    } catch (error) {
+      this.runtime?.stop();
+      this.store.qqIngestionFault = true;
+      throw error;
+    }
+  }
+  async planAlarm() {
+    const control = await this.store.transaction((state2) => state2.control);
+    if (!control?.running) {
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
+    const c = this.config(), state = await this.store.transaction((s) => s.activeBudget), remaining = Math.max(0, c.budget - (state?.usedMs ?? 0));
+    const client = this.runtime?.client, now = this.now();
+    const times = [now + 3e4, now + remaining];
+    if (client?.ws) {
+      if (!client.ready) times.push(client.deadline);
+      if (client.hello) times.push(client.nextBeat);
+    } else if (Number.isFinite(client?.retryAt)) times.push(client.retryAt);
+    await this.ctx.storage.setAlarm(Math.max(now + 1e3, Math.min(...times.filter(Number.isFinite))));
+  }
+  async requestStart() {
+    return this.command(async () => {
+      this.config();
+      const budget = await this.accountBudget();
+      if (budget.exhausted) throw Error("active_budget_exhausted");
+      await this.store.transaction((state) => {
+        if (!state.control?.running) state.qqConnectionStartedAt = this.now();
+        state.control = { running: true };
+        this.unhealthy(state, "connection_not_ready");
+      });
+      try {
+        await this.ctx.storage.setAlarm(this.now() + 1e3);
+      } catch (error) {
+        await this.stopInternal("alarm_failed");
+        throw error;
+      }
+      return { state: "scheduled", budgetRemainingMs: budget.remaining };
+    });
+  }
+  async start() {
+    return this.command(async () => {
+      this.config();
+      const budget = await this.accountBudget();
+      if (budget.exhausted) throw Error("active_budget_exhausted");
+      await this.store.transaction((state) => {
+        if (!state.control?.running) state.qqConnectionStartedAt = this.now();
+        state.control = { running: true };
+        this.unhealthy(state, "connection_not_ready");
+      });
+      await this.arm();
+      await this.ensureRuntime();
+      await this.arm();
+      return { state: "starting", budgetRemainingMs: budget.remaining };
+    });
+  }
+  async stopInternal(reason) {
+    this.runtime?.stop();
+    await this.store.transaction((state) => {
+      state.control = { running: false, reason };
+      this.unhealthy(state, "connection_unavailable");
+    });
+    await this.ctx.storage.deleteAlarm();
+  }
+  async stop() {
+    return this.command(async () => {
+      await this.accountBudget();
+      await this.stopInternal("owner_stopped");
+      return { state: "stopped" };
+    });
+  }
+  async alarm() {
+    return this.command(async () => {
+      this.recordDiagnostic(diagnosticRecord("alarm", "started", this.now()));
+      const running = await this.store.transaction((state) => state.control?.running);
+      if (!running) {
+        await this.ctx.storage.deleteAlarm();
+        this.recordDiagnostic(diagnosticRecord("alarm", "completed", this.now()));
+        return;
+      }
+      if (this.env.QQ_ENABLED !== "true") {
+        await this.stopInternal("configuration_disabled");
+        this.recordDiagnostic(diagnosticRecord("alarm", "completed", this.now()));
+        return;
+      }
+      const budget = await this.accountBudget();
+      if (budget.exhausted) {
+        await this.stopInternal("active_budget_exhausted");
+        this.recordDiagnostic(diagnosticRecord("alarm", "completed", this.now()));
+        return;
+      }
+      let alarmFailed = false;
+      try {
+        if (!this.runtime) await this.store.transaction((state) => this.unhealthy(state, "connection_not_ready"));
+        await this.ensureRuntime();
+        await this.runtime.client.tick();
+      } catch {
+        alarmFailed = true;
+        this.recordDiagnostic(diagnosticRecord("alarm", "failed", this.now()));
+        this.runtime?.stop();
+        this.store.qqIngestionFault = true;
+        await this.store.transaction((state) => {
+          state.qqIngestionHealth = { healthy: false, reason: "alarm_failed", failedAt: this.now() };
+        });
+      } finally {
+        await this.arm();
+        if (!alarmFailed) this.recordDiagnostic(diagnosticRecord("alarm", "completed", this.now()));
+      }
+    }).catch((error) => {
+      this.recordDiagnostic(diagnosticRecord("alarm", "failed", this.now()));
+      throw error;
+    });
+  }
+  async beginBinding() {
+    return this.command(async () => {
+      const running = await this.store.transaction((state) => state.control?.running);
+      if (!running || !this.runtime) throw Error("gateway_not_started");
+      return this.runtime.binding.begin();
+    });
+  }
+  async confirmBinding(id2) {
+    return this.command(async () => {
+      if (!this.runtime) throw Error("gateway_not_started");
+      return this.runtime.binding.confirm(id2);
+    });
+  }
+  async reviewAndDrainInbox(options) {
+    return this.command(async () => {
+      const running = await this.store.transaction((state) => state.control?.running);
+      if (running) throw Error("stop_before_review");
+      await this.configuredRuntime();
+      return this.runtime.reviewAndDrainInbox(options);
+    });
+  }
+  async status() {
+    return this.store.transaction((state) => ({ running: state.control?.running === true, stopReason: state.control?.reason ?? null, connected: this.runtime?.client.ready === true, bound: !!state.binding, ingestionHealthy: state.qqIngestionHealth?.healthy === true, revoked: state.qqRevoked === true, inboxCount: state.inbox?.length ?? 0, budget: state.activeBudget ?? null, connectionStartedAt: diagnosticTime(state.qqConnectionStartedAt), connectionDiagnostics: diagnosticSnapshot(state.qqConnectionDiagnostics), pendingPairing: state.pairing?.candidate ? { confirmationId: state.pairing.candidate.confirmationId, userOpenId: state.pairing.candidate.userOpenId } : null }));
+  }
+  async receiveBridge(packet) {
+    const c = this.config();
+    const snapshot = await this.command(async () => {
+      const budget = await this.accountBudget();
+      if (budget.exhausted) await this.stopInternal("active_budget_exhausted");
+      return this.store.transaction((state) => ({ binding: state.binding, running: state.control?.running, health: state.qqIngestionHealth }));
+    });
+    const config = { enabled: this.env.QQ_DELIVERY_ENABLED === "true", appId: c.appId, ownerId: c.ownerId, userOpenId: snapshot.binding?.userOpenId ?? "unbound", appSecret: () => this.env.QQ_APP_SECRET, allowedSources: c.allowedSources, allowedProjects: c.allowedProjects, allowedImageOrigins: [], evidence: () => this.evidence() };
+    const deliver = createQQDelivery({ store: this.store, config, fetch: this.network, now: this.now });
+    const bridge = new NotificationBridge({
+      store: this.store,
+      key: () => this.env.QQ_BRIDGE_SECRET,
+      appId: c.appId,
+      ownerId: c.ownerId,
+      allowedSourceIds: c.allowedSources,
+      allowedProjectIds: c.allowedProjects,
+      enabled: config.enabled && snapshot.running === true && this.runtime?.client.ready === true,
+      evidence: () => this.evidence(),
+      now: this.now,
+      deliver
+    });
+    return bridge.receive(packet);
+  }
+};
+
+// qq-cloudflare/worker.mjs
+var QQGatewayObject = class extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.actor = new GatewayActor(ctx, env);
+  }
+  // Private service-binding RPC methods. The caller must already enforce the authenticated owner.
+  start() {
+    return this.actor.start();
+  }
+  stop() {
+    return this.actor.stop();
+  }
+  beginBinding() {
+    return this.actor.beginBinding();
+  }
+  confirmBinding(id2) {
+    return this.actor.confirmBinding(id2);
+  }
+  reviewAndDrainInbox(options) {
+    return this.actor.reviewAndDrainInbox(options);
+  }
+  status() {
+    return this.actor.status();
+  }
+  receiveBridge(packet) {
+    return this.actor.receiveBridge(packet);
+  }
+  ownerSetup(p) {
+    return ownerSetup(this.actor, p);
+  }
+  alarm() {
+    return this.actor.alarm();
+  }
+  async fetch() {
+    return new Response("Not found", { status: 404 });
+  }
+};
+var worker_default = { async fetch() {
+  return new Response("Not found", { status: 404 });
+} };
+export {
+  QQGatewayObject,
+  worker_default as default
+};

@@ -1,0 +1,84 @@
+{
+  "name": "rivule-owner",
+  "main": "../production-readable-ui-candidate-20261018/modules/worker.js",
+  "no_bundle": true,
+  "compatibility_date": "2026-10-11",
+  "vars": {
+    "ALLOWED_PROJECT_IDS_JSON": "[]",
+    "APPLICATION_ID": "REPLACE_APPLICATION_ID",
+    "DELIVERY_ENABLED": "false",
+    "DIAGNOSTIC_READER_SOURCE_ID": "",
+    "DIAGNOSTICS_ENABLED": "false",
+    "DISCORD_PUBLIC_KEY": "REPLACE_DISCORD_PUBLIC_KEY",
+    "DM_CHANNEL_ID": "REPLACE_DM_CHANNEL_ID",
+    "GUILD_ID": "REPLACE_GUILD_ID",
+    "MUSE_API_ENABLED": "false",
+    "OAUTH_ALLOW_DYNAMIC_CLIENTS": "false",
+    "OAUTH_CLIENT_BINDINGS_JSON": "[]",
+    "OAUTH_ENABLED": "false",
+    "OWNER_DISCORD_ID": "REPLACE_OWNER_DISCORD_ID",
+    "OWNER_ID": "REPLACE_OWNER_ID",
+    "PUBLIC_ORIGIN": "https://terminal.example.invalid",
+    "QQ_ALLOWED_PROJECT_IDS": "[]",
+    "QQ_ALLOWED_SOURCE_IDS": "[]",
+    "QQ_APP_ID": "REPLACE_QQ_APP_ID",
+    "QQ_CAPABILITIES_JSON": "{}",
+    "QQ_DELIVERY_ENABLED": "false",
+    "QQ_ENABLED": "false",
+    "QQ_OWNER_ID": "REPLACE_QQ_OWNER_ID",
+    "QQ_SETUP_ENABLED": "false",
+    "SOURCES_JSON": "[]"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "OWNERS",
+        "class_name": "OwnerTerminal"
+      },
+      {
+        "name": "QQ_GATEWAY",
+        "class_name": "QQGatewayObject",
+        "script_name": "rivule-qq-gateway"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "OwnerTerminal"
+      ]
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "OAUTH_KV",
+      "id": "00000000000000000000000000000000"
+    }
+  ],
+  "find_additional_modules": true,
+  "rules": [
+    {
+      "type": "ESModule",
+      "globs": [
+        "**/*.mjs"
+      ],
+      "fallthrough": false
+    },
+    {
+      "type": "CompiledWasm",
+      "globs": [
+        "**/*.wasm"
+      ],
+      "fallthrough": false
+    },
+    {
+      "type": "Data",
+      "globs": [
+        "**/*.otf"
+      ],
+      "fallthrough": false
+    }
+  ],
+  "base_dir": "../production-readable-ui-candidate-20261018/modules"
+}

@@ -1,0 +1,471 @@
+Source-level copyright and SPDX attribution lines from the verified crate archives.
+These supplement, and do not replace, the accompanying license texts.
+
+adler32-1.2.0/src/lib.rs
+  Copyright (C) 1995-2013 Jean-loup Gailly and Mark Adler
+
+arrayvec-0.7.4/src/char.rs
+// Copyright 2012-2016 The Rust Project Developers. See the COPYRIGHT
+// http://rust-lang.org/COPYRIGHT.
+
+brotli-decompressor-2.5.1/src/context.rs
+// Copyright 2013 Google Inc. All Rights Reserved.
+
+deflate-1.0.0/src/bitstream.rs
+// Copyright (c) 2015 nwin
+
+flate2-1.0.28/src/bufreader.rs
+// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// <https://github.com/rust-lang/rust/blob/HEAD/COPYRIGHT>.
+
+kurbo-0.9.5/benches/cubic_arclen.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/benches/quad_arclen.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/benches/quartic.rs
+// Copyright 2022 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/benches/rect_expand.rs
+// Copyright 2020 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/examples/arclen_accuracy.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/examples/circle.rs
+// Copyright 2019 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/examples/cubic_arclen.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/examples/ellipse.rs
+// Copyright 2020 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/examples/fit_poly.rs
+// Copyright 2022 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/examples/offset.rs
+// Copyright 2022 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/examples/quad_intersect.rs
+// Copyright 2022 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/examples/simplify.rs
+// Copyright 2022 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/affine.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/arc.rs
+// Copyright 2019 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/bezpath.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/circle.rs
+// Copyright 2019 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/common.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/cubicbez.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/ellipse.rs
+// Copyright 2020 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/fit.rs
+// Copyright 2022 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/insets.rs
+// Copyright 2019 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/lib.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/line.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/mindist.rs
+// Copyright 2021 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/offset.rs
+// Copyright 2022 The Kurbo Authors
+
+kurbo-0.9.5/src/param_curve.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/point.rs
+// Copyright 2019 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/quadbez.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/quadspline.rs
+// Copyright 2021 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/rect.rs
+// Copyright 2019 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/rounded_rect.rs
+// Copyright 2019 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/rounded_rect_radii.rs
+// Copyright 2021 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/shape.rs
+// Copyright 2019 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/simplify.rs
+// Copyright 2022 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/size.rs
+// Copyright 2019 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/svg.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/translate_scale.rs
+// Copyright 2019 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+kurbo-0.9.5/src/vec2.rs
+// Copyright 2018 the Kurbo Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+pathfinder_content-0.5.0/src/clip.rs
+// Copyright © 2019 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/dash.rs
+// Copyright © 2019 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/dilation.rs
+// Copyright © 2019 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/effects.rs
+// Copyright © 2020 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/fill.rs
+// Copyright © 2019 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/gradient.rs
+// Copyright © 2020 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/lib.rs
+// Copyright © 2019 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/orientation.rs
+// Copyright © 2019 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/outline.rs
+// Copyright © 2019 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/pattern.rs
+// Copyright © 2020 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/render_target.rs
+// Copyright © 2020 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/segment.rs
+// Copyright © 2019 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/sorted_vector.rs
+// Copyright © 2020 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/stroke.rs
+// Copyright © 2019 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/transform.rs
+// Copyright © 2019 The Pathfinder Project Developers.
+
+pathfinder_content-0.5.0/src/util.rs
+// Copyright © 2020 The Pathfinder Project Developers.
+
+serde_json-1.0.115/src/lexical/mod.rs
+// copyright Alexander Huszagh.
+
+tiny-skia-0.10.0/src/alpha_runs.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/blitter.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/color.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/edge.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/edge_builder.rs
+// Copyright 2011 Google Inc.
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/edge_clipper.rs
+// Copyright 2009 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/fixed_point.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/geom.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/line_clipper.rs
+// Copyright 2011 Google Inc.
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/mask.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/math.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/painter.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/path64/cubic64.rs
+// Copyright 2012 Google Inc.
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/path64/line_cubic_intersections.rs
+// Copyright 2012 Google Inc.
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/path64/mod.rs
+// Copyright 2012 Google Inc.
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/path64/point64.rs
+// Copyright 2012 Google Inc.
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/path64/quad64.rs
+// Copyright 2012 Google Inc.
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/path_geometry.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/pipeline/blitter.rs
+// Copyright 2016 Google Inc.
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/pipeline/highp.rs
+// Copyright 2018 Google Inc.
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/pipeline/lowp.rs
+// Copyright 2018 Google Inc.
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/pipeline/mod.rs
+// Copyright 2016 Google Inc.
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/pixmap.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/scan/hairline.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/scan/hairline_aa.rs
+// Copyright 2011 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/scan/mod.rs
+// Copyright 2011 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/scan/path.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/scan/path_aa.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/shaders/gradient.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/shaders/linear_gradient.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/shaders/mod.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/shaders/pattern.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/shaders/radial_gradient.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/wide/f32x16_t.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/wide/f32x4_t.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/wide/f32x8_t.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/wide/i32x4_t.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/wide/i32x8_t.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/wide/mod.rs
+// Copyright 2020 Yevhenii Reizner
+// This module was written from scratch, therefore there is no Google copyright.
+
+tiny-skia-0.10.0/src/wide/u16x16_t.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/wide/u32x4_t.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-0.10.0/src/wide/u32x8_t.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/dash.rs
+// Copyright 2014 Google Inc.
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/f32x2_t.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/f32x4_t.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/floating_point.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/lib.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/path.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/path_builder.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/path_geometry.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/rect.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/scalar.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/size.rs
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/stroker.rs
+// Copyright 2008 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+tiny-skia-path-0.10.0/src/transform.rs
+// Copyright 2006 The Android Open Source Project
+// Copyright 2020 Yevhenii Reizner
+
+ttf-parser-0.18.1/src/tables/name.rs
+    pub const COPYRIGHT_NOTICE: u16 = 0;
+
+unicode-bidi-0.3.15/src/char_data/mod.rs
+// Copyright 2015 The Servo Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+
+unicode-bidi-0.3.15/src/data_source.rs
+// Copyright 2015 The Servo Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+
+unicode-bidi-0.3.15/src/deprecated.rs
+// Copyright 2015 The Servo Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+
+unicode-bidi-0.3.15/src/explicit.rs
+// Copyright 2015 The Servo Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+
+unicode-bidi-0.3.15/src/format_chars.rs
+// Copyright 2017 The Servo Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+
+unicode-bidi-0.3.15/src/implicit.rs
+// Copyright 2015 The Servo Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+
+unicode-bidi-0.3.15/src/level.rs
+// Copyright 2017 The Servo Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+
+unicode-bidi-0.3.15/src/lib.rs
+// Copyright 2015 The Servo Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+
+unicode-bidi-0.3.15/src/prepare.rs
+// Copyright 2015 The Servo Project Developers. See the
+// COPYRIGHT file at the top-level directory of this distribution.
+
+unicode-bidi-0.3.15/src/utf16.rs
+// Copyright 2023 The Mozilla Foundation. See the
+// COPYRIGHT file at the top-level directory of this distribution.

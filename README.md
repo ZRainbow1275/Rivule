@@ -72,13 +72,14 @@ Node.js 24 或更高，依赖由 package-lock.json 固定。
 cd local-candidate/cloudflare
 npm ci
 cd ../..
+node scripts/install-font.mjs
 node scripts/rebuild.mjs
 node scripts/verify-package.mjs
 ```
 
 重建顺序：原始已审计基线 → 中性显示层 → 只读任务快照 → 最新可读性显示层；QQ 独立重建错误分类和一次性主动测试。
 
-字体只在基线目录保留一份；WASM 不随仓库分发，从固定 npm 依赖读取、校验 SHA 后复制。依赖缺失或校验失败会停止构建。构建不会临时下载替代品、自制 WASM 或连接生产服务。各阶段哈希和最终产物由 PROVENANCE.json 与 PUBLIC_ASSET_TRANSFORM.json 校验。
+字体安装器从官方 Sans2.004 固定版本下载，校验输入 SHA，按记录的表重排与50字节元数据变换重建，再校验输出 SHA；生成字体与已验证资源逐字节一致。网络不可用或校验失败会清楚报错并停止，不安装半成品。字体和 WASM 二进制均不随仓库分发；WASM 从固定 npm 依赖读取、校验 SHA 后复制。依赖缺失或校验失败会停止构建。构建不会临时下载替代品、自制 WASM 或连接生产服务。各阶段哈希和最终产物由 PROVENANCE.json 与 PUBLIC_ASSET_TRANSFORM.json 校验。
 
 最终 owner 在 production-readable-ui-candidate-20261018/modules；最终 QQ gateway 在 production-qq-active-probe-candidate-20261018/modules。目录中的 production 是来源历史，不表示公开变体已部署。local-candidate/cloudflare/src 仅作显示编译输入与历史架构参考，不能整包直接部署替代生产衍生模块。
 

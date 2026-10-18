@@ -1,0 +1,36 @@
+Noto Sans CJK SC Regular, version 2.004
+
+Copyright notice retained from the bundled font name table (name ID 0):
+© 2014-2021 Adobe (http://www.adobe.com/).
+
+Trademark notice retained from the bundled font (name ID 7):
+Noto is a trademark of Google Inc.
+
+License: SIL Open Font License, Version 1.1 (OFL-1.1)
+See OFL-1.1.txt in this directory. The font remains under OFL-1.1;
+Rivule's project license does not replace this license.
+
+Bundled file: NotoSansCJKSC-Regular.otf
+SHA-256: 5d36f5998816d44aeb5dcf5cd2b9a0f01f25bfc31d84b79e4ab5c007a9120ddf
+Size: 16,437,340 bytes
+
+Recorded transformation: full Simplified Chinese face 2 extracted from
+NotoSansCJK-Regular.ttc; no glyph subset. This is a repackaged font, not a
+claim of byte identity with upstream's stand-alone OTF. Font name/license
+metadata is retained. The supplied upstream license does not declare a
+Reserved Font Name; the font's separate trademark notice is preserved.
+
+Upstream version source:
+https://github.com/notofonts/noto-cjk/tree/Sans2.004
+Upstream license:
+https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/LICENSE
+Upstream stand-alone OTF:
+https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf
+Upstream OTF SHA-256:
+2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b
+
+The Debian packaging copyright file separately retained in the restoration
+contains GPL-3+ terms for debian/* packaging only. Those terms do not change
+the OFL-1.1 license of the font. The font's own Adobe copyright above avoids
+mistaking the older Google copyright in that packaging record for a
+complete description of this version's font copyright.

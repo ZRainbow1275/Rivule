@@ -1,0 +1,30 @@
+{
+  "name": "rivule-worker",
+  "private": true,
+  "version": "0.2.0-cloudflare-candidate",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts qq-cloudflare/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm test && npm run typecheck",
+    "doctor": "node scripts/doctor.mjs",
+    "build:check": "wrangler deploy --dry-run --config wrangler.example.jsonc --outdir artifacts/build",
+    "test:runtime": "node scripts/verify-source-runtime.mjs",
+    "build:qq:check": "wrangler deploy --dry-run --config qq-cloudflare/wrangler.example.jsonc --outdir artifacts/qq-build",
+    "test:qq-runtime": "node scripts/verify-qq-source-runtime.mjs"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "1.2.3",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@resvg/resvg-wasm": "2.6.2",
+    "jose": "6.2.12"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261011.1",
+    "typescript": "6.0.3",
+    "wrangler": "4.149.0"
+  }
+}

@@ -1,0 +1,308 @@
+{
+  "source_url": "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
+  "source_sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+  "output_sha256": "5d36f5998816d44aeb5dcf5cd2b9a0f01f25bfc31d84b79e4ab5c007a9120ddf",
+  "output_path": "production-readonly-20261018/bbbot-pa-terminal/modules/9afe5fb649a734453ec6387663c37094ca1e46a9-NotoSansCJKSC-Regular.otf",
+  "output_size": 16437340,
+  "header_base64": "T1RUTwAQAQAABAAAQkFTRe369RYA74iQAAAA8ENGRiBlr6JGAAOneADr4RZHREVGAg4CAQDviYAAAAAcR1BPUwzIraIA74mcAAC5GkdTVUKjEKlIAPBCuAACjORPUy8yn+MX7gAAAXAAAABgVk9SR9ID9BUA8s+cAAADmGNtYXAuTy4SAAAKNAADnSFoZWFkKkA0ugAAAQwAAAA2aGhlYQwSCG4AAAFEAAAAJGhtdHgr5AVRAPLTNAAD//ZtYXhw//9QAAAAAWgAAAAGbmFtZdU1GCYAAAHQAAAIYnBvc3T/hgAyAAOnWAAAACB2aGVhDJ8VpQD20ywAAAAkdm10eJOOQ84A9tNQAAP9Cg==",
+  "tables": [
+    {
+      "tag": "BASE",
+      "offset": 15698064,
+      "length": 240,
+      "patches": []
+    },
+    {
+      "tag": "CFF ",
+      "offset": 239480,
+      "length": 15458582,
+      "patches": [
+        [
+          20,
+          106
+        ],
+        [
+          21,
+          112
+        ],
+        [
+          268,
+          74
+        ],
+        [
+          269,
+          80
+        ],
+        [
+          292,
+          74
+        ],
+        [
+          293,
+          80
+        ],
+        [
+          305,
+          106
+        ],
+        [
+          306,
+          112
+        ],
+        [
+          337,
+          106
+        ],
+        [
+          338,
+          112
+        ],
+        [
+          375,
+          106
+        ],
+        [
+          376,
+          112
+        ],
+        [
+          405,
+          106
+        ],
+        [
+          406,
+          112
+        ],
+        [
+          435,
+          106
+        ],
+        [
+          436,
+          112
+        ],
+        [
+          471,
+          106
+        ],
+        [
+          472,
+          112
+        ],
+        [
+          500,
+          106
+        ],
+        [
+          501,
+          112
+        ],
+        [
+          531,
+          106
+        ],
+        [
+          532,
+          112
+        ],
+        [
+          558,
+          106
+        ],
+        [
+          559,
+          112
+        ],
+        [
+          586,
+          106
+        ],
+        [
+          587,
+          112
+        ],
+        [
+          617,
+          106
+        ],
+        [
+          618,
+          112
+        ],
+        [
+          651,
+          106
+        ],
+        [
+          652,
+          112
+        ],
+        [
+          679,
+          106
+        ],
+        [
+          680,
+          112
+        ],
+        [
+          711,
+          106
+        ],
+        [
+          712,
+          112
+        ],
+        [
+          737,
+          106
+        ],
+        [
+          738,
+          112
+        ],
+        [
+          771,
+          106
+        ],
+        [
+          772,
+          112
+        ],
+        [
+          808,
+          106
+        ],
+        [
+          809,
+          112
+        ],
+        [
+          848,
+          106
+        ],
+        [
+          849,
+          112
+        ]
+      ]
+    },
+    {
+      "tag": "GDEF",
+      "offset": 15698304,
+      "length": 28,
+      "patches": []
+    },
+    {
+      "tag": "GPOS",
+      "offset": 15698332,
+      "length": 47386,
+      "patches": []
+    },
+    {
+      "tag": "GSUB",
+      "offset": 15745720,
+      "length": 167140,
+      "patches": []
+    },
+    {
+      "tag": "OS/2",
+      "offset": 368,
+      "length": 96,
+      "patches": []
+    },
+    {
+      "tag": "VORG",
+      "offset": 15912860,
+      "length": 920,
+      "patches": []
+    },
+    {
+      "tag": "cmap",
+      "offset": 2612,
+      "length": 236833,
+      "patches": []
+    },
+    {
+      "tag": "head",
+      "offset": 268,
+      "length": 54,
+      "patches": [
+        [
+          8,
+          137
+        ],
+        [
+          9,
+          36
+        ],
+        [
+          10,
+          209
+        ],
+        [
+          11,
+          184
+        ],
+        [
+          32,
+          230
+        ],
+        [
+          33,
+          241
+        ],
+        [
+          34,
+          97
+        ],
+        [
+          35,
+          167
+        ]
+      ]
+    },
+    {
+      "tag": "hhea",
+      "offset": 324,
+      "length": 36,
+      "patches": []
+    },
+    {
+      "tag": "hmtx",
+      "offset": 15913780,
+      "length": 262134,
+      "patches": []
+    },
+    {
+      "tag": "maxp",
+      "offset": 360,
+      "length": 6,
+      "patches": []
+    },
+    {
+      "tag": "name",
+      "offset": 464,
+      "length": 2146,
+      "patches": []
+    },
+    {
+      "tag": "post",
+      "offset": 239448,
+      "length": 32,
+      "patches": []
+    },
+    {
+      "tag": "vhea",
+      "offset": 16175916,
+      "length": 36,
+      "patches": []
+    },
+    {
+      "tag": "vmtx",
+      "offset": 16175952,
+      "length": 261386,
+      "patches": []
+    }
+  ]
+}

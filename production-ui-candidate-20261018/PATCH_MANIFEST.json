@@ -1,0 +1,13 @@
+{
+  "base_main_sha256": "f6a41f8ea9301336db0354f390b0dacecc5cc2c8a37ab18c4e2c9cb21f9c49e7",
+  "candidate_main_sha256": "9becfb77fdf3edb1bc999ac598917643319562e8103c1a73f288437d43150b21",
+  "patch_sha256": "c4ca302a460fc79a05237a20099bcc1d2789e076f423862bcdf3985502d07556",
+  "reverse_patch_recovers_exact_public_baseline": true,
+  "preserved_modules": [
+    "qq-integration.mjs",
+    "font",
+    "wasm"
+  ],
+  "changes": "Display-only renderer/messages and option descriptions; production authentication, source_connections, owner storage, routing and QQ unchanged",
+  "deployed": false
+}
