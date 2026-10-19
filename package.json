@@ -1,0 +1,25 @@
+{
+  "name": "rivule",
+  "version": "0.3.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "resources": "node scripts/install-font.mjs",
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/check.mjs"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "1.2.3",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@resvg/resvg-wasm": "2.6.2",
+    "jose": "6.2.12"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261011.1",
+    "typescript": "6.0.3",
+    "wrangler": "4.149.0"
+  },
+  "license": "AGPL-3.0-only"
+}

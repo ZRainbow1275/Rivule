@@ -1,23 +1,9 @@
 node_modules/
+dist/
+assets/font.otf
+assets/font.otf.tmp
 .wrangler/
-.env
-.env.*
+.env*
 !.env.example
-*private*.json
-*settings.json
-*.log
-
-# Locally restored from pinned dependencies; never redistributed as binary
-*.wasm
-**/test/worker.node.mjs
-production-readable-ui-candidate-20261018/preview/
-**/ui-entry.generated.js
-
-production-ui-candidate-20261018/ui-entry.js
-**/validation/*.capnp
-**/modules/*.otf
-!production-readonly-20261018/bbbot-pa-terminal/modules/9afe5fb649a734453ec6387663c37094ca1e46a9-NotoSansCJKSC-Regular.otf
-
-# Generated, SHA-verified OFL font
-production-readonly-20261018/bbbot-pa-terminal/modules/9afe5fb649a734453ec6387663c37094ca1e46a9-NotoSansCJKSC-Regular.otf
-production-readonly-20261018/bbbot-pa-terminal/modules/9afe5fb649a734453ec6387663c37094ca1e46a9-NotoSansCJKSC-Regular.otf.tmp
+.dev.vars*
+config/*.private.json

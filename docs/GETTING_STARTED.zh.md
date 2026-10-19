@@ -1,0 +1,97 @@
+# 从第一条通知开始
+
+目标很简单：让一个已授权的助手上报一条测试更新，并在你自己的 Discord 中看见它。
+
+[图文步骤](showcase/start.html) · [返回 README](../README.md) · [交给 AI 协助](AI_HANDOFF.zh.md)
+
+## 先选你的起点
+
+- **我是所有者，要搭建服务**：从第 1 步开始。你需要 Cloudflare 账号、自己的 Discord 应用与 bot，以及一个准备接入的助手
+- **服务已经搭好，我要接入助手**：向所有者确认服务地址、来源 ID 和项目 ID，然后从[第 3 步](#assistant)开始
+- **我只想看看样子**：打开[静态演示](showcase/index.html#preview)，无需账号、安装或密钥
+
+PA 指个人 AI 助手；owner 指维护 Rivule 服务和接收通知的所有者。第一次自托管需要配置服务，请逐项完成配置和自己的连接检查。
+
+<a id="build"></a>
+## 1. 在本地构建
+
+确认终端位于源码根目录，且 `node --version` 为 24 或更新版本，然后运行：
+
+```sh
+npm ci --ignore-scripts
+node scripts/install-font.mjs
+node scripts/build.mjs
+```
+
+**完成标志**：命令全部成功，`dist/owner` 与 `dist/gateway` 中生成可部署模块。这一步只准备本地部署文件，不会创建云服务。
+
+依赖安装和字体恢复需要网络；下载失败或哈希不匹配时，按[构建排查](TROUBLESHOOTING.zh.md#build)处理。
+
+<a id="owner"></a>
+## 2. 所有者准备并部署服务
+
+跟着[部署清单](OPERATIONS.md#owner-setup)逐项完成：
+
+1. 从两个配置模板建立私人配置，填入自己的 Worker 名称、服务域名、Cloudflare KV 和 Discord 目标信息
+2. 确认 owner 的 `OwnerTerminal`、gateway 的 `QQGatewayObject`、跨 Worker 的 `QQ_GATEWAY` 绑定和迁移；已有安装保留原命名空间及迁移历史
+3. 配置一个来源与允许的项目，选定 MCP OAuth、Muse API 或 HMAC 接入方式。使用服务提供的安全设置入口配置凭据
+4. 用构建生成的 owner / gateway 模块完成部署检查；按照[部署与回滚](OPERATIONS.md#release-check)执行发布与回读
+5. 将 Discord 应用的交互地址设置为你配置的 `PUBLIC_ORIGIN` 加 `/discord/interactions`，检查签名握手和 bot / 用户 / DM 绑定
+
+**完成标志**：服务部署与配置检查完成；所有者能给助手一个确定的接入地址、来源 ID 和获准使用的项目 ID。模板的发送开关起初关闭，真实测试前再由所有者启用所需渠道。
+
+不要把“服务有响应”当作“通知能收到”。`/healthz` 只是配置探针，最终要做第 4 步的实收测试。
+
+<a id="assistant"></a>
+## 3. 助手连接 Rivule
+
+### MCP 连接
+
+1. 在支持远程 MCP 的助手中添加所有者给出的地址：`PUBLIC_ORIGIN/mcp/<source_id>`
+2. 在正常的授权页面完成当前来源的 OAuth 授权
+3. 初始化连接并读取工具列表，确认 `publish_task_update`、`get_delivery_status` 和 `get_task_snapshot` 可见
+4. 保存所有者给出的项目、任务、run 和 branch 标识，用于这次测试
+
+`PUBLIC_ORIGIN` 和 `<source_id>` 是说明占位符，要换成当前服务的实际值。不同助手的设置界面不同，以其实际支持的 MCP / OAuth 流程为准。
+
+### HTTP 连接
+
+Muse API 和 HMAC 是不同接入方式，鉴权和事件封装也不同。使用[接入文档的路由表](INTEGRATIONS.md#http)，让集成方按当前合同配置；不要把一个接口的请求直接复制到另一个接口。
+
+**完成标志**：当前连接的认证与读取成功。此时还没有证明消息送达。
+
+<a id="first-message"></a>
+## 4. 一次测试，检查三件事
+
+所有者确认测试的接收渠道和内容后，助手执行：
+
+1. **读取现状**：MCP 调用 `get_task_snapshot`，指定自己的 `project_id`、`task_id`、`run_id`、`branch_id`。由维护事件顺序的来源决定下一次序号；返回的建议不预留序号
+2. **上报更新**：按当前 `tools/list` 返回的 schema，调用一次 `publish_task_update`。用清楚的测试摘要，例如“第一条连接测试：请确认你已收到”，并保存返回的 `receipt_id`
+3. **查询并实收**：用同一来源调用 `get_delivery_status`，再由所有者在 Discord 确认内容、来源和目标正确
+
+把结果记为：连接已认证 / 更新已接受 / 通知已实收。三个状态都确认后，这个来源才算接通。回执中的顶层 `delivery` / `deliveries` 描述 Discord，其他已配置渠道看独立的 `channels` 结果。
+
+如果回执等待中，就查询这张回执；如果结果未知，就检查回执和目标聊天。先查清楚再决定下一步，避免同一条测试重复发送。具体状态见[问题排查](TROUBLESHOOTING.zh.md#delivery)。
+
+<a id="qq"></a>
+## 可选：再接 QQ
+
+先完成 Discord 的第一条通知，再处理 QQ 的连接、绑定和测试三个阶段。固定回复成功后，可由所有者触发一次性主动测试；会话内持续通知需另行开启。
+
+- 公开配置模板默认关闭持续通知，开启后只在当前已授权会话内运行
+- 每日连接预算为 120 分钟，主动通知上限 100 次，最小间隔 3 秒；设置页显示连接预算和队列容量
+- 暂停会结束本轮授权；绑定或权限变化后要重新检查
+
+QQ 当前不提供全天候服务，也没有实现与 Discord 的全部功能对齐。详细要求见[会话通知配置](OPERATIONS.md#qq-session)。
+
+## 在 QQ 设置中查看状态
+
+1. 打开 QQ 主面板，查看连接、接收账户与本轮通知状态
+2. 需要查看最新状态时点击“刷新”，当前面板会原地更新
+3. 完成查看后，使用“返回总览”入口回到任务总览
+
+刷新只用于查看状态，不代替所有者的主动验证或本轮通知开启；遇到发送结果未知，先检查接收聊天与原回执。
+
+## 接通以后
+
+每次增加来源，都重复“认证 → 一条测试 → 回执 → 实收”。让助手在有进展、阻塞或需要你决定时明确上报；用简短摘要说清发生了什么，再给一个具体下一步。

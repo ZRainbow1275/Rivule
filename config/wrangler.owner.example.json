@@ -1,6 +1,6 @@
 {
   "name": "rivule-owner",
-  "main": "../production-readable-ui-candidate-20261018/modules/worker.js",
+  "main": "../dist/owner/worker.js",
   "no_bundle": true,
   "compatibility_date": "2026-10-11",
   "vars": {
@@ -80,5 +80,5 @@
       "fallthrough": false
     }
   ],
-  "base_dir": "../production-readable-ui-candidate-20261018/modules"
+  "base_dir": "../dist/owner"
 }

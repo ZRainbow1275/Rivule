@@ -2,7 +2,7 @@
   "source_url": "https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf",
   "source_sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
   "output_sha256": "5d36f5998816d44aeb5dcf5cd2b9a0f01f25bfc31d84b79e4ab5c007a9120ddf",
-  "output_path": "production-readonly-20261018/bbbot-pa-terminal/modules/9afe5fb649a734453ec6387663c37094ca1e46a9-NotoSansCJKSC-Regular.otf",
+  "output_path": "assets/font.otf",
   "output_size": 16437340,
   "header_base64": "T1RUTwAQAQAABAAAQkFTRe369RYA74iQAAAA8ENGRiBlr6JGAAOneADr4RZHREVGAg4CAQDviYAAAAAcR1BPUwzIraIA74mcAAC5GkdTVUKjEKlIAPBCuAACjORPUy8yn+MX7gAAAXAAAABgVk9SR9ID9BUA8s+cAAADmGNtYXAuTy4SAAAKNAADnSFoZWFkKkA0ugAAAQwAAAA2aGhlYQwSCG4AAAFEAAAAJGhtdHgr5AVRAPLTNAAD//ZtYXhw//9QAAAAAWgAAAAGbmFtZdU1GCYAAAHQAAAIYnBvc3T/hgAyAAOnWAAAACB2aGVhDJ8VpQD20ywAAAAkdm10eJOOQ84A9tNQAAP9Cg==",
   "tables": [

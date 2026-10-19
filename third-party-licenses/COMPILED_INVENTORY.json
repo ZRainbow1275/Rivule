@@ -1,6 +1,5 @@
 {
-  "audit_date": "2026-10-18",
-  "scope": "Public distribution of restored Rivule package; no project license selected",
+  "scope": "Third-party source URLs, integrity hashes, licenses and notices for application dependencies",
   "binary_sha256": "22bf6e9f9a100d972da0411a69c5ba504367fc1fa87b3b64e3f35e53926d2d70",
   "binary_package": "@resvg/resvg-wasm@2.6.2",
   "source_path_crate_count": 38,
@@ -15,53 +14,9 @@
       "repository": "https://github.com/remram44/adler32-rs",
       "source_url": "https://static.crates.io/crates/adler32/adler32-1.2.0.crate",
       "sha256": "aae1277d39aeec15cb388266ecc24b11c80469deae6067e17a1a7aa9e5c1f234",
-      "source_archive": "source-archives/adler32-1.2.0.crate",
       "notices": [
-        "notices/crates/adler32-1.2.0/LICENSE"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "compiler_builtins": {
-            "version": "0.1.2",
-            "optional": true
-          },
-          "core": {
-            "version": "1.0.0",
-            "optional": true,
-            "package": "rustc-std-workspace-core"
-          }
-        },
-        "dev-dependencies": {
-          "criterion": {
-            "version": "0.3"
-          },
-          "getrandom": {
-            "version": "0.1",
-            "features": [
-              "wasm-bindgen"
-            ]
-          },
-          "humansize": {
-            "version": "1.1"
-          },
-          "rand": {
-            "version": "0.7"
-          }
-        },
-        "target": {
-          "cfg(target_arch = \"wasm32\")": {
-            "dev-dependencies": {
-              "wasm-bindgen": {
-                "version": "0.2.63"
-              },
-              "wasm-bindgen-test": {
-                "version": "0.3"
-              }
-            }
-          }
-        }
-      }
+        "compiled-components/crates/adler32-1.2.0/LICENSE"
+      ]
     },
     {
       "name": "alloc-no-stdlib",
@@ -71,12 +26,9 @@
       "repository": "https://github.com/dropbox/rust-alloc-no-stdlib",
       "source_url": "https://static.crates.io/crates/alloc-no-stdlib/alloc-no-stdlib-2.0.4.crate",
       "sha256": "cc7bb162ec39d46ab1ca8c77bf72e890535becd1751bb45f64c597edb4c8c6b3",
-      "source_archive": "source-archives/alloc-no-stdlib-2.0.4.crate",
       "notices": [
-        "notices/crates/alloc-no-stdlib-2.0.4/LICENSE"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {}
+        "compiled-components/crates/alloc-no-stdlib-2.0.4/LICENSE"
+      ]
     },
     {
       "name": "arrayvec",
@@ -86,38 +38,10 @@
       "repository": "https://github.com/bluss/arrayvec",
       "source_url": "https://static.crates.io/crates/arrayvec/arrayvec-0.7.4.crate",
       "sha256": "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711",
-      "source_archive": "source-archives/arrayvec-0.7.4.crate",
       "notices": [
-        "notices/crates/arrayvec-0.7.4/LICENSE-APACHE",
-        "notices/crates/arrayvec-0.7.4/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "serde": {
-            "version": "1.0",
-            "optional": true,
-            "default-features": false
-          },
-          "zeroize": {
-            "version": "1.4",
-            "optional": true,
-            "default-features": false
-          }
-        },
-        "dev-dependencies": {
-          "bencher": {
-            "version": "0.1.4"
-          },
-          "matches": {
-            "version": "0.1"
-          },
-          "serde_test": {
-            "version": "1.0"
-          }
-        },
-        "build-dependencies": {}
-      }
+        "compiled-components/crates/arrayvec-0.7.4/LICENSE-APACHE",
+        "compiled-components/crates/arrayvec-0.7.4/LICENSE-MIT"
+      ]
     },
     {
       "name": "base64",
@@ -127,46 +51,10 @@
       "repository": "https://github.com/marshallpierce/rust-base64",
       "source_url": "https://static.crates.io/crates/base64/base64-0.21.7.crate",
       "sha256": "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567",
-      "source_archive": "source-archives/base64-0.21.7.crate",
       "notices": [
-        "notices/crates/base64-0.21.7/LICENSE-APACHE",
-        "notices/crates/base64-0.21.7/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dev-dependencies": {
-          "clap": {
-            "version": "3.2.25",
-            "features": [
-              "derive"
-            ]
-          },
-          "criterion": {
-            "version": "0.4.0"
-          },
-          "once_cell": {
-            "version": "1"
-          },
-          "rand": {
-            "version": "0.8.5",
-            "features": [
-              "small_rng"
-            ]
-          },
-          "rstest": {
-            "version": "0.13.0"
-          },
-          "rstest_reuse": {
-            "version": "0.6.0"
-          },
-          "strum": {
-            "version": "0.25",
-            "features": [
-              "derive"
-            ]
-          }
-        }
-      }
+        "compiled-components/crates/base64-0.21.7/LICENSE-APACHE",
+        "compiled-components/crates/base64-0.21.7/LICENSE-MIT"
+      ]
     },
     {
       "name": "bitvec",
@@ -176,57 +64,9 @@
       "repository": "https://github.com/bitvecto-rs/bitvec",
       "source_url": "https://static.crates.io/crates/bitvec/bitvec-1.0.1.crate",
       "sha256": "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c",
-      "source_archive": "source-archives/bitvec-1.0.1.crate",
       "notices": [
-        "notices/crates/bitvec-1.0.1/LICENSE.txt"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "funty": {
-            "version": "^2.0",
-            "default-features": false
-          },
-          "radium": {
-            "version": "0.7"
-          },
-          "serde": {
-            "version": "1",
-            "optional": true,
-            "default-features": false
-          },
-          "tap": {
-            "version": "1"
-          },
-          "wyz": {
-            "version": "0.5",
-            "default-features": false
-          }
-        },
-        "dev-dependencies": {
-          "bincode": {
-            "version": "1.3"
-          },
-          "criterion": {
-            "version": "0.3"
-          },
-          "rand": {
-            "version": "0.8"
-          },
-          "serde": {
-            "version": "1"
-          },
-          "serde_json": {
-            "version": "1"
-          },
-          "serde_test": {
-            "version": "1"
-          },
-          "static_assertions": {
-            "version": "1"
-          }
-        }
-      }
+        "compiled-components/crates/bitvec-1.0.1/LICENSE.txt"
+      ]
     },
     {
       "name": "brotli-decompressor",
@@ -236,22 +76,9 @@
       "repository": "https://github.com/dropbox/rust-brotli-decompressor",
       "source_url": "https://static.crates.io/crates/brotli-decompressor/brotli-decompressor-2.5.1.crate",
       "sha256": "4e2e4afe60d7dd600fdd3de8d0f08c2b7ec039712e3b6137ff98b7004e82de4f",
-      "source_archive": "source-archives/brotli-decompressor-2.5.1.crate",
       "notices": [
-        "notices/crates/brotli-decompressor-2.5.1/LICENSE"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "alloc-no-stdlib": {
-            "version": "~2.0"
-          },
-          "alloc-stdlib": {
-            "version": "~0.2",
-            "optional": true
-          }
-        }
-      }
+        "compiled-components/crates/brotli-decompressor-2.5.1/LICENSE"
+      ]
     },
     {
       "name": "bytemuck",
@@ -261,21 +88,11 @@
       "repository": "https://github.com/Lokathor/bytemuck",
       "source_url": "https://static.crates.io/crates/bytemuck/bytemuck-1.15.0.crate",
       "sha256": "5d6d68c57235a3a081186990eca2867354726650f42f7516ca50c28d6281fd15",
-      "source_archive": "source-archives/bytemuck-1.15.0.crate",
       "notices": [
-        "notices/crates/bytemuck-1.15.0/LICENSE-APACHE",
-        "notices/crates/bytemuck-1.15.0/LICENSE-MIT",
-        "notices/crates/bytemuck-1.15.0/LICENSE-ZLIB"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "bytemuck_derive": {
-            "version": "1.4",
-            "optional": true
-          }
-        }
-      }
+        "compiled-components/crates/bytemuck-1.15.0/LICENSE-APACHE",
+        "compiled-components/crates/bytemuck-1.15.0/LICENSE-MIT",
+        "compiled-components/crates/bytemuck-1.15.0/LICENSE-ZLIB"
+      ]
     },
     {
       "name": "bytes",
@@ -285,37 +102,9 @@
       "repository": "https://github.com/tokio-rs/bytes",
       "source_url": "https://static.crates.io/crates/bytes/bytes-1.6.0.crate",
       "sha256": "514de17de45fdb8dc022b1a7975556c53c86f9f0aa5f534b98977b171857c2c9",
-      "source_archive": "source-archives/bytes-1.6.0.crate",
       "notices": [
-        "notices/crates/bytes-1.6.0/LICENSE"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "serde": {
-            "version": "1.0.60",
-            "features": [
-              "alloc"
-            ],
-            "optional": true,
-            "default-features": false
-          }
-        },
-        "dev-dependencies": {
-          "serde_test": {
-            "version": "1.0"
-          }
-        },
-        "target": {
-          "cfg(loom)": {
-            "dev-dependencies": {
-              "loom": {
-                "version": "0.7"
-              }
-            }
-          }
-        }
-      }
+        "compiled-components/crates/bytes-1.6.0/LICENSE"
+      ]
     },
     {
       "name": "data-url",
@@ -325,28 +114,10 @@
       "repository": "https://github.com/servo/rust-url",
       "source_url": "https://static.crates.io/crates/data-url/data-url-0.2.0.crate",
       "sha256": "8d7439c3735f405729d52c3fbbe4de140eaf938a1fe47d227c27f8254d4302a5",
-      "source_archive": "source-archives/data-url-0.2.0.crate",
       "notices": [
-        "notices/crates/data-url-0.2.0/LICENSE-APACHE",
-        "notices/crates/data-url-0.2.0/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dev-dependencies": {
-          "serde": {
-            "version": "1.0",
-            "features": [
-              "derive"
-            ]
-          },
-          "serde_json": {
-            "version": "1.0"
-          },
-          "tester": {
-            "version": "0.9"
-          }
-        }
-      }
+        "compiled-components/crates/data-url-0.2.0/LICENSE-APACHE",
+        "compiled-components/crates/data-url-0.2.0/LICENSE-MIT"
+      ]
     },
     {
       "name": "deflate",
@@ -356,28 +127,10 @@
       "repository": "https://github.com/image-rs/deflate-rs",
       "source_url": "https://static.crates.io/crates/deflate/deflate-1.0.0.crate",
       "sha256": "c86f7e25f518f4b81808a2cf1c50996a61f5c2eb394b2393bd87f2a4780a432f",
-      "source_archive": "source-archives/deflate-1.0.0.crate",
       "notices": [
-        "notices/crates/deflate-1.0.0/LICENSE-APACHE",
-        "notices/crates/deflate-1.0.0/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "adler32": {
-            "version": "1.2.0"
-          },
-          "gzip-header": {
-            "version": "1.0",
-            "optional": true
-          }
-        },
-        "dev-dependencies": {
-          "miniz_oxide": {
-            "version": "0.5.0"
-          }
-        }
-      }
+        "compiled-components/crates/deflate-1.0.0/LICENSE-APACHE",
+        "compiled-components/crates/deflate-1.0.0/LICENSE-MIT"
+      ]
     },
     {
       "name": "flate2",
@@ -387,62 +140,10 @@
       "repository": "https://github.com/rust-lang/flate2-rs",
       "source_url": "https://static.crates.io/crates/flate2/flate2-1.0.28.crate",
       "sha256": "46303f565772937ffe1d394a4fac6f411c6013172fadde9dcdb1e147a086940e",
-      "source_archive": "source-archives/flate2-1.0.28.crate",
       "notices": [
-        "notices/crates/flate2-1.0.28/LICENSE-APACHE",
-        "notices/crates/flate2-1.0.28/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "cloudflare-zlib-sys": {
-            "version": "0.3.0",
-            "optional": true
-          },
-          "crc32fast": {
-            "version": "1.2.0"
-          },
-          "libz-ng-sys": {
-            "version": "1.1.8",
-            "optional": true
-          },
-          "libz-sys": {
-            "version": "1.1.8",
-            "optional": true,
-            "default-features": false
-          },
-          "miniz_oxide": {
-            "version": "0.7.1",
-            "features": [
-              "with-alloc"
-            ],
-            "optional": true,
-            "default-features": false
-          }
-        },
-        "dev-dependencies": {
-          "quickcheck": {
-            "version": "1.0",
-            "default-features": false
-          },
-          "rand": {
-            "version": "0.8"
-          }
-        },
-        "target": {
-          "cfg(all(target_arch = \"wasm32\", not(target_os = \"emscripten\")))": {
-            "dependencies": {
-              "miniz_oxide": {
-                "version": "0.7.1",
-                "features": [
-                  "with-alloc"
-                ],
-                "default-features": false
-              }
-            }
-          }
-        }
-      }
+        "compiled-components/crates/flate2-1.0.28/LICENSE-APACHE",
+        "compiled-components/crates/flate2-1.0.28/LICENSE-MIT"
+      ]
     },
     {
       "name": "fontdb",
@@ -452,60 +153,10 @@
       "repository": "https://github.com/RazrFalcon/fontdb",
       "source_url": "https://static.crates.io/crates/fontdb/fontdb-0.14.1.crate",
       "sha256": "af8d8cbea8f21307d7e84bca254772981296f058a1d36b461bf4d83a7499fc9e",
-      "source_archive": "source-archives/fontdb-0.14.1.crate",
       "notices": [
-        "notices/crates/fontdb-0.14.1/LICENSE",
-        "notices/crates/fontdb-0.14.1/tests/fonts/LICENSE.txt"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "log": {
-            "version": "0.4"
-          },
-          "memmap2": {
-            "version": "0.6",
-            "optional": true
-          },
-          "slotmap": {
-            "version": "1.0.6",
-            "default-features": false
-          },
-          "tinyvec": {
-            "version": "1.6.0",
-            "features": [
-              "alloc"
-            ]
-          },
-          "ttf-parser": {
-            "version": "0.19",
-            "features": [
-              "opentype-layout",
-              "apple-layout",
-              "variable-fonts",
-              "glyph-names"
-            ],
-            "default-features": false
-          }
-        },
-        "dev-dependencies": {
-          "env_logger": {
-            "version": "0.9",
-            "default-features": false
-          }
-        },
-        "target": {
-          "cfg(all(unix, not(any(target_os = \"macos\", target_os = \"android\"))))": {
-            "dependencies": {
-              "fontconfig-parser": {
-                "version": "0.5",
-                "optional": true,
-                "default-features": false
-              }
-            }
-          }
-        }
-      }
+        "compiled-components/crates/fontdb-0.14.1/LICENSE",
+        "compiled-components/crates/fontdb-0.14.1/tests/fonts/LICENSE.txt"
+      ]
     },
     {
       "name": "gif",
@@ -515,34 +166,10 @@
       "repository": "https://github.com/image-rs/image-gif",
       "source_url": "https://static.crates.io/crates/gif/gif-0.12.0.crate",
       "sha256": "80792593675e051cf94a4b111980da2ba60d4a83e43e0048c5693baab3977045",
-      "source_archive": "source-archives/gif-0.12.0.crate",
       "notices": [
-        "notices/crates/gif-0.12.0/LICENSE-APACHE",
-        "notices/crates/gif-0.12.0/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "color_quant": {
-            "version": "1.0",
-            "optional": true
-          },
-          "weezl": {
-            "version": "0.1.5"
-          }
-        },
-        "dev-dependencies": {
-          "criterion": {
-            "version": "0.3.1"
-          },
-          "glob": {
-            "version": "0.3"
-          },
-          "png": {
-            "version": "0.17.2"
-          }
-        }
-      }
+        "compiled-components/crates/gif-0.12.0/LICENSE-APACHE",
+        "compiled-components/crates/gif-0.12.0/LICENSE-MIT"
+      ]
     },
     {
       "name": "imagesize",
@@ -552,25 +179,9 @@
       "repository": "https://github.com/Roughsketch/imagesize",
       "source_url": "https://static.crates.io/crates/imagesize/imagesize-0.12.0.crate",
       "sha256": "029d73f573d8e8d63e6d5020011d3255b28c3ba85d6cf870a07184ed23de9284",
-      "source_archive": "source-archives/imagesize-0.12.0.crate",
       "notices": [
-        "notices/crates/imagesize-0.12.0/LICENSE"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {},
-        "dev-dependencies": {
-          "criterion": {
-            "version": "0.4",
-            "features": [
-              "html_reports"
-            ]
-          },
-          "walkdir": {
-            "version": "2.3.3"
-          }
-        }
-      }
+        "compiled-components/crates/imagesize-0.12.0/LICENSE"
+      ]
     },
     {
       "name": "jpeg-decoder",
@@ -580,37 +191,10 @@
       "repository": "https://github.com/image-rs/jpeg-decoder",
       "source_url": "https://static.crates.io/crates/jpeg-decoder/jpeg-decoder-0.3.1.crate",
       "sha256": "f5d4a7da358eff58addd2877a45865158f0d78c911d43a5784ceb7bbf52833b0",
-      "source_archive": "source-archives/jpeg-decoder-0.3.1.crate",
       "notices": [
-        "notices/crates/jpeg-decoder-0.3.1/LICENSE-APACHE",
-        "notices/crates/jpeg-decoder-0.3.1/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "rayon": {
-            "version": "1.5.1",
-            "optional": true
-          }
-        },
-        "dev-dependencies": {
-          "criterion": {
-            "version": "0.3"
-          },
-          "png": {
-            "version": "0.16"
-          },
-          "walkdir": {
-            "version": "2.0"
-          },
-          "wasm-bindgen": {
-            "version": "=0.2.83"
-          },
-          "wasm-bindgen-test": {
-            "version": "0.3"
-          }
-        }
-      }
+        "compiled-components/crates/jpeg-decoder-0.3.1/LICENSE-APACHE",
+        "compiled-components/crates/jpeg-decoder-0.3.1/LICENSE-MIT"
+      ]
     },
     {
       "name": "kurbo",
@@ -620,58 +204,10 @@
       "repository": "https://github.com/linebender/kurbo",
       "source_url": "https://static.crates.io/crates/kurbo/kurbo-0.9.5.crate",
       "sha256": "bd85a5776cd9500c2e2059c8c76c3b01528566b7fcbaf8098b55a33fc298849b",
-      "source_archive": "source-archives/kurbo-0.9.5.crate",
       "notices": [
-        "notices/crates/kurbo-0.9.5/LICENSE-APACHE",
-        "notices/crates/kurbo-0.9.5/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "arrayvec": {
-            "version": "0.7.1",
-            "default-features": false
-          },
-          "libm": {
-            "version": "0.2.6",
-            "optional": true
-          },
-          "mint": {
-            "version": "0.5.1",
-            "optional": true
-          },
-          "schemars": {
-            "version": "0.8.6",
-            "optional": true
-          },
-          "serde": {
-            "version": "1.0.105",
-            "features": [
-              "alloc",
-              "derive"
-            ],
-            "optional": true,
-            "default-features": false
-          }
-        },
-        "dev-dependencies": {
-          "rand": {
-            "version": "0.8.0"
-          }
-        },
-        "target": {
-          "cfg(target_arch=\"wasm32\")": {
-            "dev-dependencies": {
-              "getrandom": {
-                "version": "0.2.0",
-                "features": [
-                  "js"
-                ]
-              }
-            }
-          }
-        }
-      }
+        "compiled-components/crates/kurbo-0.9.5/LICENSE-APACHE",
+        "compiled-components/crates/kurbo-0.9.5/LICENSE-MIT"
+      ]
     },
     {
       "name": "miniz_oxide",
@@ -681,41 +217,12 @@
       "repository": "https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide",
       "source_url": "https://static.crates.io/crates/miniz_oxide/miniz_oxide-0.5.4.crate",
       "sha256": "96590ba8f175222643a85693f33d26e9c8a015f599c216509b1a6894af675d34",
-      "source_archive": "source-archives/miniz_oxide-0.5.4.crate",
       "notices": [
-        "notices/crates/miniz_oxide-0.5.4/LICENSE",
-        "notices/crates/miniz_oxide-0.5.4/LICENSE-APACHE.md",
-        "notices/crates/miniz_oxide-0.5.4/LICENSE-MIT.md",
-        "notices/crates/miniz_oxide-0.5.4/LICENSE-ZLIB.md"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "adler": {
-            "version": "1.0",
-            "default-features": false
-          },
-          "alloc": {
-            "version": "1.0.0",
-            "optional": true,
-            "package": "rustc-std-workspace-alloc"
-          },
-          "compiler_builtins": {
-            "version": "0.1.2",
-            "optional": true
-          },
-          "core": {
-            "version": "1.0.0",
-            "optional": true,
-            "package": "rustc-std-workspace-core"
-          },
-          "simd-adler32": {
-            "version": "0.3",
-            "optional": true,
-            "default-features": false
-          }
-        }
-      }
+        "compiled-components/crates/miniz_oxide-0.5.4/LICENSE",
+        "compiled-components/crates/miniz_oxide-0.5.4/LICENSE-APACHE.md",
+        "compiled-components/crates/miniz_oxide-0.5.4/LICENSE-MIT.md",
+        "compiled-components/crates/miniz_oxide-0.5.4/LICENSE-ZLIB.md"
+      ]
     },
     {
       "name": "miniz_oxide",
@@ -725,41 +232,12 @@
       "repository": "https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide",
       "source_url": "https://static.crates.io/crates/miniz_oxide/miniz_oxide-0.7.2.crate",
       "sha256": "9d811f3e15f28568be3407c8e7fdb6514c1cda3cb30683f15b6a1a1dc4ea14a7",
-      "source_archive": "source-archives/miniz_oxide-0.7.2.crate",
       "notices": [
-        "notices/crates/miniz_oxide-0.7.2/LICENSE",
-        "notices/crates/miniz_oxide-0.7.2/LICENSE-APACHE.md",
-        "notices/crates/miniz_oxide-0.7.2/LICENSE-MIT.md",
-        "notices/crates/miniz_oxide-0.7.2/LICENSE-ZLIB.md"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "adler": {
-            "version": "1.0",
-            "default-features": false
-          },
-          "alloc": {
-            "version": "1.0.0",
-            "optional": true,
-            "package": "rustc-std-workspace-alloc"
-          },
-          "compiler_builtins": {
-            "version": "0.1.2",
-            "optional": true
-          },
-          "core": {
-            "version": "1.0.0",
-            "optional": true,
-            "package": "rustc-std-workspace-core"
-          },
-          "simd-adler32": {
-            "version": "0.3",
-            "optional": true,
-            "default-features": false
-          }
-        }
-      }
+        "compiled-components/crates/miniz_oxide-0.7.2/LICENSE",
+        "compiled-components/crates/miniz_oxide-0.7.2/LICENSE-APACHE.md",
+        "compiled-components/crates/miniz_oxide-0.7.2/LICENSE-MIT.md",
+        "compiled-components/crates/miniz_oxide-0.7.2/LICENSE-ZLIB.md"
+      ]
     },
     {
       "name": "pathfinder_content",
@@ -769,49 +247,11 @@
       "repository": "https://github.com/servo/pathfinder",
       "source_url": "https://static.crates.io/crates/pathfinder_content/pathfinder_content-0.5.0.crate",
       "sha256": "6449e0cfa07ca782719467da7cf928625ea43375c9cd0f3104817ecd8825ca69",
-      "source_archive": "source-archives/pathfinder_content-0.5.0.crate",
       "notices": [
-        "notices/pathfinder-current-upstream/LICENSE-MIT",
-        "notices/pathfinder-current-upstream/LICENSE-APACHE",
-        "notices/ADDITIONAL_SOURCE_COPYRIGHTS.txt"
+        "compiled-components/pathfinder-current-upstream/LICENSE-MIT",
+        "compiled-components/pathfinder-current-upstream/LICENSE-APACHE",
+        "compiled-components/ADDITIONAL_SOURCE_COPYRIGHTS.txt"
       ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "arrayvec": {
-            "version": "0.5"
-          },
-          "bitflags": {
-            "version": "1.0"
-          },
-          "image": {
-            "version": "0.23",
-            "features": [],
-            "optional": true,
-            "default-features": false
-          },
-          "log": {
-            "version": "0.4"
-          },
-          "pathfinder_color": {
-            "version": "0.5"
-          },
-          "pathfinder_geometry": {
-            "version": "0.5"
-          },
-          "pathfinder_simd": {
-            "version": "0.5"
-          },
-          "smallvec": {
-            "version": "1.2"
-          }
-        },
-        "dev-dependencies": {
-          "quickcheck": {
-            "version": "0.9"
-          }
-        }
-      },
       "notice_limit": "Published crate lacks standalone license files. Its exact source headers grant MIT OR Apache-2.0; full texts were retrieved from current official upstream, not the unavailable historical VCS commit."
     },
     {
@@ -822,52 +262,10 @@
       "repository": "https://github.com/image-rs/image-png.git",
       "source_url": "https://static.crates.io/crates/png/png-0.17.5.crate",
       "sha256": "dc38c0ad57efb786dd57b9864e5b18bae478c00c824dc55a38bbc9da95dde3ba",
-      "source_archive": "source-archives/png-0.17.5.crate",
       "notices": [
-        "notices/crates/png-0.17.5/LICENSE-APACHE",
-        "notices/crates/png-0.17.5/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "bitflags": {
-            "version": "1.0"
-          },
-          "crc32fast": {
-            "version": "1.2.0"
-          },
-          "deflate": {
-            "version": "1.0"
-          },
-          "miniz_oxide": {
-            "version": "0.5.1"
-          }
-        },
-        "dev-dependencies": {
-          "criterion": {
-            "version": "0.3.1"
-          },
-          "getopts": {
-            "version": "0.2.14"
-          },
-          "glium": {
-            "version": "0.31",
-            "features": [
-              "glutin"
-            ],
-            "default-features": false
-          },
-          "glob": {
-            "version": "0.3"
-          },
-          "rand": {
-            "version": "0.8.4"
-          },
-          "term": {
-            "version": "0.7"
-          }
-        }
-      }
+        "compiled-components/crates/png-0.17.5/LICENSE-APACHE",
+        "compiled-components/crates/png-0.17.5/LICENSE-MIT"
+      ]
     },
     {
       "name": "rctree",
@@ -877,12 +275,9 @@
       "repository": "https://github.com/RazrFalcon/rctree",
       "source_url": "https://static.crates.io/crates/rctree/rctree-0.5.0.crate",
       "sha256": "3b42e27ef78c35d3998403c1d26f3efd9e135d3e5121b0a4845cc5cc27547f4f",
-      "source_archive": "source-archives/rctree-0.5.0.crate",
       "notices": [
-        "notices/crates/rctree-0.5.0/LICENSE"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {}
+        "compiled-components/crates/rctree-0.5.0/LICENSE"
+      ]
     },
     {
       "name": "roxmltree",
@@ -892,20 +287,10 @@
       "repository": "https://github.com/RazrFalcon/roxmltree",
       "source_url": "https://static.crates.io/crates/roxmltree/roxmltree-0.18.1.crate",
       "sha256": "862340e351ce1b271a378ec53f304a5558f7db87f3769dc655a8f6ecbb68b302",
-      "source_archive": "source-archives/roxmltree-0.18.1.crate",
       "notices": [
-        "notices/crates/roxmltree-0.18.1/LICENSE-APACHE",
-        "notices/crates/roxmltree-0.18.1/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "xmlparser": {
-            "version": "0.13.6",
-            "default-features": false
-          }
-        }
-      }
+        "compiled-components/crates/roxmltree-0.18.1/LICENSE-APACHE",
+        "compiled-components/crates/roxmltree-0.18.1/LICENSE-MIT"
+      ]
     },
     {
       "name": "rustybuzz",
@@ -915,65 +300,10 @@
       "repository": "https://github.com/RazrFalcon/rustybuzz",
       "source_url": "https://static.crates.io/crates/rustybuzz/rustybuzz-0.7.0.crate",
       "sha256": "162bdf42e261bee271b3957691018634488084ef577dddeb6420a9684cab2a6a",
-      "source_archive": "source-archives/rustybuzz-0.7.0.crate",
       "notices": [
-        "notices/crates/rustybuzz-0.7.0/LICENSE",
-        "notices/crates/rustybuzz-0.7.0/scripts/ms-use/COPYING"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "bitflags": {
-            "version": "1.2"
-          },
-          "bytemuck": {
-            "version": "1.5",
-            "features": [
-              "extern_crate_alloc"
-            ]
-          },
-          "libm": {
-            "version": "0.2.2",
-            "optional": true
-          },
-          "smallvec": {
-            "version": "1.6"
-          },
-          "ttf-parser": {
-            "version": "0.18",
-            "features": [
-              "opentype-layout",
-              "apple-layout",
-              "variable-fonts",
-              "glyph-names"
-            ],
-            "default-features": false
-          },
-          "unicode-bidi-mirroring": {
-            "version": "0.1"
-          },
-          "unicode-ccc": {
-            "version": "0.1.2"
-          },
-          "unicode-general-category": {
-            "version": "0.6"
-          },
-          "unicode-script": {
-            "version": "0.5.2"
-          }
-        },
-        "dev-dependencies": {
-          "libc": {
-            "version": "0.2"
-          },
-          "pico-args": {
-            "version": "0.5",
-            "features": [
-              "eq-separator"
-            ]
-          }
-        }
-      }
+        "compiled-components/crates/rustybuzz-0.7.0/LICENSE",
+        "compiled-components/crates/rustybuzz-0.7.0/scripts/ms-use/COPYING"
+      ]
     },
     {
       "name": "serde_json",
@@ -983,65 +313,10 @@
       "repository": "https://github.com/serde-rs/json",
       "source_url": "https://static.crates.io/crates/serde_json/serde_json-1.0.115.crate",
       "sha256": "12dc5c46daa8e9fdf4f5e71b6cf9a53f2487da0e86e55808e2d35539666497dd",
-      "source_archive": "source-archives/serde_json-1.0.115.crate",
       "notices": [
-        "notices/crates/serde_json-1.0.115/LICENSE-APACHE",
-        "notices/crates/serde_json-1.0.115/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "indexmap": {
-            "version": "2.2.1",
-            "optional": true
-          },
-          "itoa": {
-            "version": "1.0"
-          },
-          "ryu": {
-            "version": "1.0"
-          },
-          "serde": {
-            "version": "1.0.194",
-            "default-features": false
-          }
-        },
-        "dev-dependencies": {
-          "automod": {
-            "version": "1.0.11"
-          },
-          "indoc": {
-            "version": "2.0.2"
-          },
-          "ref-cast": {
-            "version": "1.0.18"
-          },
-          "rustversion": {
-            "version": "1.0.13"
-          },
-          "serde": {
-            "version": "1.0.194",
-            "features": [
-              "derive"
-            ]
-          },
-          "serde_bytes": {
-            "version": "0.11.10"
-          },
-          "serde_derive": {
-            "version": "1.0.166"
-          },
-          "serde_stacker": {
-            "version": "0.1.8"
-          },
-          "trybuild": {
-            "version": "1.0.81",
-            "features": [
-              "diff"
-            ]
-          }
-        }
-      }
+        "compiled-components/crates/serde_json-1.0.115/LICENSE-APACHE",
+        "compiled-components/crates/serde_json-1.0.115/LICENSE-MIT"
+      ]
     },
     {
       "name": "simplecss",
@@ -1051,28 +326,10 @@
       "repository": "https://github.com/RazrFalcon/simplecss",
       "source_url": "https://static.crates.io/crates/simplecss/simplecss-0.2.1.crate",
       "sha256": "a11be7c62927d9427e9f40f3444d5499d868648e2edbc4e2116de69e7ec0e89d",
-      "source_archive": "source-archives/simplecss-0.2.1.crate",
       "notices": [
-        "notices/crates/simplecss-0.2.1/LICENSE-APACHE",
-        "notices/crates/simplecss-0.2.1/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "log": {
-            "version": "0.4.8"
-          }
-        },
-        "dev-dependencies": {
-          "env_logger": {
-            "version": "0.6",
-            "default-features": false
-          },
-          "roxmltree": {
-            "version": "0.7"
-          }
-        }
-      }
+        "compiled-components/crates/simplecss-0.2.1/LICENSE-APACHE",
+        "compiled-components/crates/simplecss-0.2.1/LICENSE-MIT"
+      ]
     },
     {
       "name": "slotmap",
@@ -1082,46 +339,9 @@
       "repository": "https://github.com/orlp/slotmap",
       "source_url": "https://static.crates.io/crates/slotmap/slotmap-1.0.7.crate",
       "sha256": "dbff4acf519f630b3a3ddcfaea6c06b42174d9a44bc70c620e9ed1649d58b82a",
-      "source_archive": "source-archives/slotmap-1.0.7.crate",
       "notices": [
-        "notices/crates/slotmap-1.0.7/LICENSE"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "serde": {
-            "version": "1.0",
-            "features": [
-              "derive",
-              "alloc"
-            ],
-            "optional": true,
-            "default-features": false
-          }
-        },
-        "dev-dependencies": {
-          "fxhash": {
-            "version": "0.2.1"
-          },
-          "quickcheck": {
-            "version": "0.9"
-          },
-          "serde": {
-            "version": "1.0"
-          },
-          "serde_derive": {
-            "version": "1.0"
-          },
-          "serde_json": {
-            "version": "1.0"
-          }
-        },
-        "build-dependencies": {
-          "version_check": {
-            "version": "0.9"
-          }
-        }
-      }
+        "compiled-components/crates/slotmap-1.0.7/LICENSE"
+      ]
     },
     {
       "name": "smallvec",
@@ -1131,36 +351,10 @@
       "repository": "https://github.com/servo/rust-smallvec",
       "source_url": "https://static.crates.io/crates/smallvec/smallvec-1.13.2.crate",
       "sha256": "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67",
-      "source_archive": "source-archives/smallvec-1.13.2.crate",
       "notices": [
-        "notices/crates/smallvec-1.13.2/LICENSE-APACHE",
-        "notices/crates/smallvec-1.13.2/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "arbitrary": {
-            "version": "1",
-            "optional": true
-          },
-          "serde": {
-            "version": "1",
-            "optional": true,
-            "default-features": false
-          }
-        },
-        "dev-dependencies": {
-          "bincode": {
-            "version": "1.0.1"
-          },
-          "debugger_test": {
-            "version": "0.1.0"
-          },
-          "debugger_test_parser": {
-            "version": "0.1.0"
-          }
-        }
-      }
+        "compiled-components/crates/smallvec-1.13.2/LICENSE-APACHE",
+        "compiled-components/crates/smallvec-1.13.2/LICENSE-MIT"
+      ]
     },
     {
       "name": "svgtypes",
@@ -1170,22 +364,10 @@
       "repository": "https://github.com/RazrFalcon/svgtypes",
       "source_url": "https://static.crates.io/crates/svgtypes/svgtypes-0.11.0.crate",
       "sha256": "ed4b0611e7f3277f68c0fa18e385d9e2d26923691379690039548f867cef02a7",
-      "source_archive": "source-archives/svgtypes-0.11.0.crate",
       "notices": [
-        "notices/crates/svgtypes-0.11.0/LICENSE-APACHE",
-        "notices/crates/svgtypes-0.11.0/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "kurbo": {
-            "version": "0.9"
-          },
-          "siphasher": {
-            "version": "0.3"
-          }
-        }
-      }
+        "compiled-components/crates/svgtypes-0.11.0/LICENSE-APACHE",
+        "compiled-components/crates/svgtypes-0.11.0/LICENSE-MIT"
+      ]
     },
     {
       "name": "svgtypes",
@@ -1195,22 +377,10 @@
       "repository": "https://github.com/RazrFalcon/svgtypes",
       "source_url": "https://static.crates.io/crates/svgtypes/svgtypes-0.14.0.crate",
       "sha256": "59d7618f12b51be8171a7cfdda1e7a93f79cbc57c4e7adf89a749cf671125241",
-      "source_archive": "source-archives/svgtypes-0.14.0.crate",
       "notices": [
-        "notices/crates/svgtypes-0.14.0/LICENSE-APACHE",
-        "notices/crates/svgtypes-0.14.0/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "kurbo": {
-            "version": "0.10"
-          },
-          "siphasher": {
-            "version": "0.3"
-          }
-        }
-      }
+        "compiled-components/crates/svgtypes-0.14.0/LICENSE-APACHE",
+        "compiled-components/crates/svgtypes-0.14.0/LICENSE-MIT"
+      ]
     },
     {
       "name": "tiny-skia",
@@ -1220,42 +390,9 @@
       "repository": "https://github.com/RazrFalcon/tiny-skia",
       "source_url": "https://static.crates.io/crates/tiny-skia/tiny-skia-0.10.0.crate",
       "sha256": "7db11798945fa5c3e5490c794ccca7c6de86d3afdd54b4eb324109939c6f37bc",
-      "source_archive": "source-archives/tiny-skia-0.10.0.crate",
       "notices": [
-        "notices/crates/tiny-skia-0.10.0/LICENSE"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "arrayref": {
-            "version": "0.3.6"
-          },
-          "arrayvec": {
-            "version": "0.7",
-            "default-features": false
-          },
-          "bytemuck": {
-            "version": "1.12",
-            "features": [
-              "aarch64_simd"
-            ]
-          },
-          "cfg-if": {
-            "version": "1"
-          },
-          "log": {
-            "version": "0.4"
-          },
-          "png": {
-            "version": "0.17",
-            "optional": true
-          },
-          "tiny-skia-path": {
-            "version": "0.10.0",
-            "default-features": false
-          }
-        }
-      }
+        "compiled-components/crates/tiny-skia-0.10.0/LICENSE"
+      ]
     },
     {
       "name": "tiny-skia-path",
@@ -1265,29 +402,9 @@
       "repository": "https://github.com/RazrFalcon/tiny-skia/tree/master/path",
       "source_url": "https://static.crates.io/crates/tiny-skia-path/tiny-skia-path-0.10.0.crate",
       "sha256": "2f60aa35c89ac2687ace1a2556eaaea68e8c0d47408a2e3e7f5c98a489e7281c",
-      "source_archive": "source-archives/tiny-skia-path-0.10.0.crate",
       "notices": [
-        "notices/crates/tiny-skia-path-0.10.0/LICENSE"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "arrayref": {
-            "version": "0.3.6"
-          },
-          "bytemuck": {
-            "version": "1.4"
-          },
-          "libm": {
-            "version": "0.2.1",
-            "optional": true
-          },
-          "strict-num": {
-            "version": "0.1",
-            "default-features": false
-          }
-        }
-      }
+        "compiled-components/crates/tiny-skia-path-0.10.0/LICENSE"
+      ]
     },
     {
       "name": "tinyvec",
@@ -1297,41 +414,11 @@
       "repository": "https://github.com/Lokathor/tinyvec",
       "source_url": "https://static.crates.io/crates/tinyvec/tinyvec-1.6.0.crate",
       "sha256": "87cc5ceb3875bb20c2890005a4e226a4651264a5c75edb2421b52861a0a0cb50",
-      "source_archive": "source-archives/tinyvec-1.6.0.crate",
       "notices": [
-        "notices/crates/tinyvec-1.6.0/LICENSE-APACHE.md",
-        "notices/crates/tinyvec-1.6.0/LICENSE-MIT.md",
-        "notices/crates/tinyvec-1.6.0/LICENSE-ZLIB.md"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "arbitrary": {
-            "version": "1",
-            "optional": true
-          },
-          "serde": {
-            "version": "1.0",
-            "optional": true,
-            "default-features": false
-          },
-          "tinyvec_macros": {
-            "version": "0.1",
-            "optional": true
-          }
-        },
-        "dev-dependencies": {
-          "criterion": {
-            "version": "0.3.0"
-          },
-          "serde_test": {
-            "version": "1.0"
-          },
-          "smallvec": {
-            "version": "1"
-          }
-        }
-      }
+        "compiled-components/crates/tinyvec-1.6.0/LICENSE-APACHE.md",
+        "compiled-components/crates/tinyvec-1.6.0/LICENSE-MIT.md",
+        "compiled-components/crates/tinyvec-1.6.0/LICENSE-ZLIB.md"
+      ]
     },
     {
       "name": "ttf-parser",
@@ -1341,25 +428,10 @@
       "repository": "https://github.com/RazrFalcon/ttf-parser",
       "source_url": "https://static.crates.io/crates/ttf-parser/ttf-parser-0.18.1.crate",
       "sha256": "0609f771ad9c6155384897e1df4d948e692667cc0588548b68eb44d052b27633",
-      "source_archive": "source-archives/ttf-parser-0.18.1.crate",
       "notices": [
-        "notices/crates/ttf-parser-0.18.1/LICENSE-APACHE",
-        "notices/crates/ttf-parser-0.18.1/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dev-dependencies": {
-          "base64": {
-            "version": "0.13"
-          },
-          "pico-args": {
-            "version": "0.5"
-          },
-          "xmlwriter": {
-            "version": "0.1"
-          }
-        }
-      }
+        "compiled-components/crates/ttf-parser-0.18.1/LICENSE-APACHE",
+        "compiled-components/crates/ttf-parser-0.18.1/LICENSE-MIT"
+      ]
     },
     {
       "name": "unicode-bidi",
@@ -1369,38 +441,11 @@
       "repository": "https://github.com/servo/unicode-bidi",
       "source_url": "https://static.crates.io/crates/unicode-bidi/unicode-bidi-0.3.15.crate",
       "sha256": "08f95100a766bf4f8f28f90d77e0a5461bbdb219042e7679bebe79004fed8d75",
-      "source_archive": "source-archives/unicode-bidi-0.3.15.crate",
       "notices": [
-        "notices/crates/unicode-bidi-0.3.15/COPYRIGHT",
-        "notices/crates/unicode-bidi-0.3.15/LICENSE-APACHE",
-        "notices/crates/unicode-bidi-0.3.15/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "flame": {
-            "version": "0.2",
-            "optional": true
-          },
-          "flamer": {
-            "version": "0.4",
-            "optional": true
-          },
-          "serde": {
-            "version": ">=0.8, <2.0",
-            "features": [
-              "derive"
-            ],
-            "optional": true,
-            "default-features": false
-          }
-        },
-        "dev-dependencies": {
-          "serde_test": {
-            "version": ">=0.8, <2.0"
-          }
-        }
-      }
+        "compiled-components/crates/unicode-bidi-0.3.15/COPYRIGHT",
+        "compiled-components/crates/unicode-bidi-0.3.15/LICENSE-APACHE",
+        "compiled-components/crates/unicode-bidi-0.3.15/LICENSE-MIT"
+      ]
     },
     {
       "name": "unicode-general-category",
@@ -1410,14 +455,9 @@
       "repository": "https://github.com/yeslogic/unicode-general-category",
       "source_url": "https://static.crates.io/crates/unicode-general-category/unicode-general-category-0.6.0.crate",
       "sha256": "2281c8c1d221438e373249e065ca4989c4c36952c211ff21a0ee91c44a3869e7",
-      "source_archive": "source-archives/unicode-general-category-0.6.0.crate",
       "notices": [
-        "notices/crates/unicode-general-category-0.6.0/LICENSE"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {}
-      }
+        "compiled-components/crates/unicode-general-category-0.6.0/LICENSE"
+      ]
     },
     {
       "name": "weezl",
@@ -1427,47 +467,10 @@
       "repository": "https://github.com/image-rs/lzw",
       "source_url": "https://static.crates.io/crates/weezl/weezl-0.1.8.crate",
       "sha256": "53a85b86a771b1c87058196170769dd264f66c0782acf1ae6cc51bfd64b39082",
-      "source_archive": "source-archives/weezl-0.1.8.crate",
       "notices": [
-        "notices/crates/weezl-0.1.8/LICENSE-APACHE",
-        "notices/crates/weezl-0.1.8/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {
-        "dependencies": {
-          "futures": {
-            "version": "0.3.12",
-            "features": [
-              "std"
-            ],
-            "optional": true,
-            "default-features": false
-          }
-        },
-        "dev-dependencies": {
-          "criterion": {
-            "version": "0.3.1"
-          },
-          "tokio": {
-            "version": "1",
-            "features": [
-              "macros",
-              "io-util",
-              "net",
-              "rt",
-              "rt-multi-thread"
-            ],
-            "default-features": false
-          },
-          "tokio-util": {
-            "version": "0.6.2",
-            "features": [
-              "compat"
-            ],
-            "default-features": false
-          }
-        }
-      }
+        "compiled-components/crates/weezl-0.1.8/LICENSE-APACHE",
+        "compiled-components/crates/weezl-0.1.8/LICENSE-MIT"
+      ]
     },
     {
       "name": "xmlparser",
@@ -1477,13 +480,10 @@
       "repository": "https://github.com/RazrFalcon/xmlparser",
       "source_url": "https://static.crates.io/crates/xmlparser/xmlparser-0.13.6.crate",
       "sha256": "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4",
-      "source_archive": "source-archives/xmlparser-0.13.6.crate",
       "notices": [
-        "notices/crates/xmlparser-0.13.6/LICENSE-APACHE",
-        "notices/crates/xmlparser-0.13.6/LICENSE-MIT"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {}
+        "compiled-components/crates/xmlparser-0.13.6/LICENSE-APACHE",
+        "compiled-components/crates/xmlparser-0.13.6/LICENSE-MIT"
+      ]
     },
     {
       "name": "xmlwriter",
@@ -1493,12 +493,9 @@
       "repository": "https://github.com/RazrFalcon/xmlwriter",
       "source_url": "https://static.crates.io/crates/xmlwriter/xmlwriter-0.1.0.crate",
       "sha256": "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9",
-      "source_archive": "source-archives/xmlwriter-0.1.0.crate",
       "notices": [
-        "notices/crates/xmlwriter-0.1.0/LICENSE"
-      ],
-      "binary_evidence": "Exact version appears in WASM embedded Cargo registry source path",
-      "manifest_dependencies": {}
+        "compiled-components/crates/xmlwriter-0.1.0/LICENSE"
+      ]
     }
   ],
   "additional_crates": [
@@ -1509,10 +506,9 @@
       "source_url": "https://static.crates.io/crates/wasm-bindgen/wasm-bindgen-0.2.92.crate",
       "sha256": "4be2531df63900aeb2bca0daaaddec08491ee64ceecbee5076636a3b026795a8",
       "notices": [
-        "notices/crates/wasm-bindgen-0.2.92/LICENSE-APACHE",
-        "notices/crates/wasm-bindgen-0.2.92/LICENSE-MIT"
-      ],
-      "binary_evidence": "WASM producers section identifies wasm-bindgen 0.2.92 (2a4a49362), corresponding glue/runtime version is strongly indicated"
+        "compiled-components/crates/wasm-bindgen-0.2.92/LICENSE-APACHE",
+        "compiled-components/crates/wasm-bindgen-0.2.92/LICENSE-MIT"
+      ]
     },
     {
       "name": "hashbrown",
@@ -1521,10 +517,9 @@
       "source_url": "https://static.crates.io/crates/hashbrown/hashbrown-0.14.3.crate",
       "sha256": "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604",
       "notices": [
-        "notices/crates/hashbrown-0.14.3/LICENSE-APACHE",
-        "notices/crates/hashbrown-0.14.3/LICENSE-MIT"
-      ],
-      "binary_evidence": "WASM embedded /rust/deps/hashbrown-0.14.3/ source path"
+        "compiled-components/crates/hashbrown-0.14.3/LICENSE-APACHE",
+        "compiled-components/crates/hashbrown-0.14.3/LICENSE-MIT"
+      ]
     }
   ],
   "git_sources": [
@@ -1533,14 +528,10 @@
       "repository": "https://github.com/thx/resvg-js",
       "commit": "9ca058462ac529120c8cc84ddcd6fef644cc5406",
       "source_url": "https://codeload.github.com/thx/resvg-js/tar.gz/9ca058462ac529120c8cc84ddcd6fef644cc5406",
-      "source_archive": "source-archives/resvg-js-9ca058462ac529120c8cc84ddcd6fef644cc5406.tar.gz",
       "sha256": "7ce8697451237577d473361aa688917a48cba00c4a8f3302a833455c9c2013fa",
       "bytes": 17926847,
       "notices": [
-        "notices/git/resvg-js/LICENSE"
-      ],
-      "manifests": [
-        "manifests/git/resvg-js/Cargo.toml"
+        "compiled-components/git/resvg-js/LICENSE"
       ]
     },
     {
@@ -1548,29 +539,16 @@
       "repository": "https://github.com/zimond/resvg",
       "commit": "3495d8705b302d6d266748516973606ca9657906",
       "source_url": "https://codeload.github.com/zimond/resvg/tar.gz/3495d8705b302d6d266748516973606ca9657906",
-      "source_archive": "source-archives/resvg-3495d8705b302d6d266748516973606ca9657906.tar.gz",
       "sha256": "08d15a07f930ee4dfb7971b792697c32059b25a5c10aa283ee672488a2417713",
       "bytes": 8136093,
       "notices": [
-        "notices/git/resvg/LICENSE.txt",
-        "notices/git/resvg/crates/resvg/LICENSE.txt",
-        "notices/git/resvg/crates/usvg-parser/LICENSE.txt",
-        "notices/git/resvg/crates/usvg-text-layout/LICENSE.txt",
-        "notices/git/resvg/crates/usvg-tree/LICENSE.txt",
-        "notices/git/resvg/crates/usvg/LICENSE.txt",
-        "notices/git/resvg/tools/explorer-thumbnailer/LICENSE.txt"
-      ],
-      "manifests": [
-        "manifests/git/resvg/Cargo.lock",
-        "manifests/git/resvg/Cargo.toml",
-        "manifests/git/resvg/crates/c-api/Cargo.toml",
-        "manifests/git/resvg/crates/resvg/Cargo.toml",
-        "manifests/git/resvg/crates/usvg-parser/Cargo.toml",
-        "manifests/git/resvg/crates/usvg-parser/codegen/Cargo.toml",
-        "manifests/git/resvg/crates/usvg-text-layout/Cargo.toml",
-        "manifests/git/resvg/crates/usvg-tree/Cargo.toml",
-        "manifests/git/resvg/crates/usvg/Cargo.toml",
-        "manifests/git/resvg/tools/explorer-thumbnailer/Cargo.toml"
+        "compiled-components/git/resvg/LICENSE.txt",
+        "compiled-components/git/resvg/crates/resvg/LICENSE.txt",
+        "compiled-components/git/resvg/crates/usvg-parser/LICENSE.txt",
+        "compiled-components/git/resvg/crates/usvg-text-layout/LICENSE.txt",
+        "compiled-components/git/resvg/crates/usvg-tree/LICENSE.txt",
+        "compiled-components/git/resvg/crates/usvg/LICENSE.txt",
+        "compiled-components/git/resvg/tools/explorer-thumbnailer/LICENSE.txt"
       ]
     },
     {
@@ -1578,30 +556,24 @@
       "repository": "https://github.com/yisibl/woff2-rs",
       "commit": "88cce4cd07da2c3f35839068c6f73672700cfc8b",
       "source_url": "https://codeload.github.com/yisibl/woff2-rs/tar.gz/88cce4cd07da2c3f35839068c6f73672700cfc8b",
-      "source_archive": "source-archives/woff2-88cce4cd07da2c3f35839068c6f73672700cfc8b.tar.gz",
       "sha256": "ddd1142379dd778e32e230a65168237792e2eadface6c74271e918d0e3a50fa2",
       "bytes": 57263,
       "notices": [
-        "notices/git/woff2/LICENSE"
-      ],
-      "manifests": [
-        "manifests/git/woff2/Cargo.toml"
+        "compiled-components/git/woff2/LICENSE"
       ]
     }
   ],
   "rust_toolchain": {
     "version": "1.76.0-nightly",
     "commit": "d86d65bbc19b928387f68427fcc3a0da498d8a19",
-    "evidence": "WASM producers section and embedded source paths",
     "source_url": "https://github.com/rust-lang/rust/tree/d86d65bbc19b928387f68427fcc3a0da498d8a19",
     "notices": [
-      "notices/rust/LICENSE-MIT",
-      "notices/rust/LICENSE-APACHE",
-      "notices/rust/COPYRIGHT"
+      "compiled-components/rust/LICENSE-MIT",
+      "compiled-components/rust/LICENSE-APACHE",
+      "compiled-components/rust/COPYRIGHT"
     ]
   },
   "font": {
-    "path": "local-candidate/cloudflare/assets/fonts/NotoSansCJKSC-Regular.otf",
     "sha256": "5d36f5998816d44aeb5dcf5cd2b9a0f01f25bfc31d84b79e4ab5c007a9120ddf",
     "size": 16437340,
     "names": [

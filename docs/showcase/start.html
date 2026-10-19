@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f5ef">
+  <meta name="description" content="跟着 Rivule 的四步指南完成本地构建、所有者部署、AI 助手连接和第一条通知验收。">
+  <title>开始使用 · Rivule</title>
+  <link rel="icon" href="assets/rivule-mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="start.css">
+</head>
+<body class="guide-page">
+<a class="skip" href="#main">跳到内容</a>
+<header class="masthead">
+  <a class="brand" href="index.html" aria-label="Rivule 首页"><img src="assets/rivule-mark.svg" alt="" width="36" height="36"><span>rivule<span class="brand-dot">.</span></span></a>
+  <nav aria-label="主导航"><a href="index.html#preview">通知预览</a><a href="#ai">交给 AI</a><a class="open-source" href="https://github.com/ZRainbow1275/Rivule">GitHub ↗</a></nav>
+</header>
+<main id="main">
+  <section class="guide-hero">
+    <div class="eyebrow">YOUR FIRST SIGNAL</div>
+    <h1>让第一条进展<br><span class="serif">流过来。</span></h1>
+    <p class="guide-lead">先接通一个助手和一个项目。<br>在自己的 Discord 里看见那条更新，再逐步增加来源。</p>
+    <div class="starting-points" aria-label="选择你的起点">
+      <a href="#build"><span>我是所有者</span><strong>从构建与配置开始 ↘</strong></a>
+      <a href="#assistant"><span>已有可用服务</span><strong>直接连接一个助手 ↘</strong></a>
+    </div>
+    <p class="guide-context">这是自托管项目。首次安装需要 Cloudflare 和 Discord 配置；每个安装都需自行完成连接与实收检查。</p>
+  </section>
+  <div class="guide-layout">
+    <aside class="guide-navigation"><nav aria-label="步骤导航"><span class="guide-nav-label">四步，走通一次</span><a href="#build"><span>01</span> 构建源码</a><a href="#owner"><span>02</span> 所有者部署</a><a href="#assistant"><span>03</span> 助手连接</a><a href="#check"><span>04</span> 确认实收</a><a class="secondary-nav" href="#help">遇到问题</a><a class="secondary-nav" href="#ai">交给 AI 协助</a></nav></aside>
+    <div class="guide-content">
+      <section id="build" class="guide-step">
+        <div class="step-heading"><span class="step-number">01</span><div><span class="step-owner">所有者 / 协助构建的 AI</span><h2>先把源码准备好</h2></div></div>
+        <p>需要 Node.js 24 或更新版本。在源码根目录运行下面的命令。依赖和字体安装需要网络，其余重建使用固定输入。</p>
+        <div class="command-block"><div class="command-bar"><span>在源码根目录运行</span><button type="button" data-copy="build-commands" data-label="复制构建命令">复制构建命令</button></div><pre id="build-commands"><code>npm ci --ignore-scripts
+node scripts/install-font.mjs
+node scripts/build.mjs</code></pre></div>
+        <p class="step-outcome"><span aria-hidden="true">✓</span><span><strong>这一步完成时</strong>命令全部成功，在 dist/owner 和 dist/gateway 生成部署模块。本地构建不会部署服务或发出真实通知。</span></p>
+        <a class="guide-link" href="../../README.md#build">构建与版本说明 ↗</a>
+      </section>
+      <section id="owner" class="guide-step">
+        <div class="step-heading"><span class="step-number">02</span><div><span class="step-owner">服务所有者</span><h2>配置自己的通知入口</h2></div></div>
+        <p>准备 Cloudflare 账号、自己的 Discord 应用和 bot，以及一个准备接入的助手。先复制模板，再填写你自己的配置。</p>
+        <div class="command-block"><div class="command-bar"><span>建立私人配置</span><button type="button" data-copy="config-commands" data-label="复制模板命令">复制模板命令</button></div><pre id="config-commands"><code>cp config/wrangler.owner.example.json config/wrangler.owner.private.json
+cp config/wrangler.qq.example.json config/wrangler.qq.private.json</code></pre></div>
+        <ol class="guide-checklist">
+          <li><strong>确定账户与目标</strong><span>填入 Worker 名称、实际服务域名、KV 和 Discord 的应用 / 用户 / DM 信息</span></li>
+          <li><strong>配置来源与项目</strong><span>先选一个来源和一个允许的项目，决定使用 MCP OAuth 还是 HTTP 接入</span></li>
+          <li><strong>检查模块与绑定</strong><span>保留模板的最终模块路径、no_bundle 和 Durable Object 绑定；已有安装保留原迁移历史</span></li>
+          <li><strong>按部署清单发布并回读</strong><span>核对实际版本和模块，再设置 Discord 交互地址与签名握手</span></li>
+        </ol>
+        <div class="quiet-note"><strong>凭据在服务的安全设置里配置</strong><p>把非敏感缺项交给 AI 整理即可。需要登录或授权时，使用对应服务的正常流程。</p></div>
+        <p class="step-outcome"><span aria-hidden="true">✓</span><span><strong>这一步完成时</strong>你有经过部署检查的服务，并能提供确定的接入地址、来源 ID 和项目 ID。</span></p>
+        <a class="guide-link" href="../OPERATIONS.md#owner-setup">完整部署命令、绑定与回滚清单 ↗</a>
+      </section>
+      <section id="assistant" class="guide-step">
+        <div class="step-heading"><span class="step-number">03</span><div><span class="step-owner">要接入的 AI 助手</span><h2>完成当前来源的连接</h2></div></div>
+        <p>先向所有者确认接入方式、实际服务地址、来源 ID 和获准使用的项目。这里的 PA 就是个人 AI 助手。</p>
+        <div class="connection-options">
+          <article><span class="option-label">MCP + OAuth</span><h3>添加远程 MCP 连接</h3><p>地址为 <code>PUBLIC_ORIGIN/mcp/&lt;source_id&gt;</code>，用所有者给出的实际值替换占位符。</p><p>完成正常授权后，初始化并读取工具列表。你应能看到发布更新、查询回执和精确任务快照的工具。</p></article>
+          <article><span class="option-label">HTTP</span><h3>按集成合同连接</h3><p>Muse API 和 HMAC 的鉴权、路由与请求封装各不相同。让集成方按对应合同配置。</p><p>连接成功之后，继续做同一来源的上报与实收验收。</p></article>
+        </div>
+        <p class="step-outcome"><span aria-hidden="true">✓</span><span><strong>这一步完成时</strong>当前连接已通过认证和读取检查。接着发一条已获准的测试通知。</span></p>
+        <a class="guide-link" href="../INTEGRATIONS.md#connect">查看工具、HTTP 路由与验收合同 ↗</a>
+      </section>
+      <section id="check" class="guide-step">
+        <div class="step-heading"><span class="step-number">04</span><div><span class="step-owner">助手上报 · 所有者确认</span><h2>亲眼看见第一条更新</h2></div></div>
+        <p>所有者确认测试内容与接收渠道后，助手执行下面这一个闭环。</p>
+        <ol class="guide-checklist">
+          <li><strong>读取当前任务</strong><span>调用 get_task_snapshot，使用自己的项目、任务、run 和 branch；序号由维护事件顺序的来源决定</span></li>
+          <li><strong>发布一次测试更新</strong><span>按当前工具 schema 调用 publish_task_update，写清“第一条连接测试”，保存 receipt_id</span></li>
+          <li><strong>查询原回执</strong><span>同一来源调用 get_delivery_status，确认状态；顶层结果描述 Discord，其他渠道分别检查</span></li>
+          <li><strong>在 Discord 确认收到</strong><span>检查目标聊天、来源和内容都正确，再将这个来源记为已接通</span></li>
+        </ol>
+        <div class="acceptance-strip" aria-label="需要分别确认的验收状态"><span>连接已认证</span><span aria-hidden="true">→</span><span>更新已接受</span><span aria-hidden="true">→</span><span>通知已实收</span></div>
+        <p>如果正在等待，就查询原回执；结果未知时，先检查回执与目标聊天，避免重复试发。</p>
+        <a class="guide-link" href="../GETTING_STARTED.zh.md#first-message">完整的第一条消息验收步骤 ↗</a>
+      </section>
+      <section class="guide-extra" aria-labelledby="qq-heading"><div class="eyebrow">ONE MORE CHANNEL</div><h2 id="qq-heading">接通以后，再加 QQ</h2><p>按连接、绑定、测试三个阶段操作。固定回复、一次性主动测试和持续通知分别确认。</p><div class="qq-facts"><span><strong>默认关闭</strong>所有者开启本轮持续通知</span><span><strong>120 分钟 / 日</strong>按实际连接时间计入预算</span></div><p>持续通知限当前已授权会话，支持暂停与容量提示；主动通知每日上限 100 次，最小间隔 3 秒。当前不是全天候服务，也未实现 Discord 功能对齐。在 QQ 主面板点击“刷新”可原地更新状态，使用“返回总览”入口回到任务总览。</p><a class="guide-link" href="../OPERATIONS.md#qq-session">QQ 会话配置 ↗</a></section>
+      <section id="help" class="guide-step">
+        <div class="eyebrow">A CLEAR NEXT STEP</div><h2>卡住时，先看是哪一步</h2>
+        <div class="help-rows">
+          <a href="../TROUBLESHOOTING.zh.md#build"><strong>构建中断</strong><span>检查 Node 版本、依赖、字体与 SHA 校验</span><span aria-hidden="true">↗</span></a>
+          <a href="../TROUBLESHOOTING.zh.md#connection"><strong>连接被拒绝</strong><span>核对实际地址、来源绑定与当前授权</span><span aria-hidden="true">↗</span></a>
+          <a href="../TROUBLESHOOTING.zh.md#delivery"><strong>消息没有出现</strong><span>查询原回执，按具体状态处理</span><span aria-hidden="true">↗</span></a>
+        </div>
+        <p>报告问题时，给出版本、所处步骤和原始错误码即可。不要附上密钥或完整认证请求。</p>
+      </section>
+      <section id="ai" class="guide-extra ai-handoff">
+        <div class="eyebrow">A LITTLE HELP GETTING STARTED</div><h2>让 AI 帮你走完这几步</h2><p>完整交接说明包括真实命令、文件入口、接口合同和验收清单。把它交给协助配置的助手，并告诉它你目前在哪一步。</p>
+        <a class="button" href="../AI_HANDOFF.zh.md">打开 AI 交接说明 <span aria-hidden="true">↗</span></a>
+      </section>
+    </div>
+  </div>
+  <p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>
+</main>
+<footer><a class="brand" href="index.html"><img src="assets/rivule-mark.svg" alt="" width="28" height="28"><span>rivule.</span></a><span>Many streams. One clear view.</span><nav aria-label="页脚"><a href="https://github.com/ZRainbow1275/Rivule">源码 ↗</a><a href="../../LICENSE">AGPL-3.0</a><a href="../GETTING_STARTED.zh.md">文字版步骤</a></nav></footer>
+<script src="start.js"></script>
+</body>
+</html>

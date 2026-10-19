@@ -1,7 +1,7 @@
 # Project license
 
-Rivule project code is licensed under GNU Affero General Public License version 3, as selected by the project author on 2026-10-18. The full license text is in LICENSE, obtained from https://www.gnu.org/licenses/agpl-3.0.txt .
+Rivule project code is licensed under GNU Affero General Public License version 3. The full license is in [LICENSE](LICENSE).
 
-Third-party code, font files, WebAssembly package components, and brand marks retain their respective licenses and restrictions. This project license does not relicense those materials or imply endorsement. See docs/THIRD_PARTY.md.
+Third-party code, font files and WebAssembly components retain their respective licenses. Product names and trademarks remain with their owners. The project license does not relicense these materials or imply endorsement. See [third-party materials](docs/THIRD_PARTY.md).
 
-An AGPL-covered network deployment must satisfy the applicable corresponding-source offer requirements. Keep a source link to the actual deployed revision in the user-facing deployment documentation/interface; do not point to an unrelated or older source package. This review package is not a claim that an existing deployment's source-offer flow has already been added.
+For AGPL-covered network deployments, provide the applicable corresponding source for the actual running version through a user-facing source link. Preserve the relevant license and copyright notices.

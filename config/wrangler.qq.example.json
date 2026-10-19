@@ -1,6 +1,6 @@
 {
   "name": "rivule-qq-gateway",
-  "main": "../production-qq-active-probe-candidate-20261018/modules/gateway-candidate.mjs",
+  "main": "../dist/gateway/worker.mjs",
   "no_bundle": true,
   "compatibility_date": "2026-10-11",
   "vars": {
@@ -36,14 +36,5 @@
     }
   ],
   "find_additional_modules": true,
-  "rules": [
-    {
-      "type": "Text",
-      "globs": [
-        "SHA256SUMS.txt"
-      ],
-      "fallthrough": false
-    }
-  ],
-  "base_dir": "../production-qq-active-probe-candidate-20261018/modules"
+  "base_dir": "../dist/gateway"
 }
