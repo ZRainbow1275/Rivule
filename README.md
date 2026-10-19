@@ -48,6 +48,8 @@ node scripts/build.mjs
 
 静态展示使用虚构的示例内容，不连接服务；页面中的通知是示意排版。
 
+要在本地浏览展示，从仓库根目录运行 `python3 -m http.server 8080 --bind 127.0.0.1`，然后在自己的浏览器打开 `http://127.0.0.1:8080/docs/showcase/`；需要 Python 3，查看结束按 Ctrl+C 关闭。在 GitHub 中打开 HTML 文件进入的是源码文件页。
+
 ## 开源许可
 
 Rivule 采用 [AGPL-3.0](LICENSE)。网络部署应提供与实际运行版本对应的源码入口。第三方依赖与字体保留各自许可，详见[第三方声明](docs/THIRD_PARTY.md)及[源码来源说明](third-party-licenses/COMPILED_SOURCE_AVAILABILITY.md)。

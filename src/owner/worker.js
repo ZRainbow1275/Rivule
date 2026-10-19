@@ -27626,16 +27626,16 @@ var __rivuleDisplay = (function (__displayBridge) {
         }
         function sourceLabel(source) {
             if (source.enabled === false || source.connection_status === "disabled")
-                return "来源已停用";
+                return "已停用 · 在连接管理中查看";
             if (source.connection_status === "revoked")
-                return "接入已撤销";
+                return "已撤销 · 请重新连接";
             if (source.connection_status === "disconnected")
-                return "来源失联";
+                return "连接中断 · 请重新连接";
             if (source.connection_status === "stale")
-                return "来源久未更新";
-            if (source.verification_status && source.verification_status !== "verified")
-                return "待重新验证";
-            return "当前在线状态未知";
+                return "久未更新 · 请重新验证";
+            if (source.enabled === true && source.selectable === true && source.connection_status === "verified" && source.verification_status === "verified")
+                return "已连接";
+            return "待验证 · 打开连接管理";
         }
         function glyphSupported(cp) {
             let low = 0, high = coverage_default.length - 1;
@@ -27761,13 +27761,14 @@ var __rivuleDisplay = (function (__displayBridge) {
                 y += 14;
             }
             if (!rows.length) {
-                text2(16, 118, "尚无已确认任务", 18, "#263740", "500", 20);
+                text2(16, 118, selection.branch_key ? "所选分支不可用" : "暂无任务", 18, "#263740", "500", 20);
                 text2(16, 146, selection.branch_key ? "所选分支不可用，请重新选择" : "收到来源更新后，这里会显示任务", 14, "#61727C", "400", 25);
                 y = 184;
                 const empty = sources.filter((s) => s.visible !== false && (!selection.source_id || s.source_id === selection.source_id));
                 for (const s of empty.slice(0, 3)) {
-                    text2(16, y, s.display_name ?? s.source_id, 16, "#465964", "500", 22);
-                    text2(16, y + 24, sourceLabel(s), 14, "#61727C", "400", 25);
+                    front.push(sourceIcon(s.provider ?? "", 16, y - 19));
+                    text2(50, y, s.display_name ?? s.source_id, 16, "#465964", "500", 20);
+                    text2(50, y + 24, sourceLabel(s) + (sourceLabel(s) === "已连接" ? selection.branch_key ? " · 当前视图无任务" : " · 暂无任务" : ""), 14, "#61727C", "400", 22);
                     y += 62;
                 }
                 if (empty.length > 3) {
@@ -27786,7 +27787,7 @@ var __rivuleDisplay = (function (__displayBridge) {
                 }
             }
             y += 12;
-            text2(16, y, `仅显示当前页 · 第 ${page + 1}/${pages} 页`, 14, "#61727C", "400", 35);
+            text2(16, y, `第 ${page + 1}/${pages} 页 · ${compactTime(rendered_at, snapshot.utc_offset_minutes)}`, 14, "#61727C", "400", 35);
             y += 24;
             if (missingGlyphs) {
                 text2(16, y, "□ 为字体缺字，请查看消息或原任务", 14, "#875914", "400", 28);
@@ -27874,6 +27875,15 @@ var __rivuleDisplay = (function (__displayBridge) {
                 const body = [clipNative(v.warning, 140), clipNative(v.actionable ? "待你处理：" + v.question : v.blocker ? "阻塞：" + v.blocker : v.summary || "来源尚未提供摘要", v.actionable ? 280 : 360), v.actionable ? "请在原平台确认" : "", v.actionable && v.impact ? clipNative("影响：" + v.impact, 140) : "", v.deadline ? "请在 " + asTime(v.deadline) + " 前处理" : "", v.phase ? clipNative("当前：" + v.phase, 80) : "", clipNative(v.progress, 80)].filter(Boolean).join("\n");
                 return { name: safeDiscord(`${v.state.symbol} ${fitText(v.taskName, 27)} / ${fitText(v.branchName, 18)} · ${v.state.label}`, 190), value: context + "\n" + utf16Limit(body, 680) + "\n" + safeDiscord("来源更新 " + asTime(v.updatedAt), 80), inline: false };
             });
+            if (!graph.rows.length) {
+                const visible = (snapshot.sources ?? []).filter((s) => s.visible !== false && (!snapshot.selection?.source_id || snapshot.selection.source_id === s.source_id));
+                for (const source of visible.slice(0, 3))
+                    fields.push({ name: safeDiscord(source.display_name ?? source.source_id, 190), value: sourceLabel(source) + (sourceLabel(source) === "已连接" ? detail ? " · 当前视图无任务" : " · 暂无任务" : ""), inline: false });
+                if (!visible.length)
+                    fields.push({ name: detail ? "所选分支不可用" : "尚无已连接来源", value: detail ? "请返回总览，重新选择任务" : "打开连接管理，完成来源验证", inline: false });
+                if (visible.length > 3)
+                    fields.push({ name: "其他来源", value: `另有 ${visible.length - 3} 个来源，可在来源菜单中选择`, inline: false });
+            }
             if (detail && graph.views.length === 1) {
                 const v = graph.views[0], b = v.branch;
                 fields.push({ name: "完整任务名称", value: safeDiscord(`${v.sourceName} / ${v.projectName} / ${v.taskName} / ${v.branchName}`, 950), inline: false });
