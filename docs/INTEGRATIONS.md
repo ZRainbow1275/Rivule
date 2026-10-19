@@ -70,8 +70,10 @@ HTTP 路由、鉴权和事件校验实现在 `src/owner/worker.js`；MCP 接入�
 
 ## QQ 的独立验收
 
-固定回复成功不代表已获得主动通知许可。一次性主动测试与会话持续通知分开处理；公开配置模板默认关闭持续通知；开启后每日连接预算 120 分钟、主动通知上限 100 次、最小间隔 3 秒。机器人资料卡中的主动消息开关由用户控制，证明信息不能手动伪造。
+公开配置模板默认关闭持续通知。部署者开启发送配置后，所有者在 QQ 设置 → 持续通知中点击“验证并开启本轮通知”。QQ 接受本次固定验证消息后，本轮开始接收已授权项目的新动态。每日连接预算 120 分钟、主动通知上限 100 次、最小间隔 3 秒。
+
+机器人资料卡的接收开关由用户控制。系统未收到近期允许事件时，仍可通过本人点击进行实际验证；如果曾收到关闭或移除事件，则先等待当前账户、当前会话的允许事件。诊断页会区分缺少记录、记录过期与会话变化。
 
 QQ 主动 API 不带 `msg_id` / `event_id`；唤醒为单独模式。官方被动回复说明存在正文 60 分钟与参数 5 分钟的差异，当前固定回复采用保守的 5 分钟检查。
 
-官方参考：[发送 C2C 消息](https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_users_user_openid_messages.post.html)、[C2C 消息事件](https://bot.q.qq.com/wiki/develop/api-v2/autogen/event/c2c_msg_receive.html)。
+官方参考：[发送 C2C 消息](https://bot.q.qq.com/wiki/develop/api-v2/autogen/api/v2_users_user_openid_messages.post.html)、[主动消息接收开关事件](https://bot.q.qq.com/wiki/develop/api-v2/autogen/event/c2c_msg_receive.html)。

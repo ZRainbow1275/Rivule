@@ -55,6 +55,11 @@ function connectionDiagnosticLines(status) {
         const record = snapshot.last[stage];
         lines.push(record ? `${stage}\uFF1A${record.code}\uFF0C${when(record.at)}\uFF08${scope(record.at)}\uFF09` : `${stage}\uFF1A\u5C1A\u65E0\u8BB0\u5F55`);
     }
+    const permission = status?.permissionEvidence;
+    if (permission) {
+        const labels = { missing: "尚未收到允许事件", invalid: "权限事件格式待核对", binding_changed: "权限记录属于旧绑定", permission_changed: "权限记录代次已变化", expired_local_evidence: "权限记录已超过本地验证窗口", session_changed: "权限记录属于旧会话", current: "已收到当前允许事件" };
+        lines.push("权限记录：" + (labels[permission.status] ?? "待核对") + (permission.observedRevocation ? "；曾收到关闭或移除事件" : "") + (Number.isSafeInteger(permission.ageMs) ? "；距今 " + Math.floor(permission.ageMs / 1000) + " 秒" : ""));
+    }
     const failure = snapshot.lastFailure;
     if (failure)
         lines.push(`${scope(failure.at)}\u6700\u8FD1\u5931\u8D25\uFF1A${failure.stage}/${failure.code}${failure.httpStatus === void 0 ? "" : `\uFF08HTTP ${failure.httpStatus}\uFF09`}\uFF0C${when(failure.at)}${failure.businessCode === void 0 ? "" : `\uFF1B\u4E1A\u52A1\u7801 ${failure.businessCode}`}\u3002\u5931\u8D25\u8BB0\u5F55\u4E0D\u4EE3\u8868\u5F53\u524D\u9636\u6BB5\u3002`);
@@ -1822,7 +1827,7 @@ var RivuleContinuous = (() => {
     const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     function bindingKey(b) { if (!b || !text(b.ownerId) || !text(b.appId) || !text(b.userOpenId) || !integer(b.confirmedAt))
         fail('binding_unverified'); return JSON.stringify([b.ownerId, b.appId, b.userOpenId, b.confirmedAt]); }
-    function permissionKey(p) { if (!p || p.kind !== 'authenticated_C2C_MSG_RECEIVE' || !text(p.eventKey) || !integer(p.revision) || !integer(p.confirmedAt))
+    function permissionKey(p) { if (!p || !['authenticated_C2C_MSG_RECEIVE', 'authenticated_active_enrollment'].includes(p.kind) || !text(p.eventKey) || !integer(p.revision) || !integer(p.confirmedAt))
         fail('permission_unverified'); return JSON.stringify([p.eventKey, p.revision, p.confirmedAt, p.bindingFingerprint, p.sessionFingerprint]); }
     function currentGate(state, context, now, requireProducer = true) {
         if (!integer(now) || context.enabled !== true)
@@ -1916,6 +1921,15 @@ var RivuleContinuous = (() => {
         if (context.credentialsCurrent !== true || context.runtimeLimitMs !== POLICY.maxSessionMs || context.ownerId !== context.binding?.ownerId || context.appId !== context.binding?.appId || !Array.isArray(context.projectIds) || context.projectIds.some(x => !text(x)))
             fail('configuration_changed');
         const b = bindingKey(context.binding), p = context.permission, pk = permissionKey(p), probe = context.probe;
+        if (probe?.kind === 'continuous_enrollment_observation') {
+            const record = state.qqEnrollmentProbes?.[probe.bindingFingerprint]?.[probe.probeId];
+            if (!record || record.interactionId !== approval.interactionId || record.bindingFingerprint !== context.bindingFingerprint || record.confirmedAt !== context.binding.confirmedAt || record.userOpenId !== context.binding.userOpenId || record.permissionRevision !== context.permissionRevision || record.sessionFingerprint !== context.permissionSessionFingerprint || record.runtimeEpoch !== context.runtimeEpoch || record.receipt?.state !== 'sent' || record.receipt?.reason !== 'provider_accepted' || probe.receipt?.reason !== 'provider_accepted' || record.receipt.messageId !== probe.receipt.messageId)
+                fail('enrollment_observation_mismatch');
+        }
+        if (probe?.kind === 'continuous_enrollment_observation' && (probe.interactionId !== approval.interactionId || probe.runtimeEpoch !== context.runtimeEpoch || probe.sessionFingerprint !== context.permissionSessionFingerprint))
+            fail('enrollment_observation_mismatch');
+        if (p.kind === 'authenticated_active_enrollment' && (p.interactionId !== approval.interactionId || probe?.interactionId !== approval.interactionId || p.eventKey !== probe?.probeId || p.messageId !== probe?.receipt?.messageId))
+            fail('enrollment_observation_mismatch');
         if (!fresh(p.eventAt, now, 300000) || !fresh(p.receivedAt, now, 300000) || p.confirmedAt !== context.binding.confirmedAt || p.bindingFingerprint !== context.bindingFingerprint || p.revision !== context.permissionRevision || p.sessionFingerprint !== context.permissionSessionFingerprint)
             fail('fresh_permission_required');
         if (!probe || !['isolated_active_probe_observation', 'continuous_enrollment_observation'].includes(probe.kind) || probe.bindingFingerprint !== context.bindingFingerprint || probe.confirmedAt !== context.binding.confirmedAt || probe.permissionRevision !== context.permissionRevision || probe.receipt?.state !== 'sent' || !text(probe.receipt.messageId, 1024) || !fresh(probe.checkedAt, now, 300000) || !integer(probe.validUntil) || probe.validUntil <= now)
@@ -2171,18 +2185,63 @@ var RivuleContinuous = (() => {
     }
     return { ContinuousDeliveryController, POLICY, pause, maintainHistory, reserveEnrollmentAttempt, unresolvedAttempts, acknowledgeUnknown };
 })();
+function continuousPermissionProof(state) {
+    if (state.qqRevoked === true)
+        return state.qqActivePermission?.renewal;
+    const observation = state.qqEnrollmentObservedCapability, binding = state.binding;
+    const record = state.qqEnrollmentProbes?.[observation?.bindingFingerprint]?.[observation?.probeId];
+    if (!observation || observation.kind !== "continuous_enrollment_observation" || !record || !binding
+        || observation.permissionRevision !== (state.qqActivePermission?.revision ?? 0)
+        || observation.confirmedAt !== binding.confirmedAt || record.confirmedAt !== binding.confirmedAt
+        || observation.appId !== binding.appId || observation.ownerId !== binding.ownerId || record.userOpenId !== binding.userOpenId
+        || record.bindingFingerprint !== observation.bindingFingerprint || record.interactionId !== observation.interactionId
+        || record.permissionRevision !== observation.permissionRevision || record.sessionFingerprint !== observation.sessionFingerprint || record.runtimeEpoch !== observation.runtimeEpoch
+        || record.receipt?.reason !== "provider_accepted" || observation.receipt?.reason !== "provider_accepted"
+        || record.receipt?.state !== "sent" || observation.receipt?.state !== "sent" || record.receipt.messageId !== observation.receipt.messageId
+        || typeof observation.sessionFingerprint !== "string" || !observation.sessionFingerprint
+        || !Number.isSafeInteger(observation.checkedAt) || observation.checkedAt < 0)
+        return state.qqActivePermission?.renewal;
+    return { kind: "authenticated_active_enrollment", eventKey: observation.probeId, revision: observation.permissionRevision,
+        confirmedAt: observation.confirmedAt, bindingFingerprint: observation.bindingFingerprint, sessionFingerprint: observation.sessionFingerprint,
+        eventAt: observation.checkedAt, receivedAt: observation.checkedAt, interactionId: observation.interactionId, messageId: observation.receipt.messageId };
+}
+async function continuousPermissionDiagnostic(actor, state) {
+    const renewal = state.qqActivePermission?.renewal, now = actor.now(), fingerprint = await activeBindingFingerprint(state.binding);
+    let status = "missing", observedAt = null, ageMs = null;
+    if (renewal) {
+        const validTime = Number.isSafeInteger(renewal.eventAt) && renewal.eventAt >= 0 && renewal.eventAt <= now;
+        if (validTime) {
+            observedAt = renewal.eventAt;
+            ageMs = now - renewal.eventAt;
+        }
+        status = renewal.kind !== "authenticated_C2C_MSG_RECEIVE" || !validTime ? "invalid"
+            : renewal.bindingFingerprint !== fingerprint || renewal.confirmedAt !== state.binding?.confirmedAt ? "binding_changed"
+                : renewal.revision !== (state.qqActivePermission?.revision ?? 0) ? "permission_changed"
+                    : ageMs >= ACTIVE_PROBE_FRESH_MS ? "expired_local_evidence"
+                        : renewal.sessionFingerprint !== actor.continuousSessionFingerprint ? "session_changed" : "current";
+    }
+    return { status, observedRevocation: state.qqRevoked === true, observedAt, ageMs,
+        enrollmentAcceptedAt: Number.isSafeInteger(state.qqEnrollmentObservedCapability?.checkedAt) ? state.qqEnrollmentObservedCapability.checkedAt : null };
+}
+function continuousRuntimeEpoch(actor) {
+    actor.continuousEpoch ??= randomHex(24);
+    actor.continuousClientIds ??= new WeakMap();
+    const client = actor.runtime?.client;
+    if (client && !actor.continuousClientIds.has(client))
+        actor.continuousClientIds.set(client, randomHex(24));
+    return actor.continuousEpoch + ':' + (client ? actor.continuousClientIds.get(client) : 'no-client') + ':' + String(client?.generation);
+}
 async function continuousController(actor) {
     if (actor.continuous)
         return actor.continuous;
     actor.continuousEpoch ??= randomHex(24);
-    const runtimeIds = new WeakMap(), credentials = { appSecret: actor.env.QQ_APP_SECRET, bridgeSecret: actor.env.QQ_BRIDGE_SECRET };
+    const credentials = { appSecret: actor.env.QQ_APP_SECRET, bridgeSecret: actor.env.QQ_BRIDGE_SECRET };
     const context = (s) => {
         const c = actor.config(), client = actor.runtime?.client;
-        if (client && !runtimeIds.has(client))
-            runtimeIds.set(client, randomHex(24));
+        continuousRuntimeEpoch(actor);
         const budget = setupBudgetView({ budget: s.activeBudget, running: s.control?.running }, c.budget, actor.now());
-        const b = s.binding, p = s.qqActivePermission?.renewal;
-        return { credentialsCurrent: credentials.appSecret === actor.env.QQ_APP_SECRET && credentials.bridgeSecret === actor.env.QQ_BRIDGE_SECRET, runtimeLimitMs: c.budget, ownerId: c.ownerId, appId: c.appId, projectIds: c.allowedProjects, enabled: actor.env.QQ_DELIVERY_ENABLED === 'true', running: s.control?.running === true, ready: client?.ready === true && !client.stopped, healthy: s.qqIngestionHealth?.healthy === true, storageFault: actor.store.qqIngestionFault === true, remainingMs: budget?.remainingMs ?? 0, binding: b, bindingFingerprint: p?.bindingFingerprint ?? null, runtimeEpoch: actor.continuousEpoch + ':' + (client ? runtimeIds.get(client) : 'no-client') + ':' + String(client?.generation), permissionSessionFingerprint: actor.continuousSessionFingerprint, permissionRevision: s.qqActivePermission?.revision ?? 0, permission: p, probe: (s.qqEnrollmentObservedCapability?.validUntil ?? 0) > (s.qqActiveObservedCapability?.validUntil ?? 0) ? s.qqEnrollmentObservedCapability : s.qqActiveObservedCapability };
+        const b = s.binding, p = continuousPermissionProof(s);
+        return { credentialsCurrent: credentials.appSecret === actor.env.QQ_APP_SECRET && credentials.bridgeSecret === actor.env.QQ_BRIDGE_SECRET, runtimeLimitMs: c.budget, ownerId: c.ownerId, appId: c.appId, projectIds: c.allowedProjects, enabled: actor.env.QQ_DELIVERY_ENABLED === 'true', running: s.control?.running === true, ready: client?.ready === true && !client.stopped, healthy: s.qqIngestionHealth?.healthy === true, storageFault: actor.store.qqIngestionFault === true, remainingMs: budget?.remainingMs ?? 0, binding: b, bindingFingerprint: p?.bindingFingerprint ?? null, runtimeEpoch: continuousRuntimeEpoch(actor), permissionSessionFingerprint: actor.continuousSessionFingerprint, permissionRevision: s.qqActivePermission?.revision ?? 0, permission: p, probe: (s.qqEnrollmentObservedCapability?.validUntil ?? 0) > (s.qqActiveObservedCapability?.validUntil ?? 0) ? s.qqEnrollmentObservedCapability : s.qqActiveObservedCapability };
     };
     actor.continuous = new RivuleContinuous.ContinuousDeliveryController({ store: actor.store, command: fn => actor.command(fn), context, now: () => actor.now(), random: () => randomHex(24),
         acquireToken: async () => {
@@ -2264,16 +2323,20 @@ async function continuousEnrollmentEligibility(actor, state, expected) {
     if (expected && (expected.probeId !== "continuous-enrollment-v1" || expected.bindingFingerprint !== fingerprint || expected.confirmedAt !== binding.confirmedAt))
         return { reason: "active_probe_binding_changed" };
     const revision = state.qqActivePermission?.revision ?? 0;
+    if (typeof actor.continuousSessionFingerprint !== "string" || !actor.continuousSessionFingerprint)
+        return { reason: "active_probe_connection_not_healthy" };
+    if (expected && (expected.sessionFingerprint !== actor.continuousSessionFingerprint || expected.runtimeEpoch !== continuousRuntimeEpoch(actor) || expected.runtimeGeneration !== actor.runtime?.client.generation))
+        return { reason: "active_probe_connection_changed" };
     let renewalEventKey = null;
-    {
+    if (state.qqRevoked === true) {
         const renewal = state.qqActivePermission?.renewal;
-        if (!renewal || renewal.kind !== "authenticated_C2C_MSG_RECEIVE" || renewal.bindingFingerprint !== fingerprint || renewal.confirmedAt !== binding.confirmedAt || renewal.revision !== revision || renewal.eventAt > now || now - renewal.eventAt >= ACTIVE_PROBE_FRESH_MS || renewal.receivedAt > now || renewal.eventAt < binding.confirmedAt)
+        if (!renewal || renewal.kind !== "authenticated_C2C_MSG_RECEIVE" || renewal.sessionFingerprint !== actor.continuousSessionFingerprint || renewal.bindingFingerprint !== fingerprint || renewal.confirmedAt !== binding.confirmedAt || renewal.revision !== revision || renewal.eventAt > now || now - renewal.eventAt >= ACTIVE_PROBE_FRESH_MS || renewal.receivedAt > now || renewal.eventAt < binding.confirmedAt)
             return { reason: "active_probe_fresh_qq_permission_required" };
         renewalEventKey = renewal.eventKey;
     }
     if (expected && (expected.permissionRevision !== revision || expected.renewalEventKey !== renewalEventKey))
         return { reason: "active_probe_permission_changed" };
-    return { bindingFingerprint: fingerprint, confirmedAt: binding.confirmedAt, probeId: "continuous-enrollment-v1", permissionRevision: revision, renewalEventKey };
+    return { bindingFingerprint: fingerprint, confirmedAt: binding.confirmedAt, probeId: "continuous-enrollment-v1", permissionRevision: revision, renewalEventKey, sessionFingerprint: actor.continuousSessionFingerprint, runtimeEpoch: continuousRuntimeEpoch(actor), runtimeGeneration: actor.runtime?.client.generation };
 }
 async function continuousEnrollmentProbe(actor, approved, interactionId) {
     let reserved;
@@ -2366,7 +2429,7 @@ async function continuousEnrollmentProbe(actor, approved, interactionId) {
             record.completedAt = actor.now();
             const current = await continuousEnrollmentEligibility(actor, s, probe);
             if (result.reason === "provider_accepted" && !current.reason) {
-                s.qqEnrollmentObservedCapability = { schemaVersion: 1, kind: "continuous_enrollment_observation", bindingFingerprint: probe.bindingFingerprint, confirmedAt: probe.confirmedAt, appId: s.binding.appId, ownerId: s.binding.ownerId, recipientFingerprint: await qqHash(s.binding.userOpenId), checkedAt: actor.now(), validUntil: actor.now() + ACTIVE_PROBE_FRESH_MS, probeId: approved.enrollmentId, permissionRevision: probe.permissionRevision, renewalEventKey: probe.renewalEventKey, receipt: structuredClone(result) };
+                s.qqEnrollmentObservedCapability = { schemaVersion: 1, kind: "continuous_enrollment_observation", bindingFingerprint: probe.bindingFingerprint, confirmedAt: probe.confirmedAt, appId: s.binding.appId, ownerId: s.binding.ownerId, recipientFingerprint: await qqHash(s.binding.userOpenId), checkedAt: actor.now(), validUntil: actor.now() + ACTIVE_PROBE_FRESH_MS, probeId: approved.enrollmentId, interactionId: probe.interactionId, sessionFingerprint: probe.sessionFingerprint, runtimeEpoch: probe.runtimeEpoch, permissionRevision: probe.permissionRevision, renewalEventKey: probe.renewalEventKey, receipt: structuredClone(result) };
             }
         }));
     }
@@ -2384,8 +2447,8 @@ function continuousReasonGuidance(reason) {
         active_probe_binding_unverified: '请先确认接收账户。返回设置，完成本人 QQ 绑定。',
         active_probe_binding_changed: '接收账户已更新。返回设置核对绑定，再重新打开持续通知。',
         active_probe_permission_changed: 'QQ 权限已变化。刷新状态，按当前提示重新验证。',
-        fresh_permission_required: '请到 QQ 机器人资料卡重新开启主动消息，再刷新这里。',
-        active_probe_fresh_qq_permission_required: '请到 QQ 机器人资料卡重新开启主动消息，再刷新这里。',
+        fresh_permission_required: '曾收到关闭或移除记录，尚缺当前允许事件。请核对 QQ 资料卡的接收设置后刷新。',
+        active_probe_fresh_qq_permission_required: '曾收到关闭或移除记录，尚缺当前允许事件。请核对 QQ 资料卡的接收设置后刷新。',
         enrollment_outcome_requires_review: '上次验证结果待确认，请先核对 QQ 中的消息。'
     };
     return Object.hasOwn(known, reason) ? known[reason] : '当前还不能开启。返回设置查看具体阶段；仍有问题时打开诊断。';
@@ -2426,7 +2489,7 @@ function continuousDisplayView({ status, eligibility, review, deliveryEnabled })
         reason = eligibility.reason ? continuousReasonGuidance(eligibility.reason) : '可以重新验证并开启下一轮通知。';
     }
     else if (eligibility.reason) {
-        const titles = { active_probe_binding_unverified: '确认接收 QQ 账户', active_probe_connection_not_healthy: '等待 QQ 连接就绪', fresh_permission_required: '等待 QQ 主动消息权限', active_probe_fresh_qq_permission_required: '等待 QQ 主动消息权限', active_probe_budget_configuration_changed: '连接预算需要检查' };
+        const titles = { active_probe_binding_unverified: '确认接收 QQ 账户', active_probe_connection_not_healthy: '等待 QQ 连接就绪', fresh_permission_required: '权限更新待确认', active_probe_fresh_qq_permission_required: '权限更新待确认', active_probe_budget_configuration_changed: '连接预算需要检查' };
         heading = Object.hasOwn(titles, eligibility.reason) ? titles[eligibility.reason] : 'QQ 设置需要检查';
         reason = continuousReasonGuidance(eligibility.reason);
     }
@@ -2442,7 +2505,7 @@ async function continuousPanel(actor) {
         const p = await continuousEnrollmentEligibility(actor, s), renewal = s.qqActivePermission?.renewal;
         if (p.reason)
             return { reason: p.reason };
-        if (!renewal || renewal.kind !== 'authenticated_C2C_MSG_RECEIVE' || renewal.bindingFingerprint !== p.bindingFingerprint || renewal.revision !== p.permissionRevision || renewal.eventAt > actor.now() || actor.now() - renewal.eventAt >= 300000)
+        if (s.qqRevoked === true && (!renewal || renewal.kind !== 'authenticated_C2C_MSG_RECEIVE' || renewal.bindingFingerprint !== p.bindingFingerprint || renewal.revision !== p.permissionRevision || renewal.eventAt > actor.now() || actor.now() - renewal.eventAt >= 300000))
             return { reason: 'fresh_permission_required' };
         if (review.count)
             return { reason: 'enrollment_outcome_requires_review' };
@@ -2452,7 +2515,7 @@ async function continuousPanel(actor) {
     const { active, awaitingProducer, heading, reason, canOfferEnable } = view;
     const stage = active ? '✓ 本轮通知' : awaitingProducer ? '◌ 通知队列' : '○ 本轮通知';
     const limit = Number(actor.env.QQ_DAILY_ACTIVE_BUDGET_MS), daily = { usedMs: Math.max(0, limit - status.remainingRuntimeMs), limitMs: limit };
-    const text = ['**Rivule · 持续通知**', `-# ${status.bound ? '✓ 已绑定' : '○ 待绑定'} · ${active || awaitingProducer || !eligibility.reason ? '✓' : '○'} 主动权限 · ${stage}`, '', `**${heading}**`, reason,
+    const text = ['**Rivule · 持续通知**', `-# ${status.bound ? '✓ 已绑定' : '○ 待绑定'} · ${active || awaitingProducer ? '✓' : '○'} 主动验证 · ${stage}`, '', `**${heading}**`, reason,
         status.bound ? '\n发送到：已确认的本人 QQ' : '\n接收账户：尚未确认', '来源：已授权项目的全部已验证 PA', '通知：普通内容的进展 / 受阻 / 待办 / 完成',
         '\n每天最多 100 次尝试 · 每次至少间隔 3 秒', `-# 今日（UTC）还可尝试 ${view.quotaKnown ? status.remainingDaily + ' 次' : '待核对'}`,
         `-# 今日连接 ${setupBudgetBar(daily)} 剩余 ${setupMinutes(status.remainingRuntimeMs)}`,
@@ -2473,6 +2536,9 @@ async function enableContinuousFromControl(actor, action, interactionId) {
     const result = await continuousEnrollmentProbe(actor, action, interactionId);
     if (result.state !== 'sent')
         return '验证' + (result.state === 'uncertain' ? '结果待确认，请先到 QQ 核对。' : '未完成，可在诊断中查看原因。');
+    const accepted = await actor.store.transaction(s => s.qqEnrollmentObservedCapability?.interactionId === interactionId && s.qqEnrollmentObservedCapability?.probeId === action.enrollmentId && s.qqEnrollmentObservedCapability?.receipt?.messageId === result.messageId);
+    if (!accepted)
+        throw Error('enrollment_observation_changed');
     const ctl = await continuousController(actor), remaining = (await ctl.status()).remainingRuntimeMs;
     await ctl.enroll({ ownerAuthenticated: true, interactionId, policyFingerprint: action.policyFingerprint, policyRevision: 1, backlog: 'new_only', startAfterRevision: 0, expiresAt: actor.now() + Math.min(remaining, 7200000) });
     return '验证已提交 QQ，正在开启本轮通知。';
@@ -2583,7 +2649,7 @@ var GatewayActor = class {
                     await dispatch(event, auth);
                     await this.store.transaction((state) => {
                         state.gatewaySession = { session: runtime.client.session, sequence: event.s };
-                        if (state.qqContinuous?.grant && state.qqContinuous.grant.permissionKey !== JSON.stringify([state.qqActivePermission?.renewal?.eventKey, state.qqActivePermission?.renewal?.revision, state.qqActivePermission?.renewal?.confirmedAt, state.qqActivePermission?.renewal?.bindingFingerprint, state.qqActivePermission?.renewal?.sessionFingerprint]))
+                        if (state.qqContinuous?.grant && state.qqContinuous.grant.permissionKey !== ((p) => JSON.stringify([p?.eventKey, p?.revision, p?.confirmedAt, p?.bindingFingerprint, p?.sessionFingerprint]))(continuousPermissionProof(state)))
                             RivuleContinuous.pause(state, 'permission_changed', this.now());
                     });
                 }
@@ -2813,7 +2879,7 @@ var GatewayActor = class {
         });
     }
     async status() {
-        return this.store.transaction((state) => ({ running: state.control?.running === true, stopReason: state.control?.reason ?? null, connected: this.runtime?.client.ready === true, bound: !!state.binding, ingestionHealthy: state.qqIngestionHealth?.healthy === true, revoked: state.qqRevoked === true, inboxCount: state.inbox?.length ?? 0, budget: state.activeBudget ?? null, connectionStartedAt: diagnosticTime(state.qqConnectionStartedAt), connectionDiagnostics: diagnosticSnapshot(state.qqConnectionDiagnostics), pendingPairing: state.pairing?.candidate ? { confirmationId: state.pairing.candidate.confirmationId, userOpenId: state.pairing.candidate.userOpenId } : null }));
+        return this.store.transaction(async (state) => ({ permissionEvidence: await continuousPermissionDiagnostic(this, state), running: state.control?.running === true, stopReason: state.control?.reason ?? null, connected: this.runtime?.client.ready === true, bound: !!state.binding, ingestionHealthy: state.qqIngestionHealth?.healthy === true, revoked: state.qqRevoked === true, inboxCount: state.inbox?.length ?? 0, budget: state.activeBudget ?? null, connectionStartedAt: diagnosticTime(state.qqConnectionStartedAt), connectionDiagnostics: diagnosticSnapshot(state.qqConnectionDiagnostics), pendingPairing: state.pairing?.candidate ? { confirmationId: state.pairing.candidate.confirmationId, userOpenId: state.pairing.candidate.userOpenId } : null }));
     }
     async receiveBridge(packet) {
         if (this.env.QQ_DELIVERY_ENABLED === 'true') {
