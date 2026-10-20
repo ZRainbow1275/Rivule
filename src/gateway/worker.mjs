@@ -407,7 +407,26 @@ async function fixedReplyProof(actor) {
 var ACTIVE_PROBE_ID = "qq-active-fixed-v1";
 var ACTIVE_PROBE_TEXT = "Rivule 主动通知测试：主动消息通道验证。";
 var ACTIVE_PROBE_FRESH_MS = 300000;
-var ACTIVE_PROBE_BUDGET_MS = 7200000;
+var RUNTIME_SESSION_EXPIRY = Number.MAX_SAFE_INTEGER;
+function runtimeBudgetPolicy(state, fallback) {
+    const p = state.qqRuntimeBudgetPolicy;
+    if (p === undefined) {
+        if (!Number.isSafeInteger(fallback) || fallback < 60000 || fallback > 86400000)
+            throw Error("runtime_budget_policy_invalid");
+        return { version: 1, mode: "warn", limitMs: fallback, revision: 0 };
+    }
+    if (!p || p.version !== 1 || !["warn", "stop"].includes(p.mode) || !Number.isSafeInteger(p.limitMs) || p.limitMs < 60000 || p.limitMs > 86400000 || !Number.isSafeInteger(p.revision) || p.revision < 1)
+        throw Error("runtime_budget_policy_invalid");
+    return p;
+}
+function runtimeBudgetView(state, fallback, now) {
+    const p = runtimeBudgetPolicy(state, fallback);
+    const b = setupBudgetView({ budget: state.activeBudget, running: state.control?.running }, p.limitMs, now);
+    if (!b)
+        throw Error("runtime_budget_ledger_invalid");
+    return { ...b, mode: p.mode, revision: p.revision, warningReached: b.exhausted, exhausted: p.mode === "stop" && b.exhausted,
+        availableMs: p.mode === "stop" ? b.remainingMs : RUNTIME_SESSION_EXPIRY - now };
+}
 var authenticatedGatewayDispatches = new WeakSet();
 async function dispatchAuthenticatedGatewayEvent(client, event, phase = "live") {
     const auth = { session: client.session, generation: client.generation, phase };
@@ -476,16 +495,14 @@ async function observeActivePermission({ state, store, event, auth, client, appI
 }
 async function activeProbeEligibility(actor, state, expected) {
     const c = actor.config(), now = actor.now(), binding = state.binding;
-    if (c.budget !== ACTIVE_PROBE_BUDGET_MS)
+    let budget;
+    try {
+        budget = runtimeBudgetView(state, c.budget, now);
+    }
+    catch {
         return { reason: "active_probe_budget_configuration_changed" };
-    const budget = state.activeBudget;
-    if (!budget || !Number.isSafeInteger(budget.day) || !Number.isFinite(budget.usedMs) || budget.usedMs < 0 || !Number.isFinite(budget.lastAt) || budget.lastAt > now)
-        return { reason: "budget_exhausted" };
-    const running = state.control?.running === true;
-    const projectedUsedMs = budget.day === Math.floor(now / 86400000)
-        ? budget.usedMs + (running ? Math.max(0, now - budget.lastAt) : 0)
-        : running ? Math.max(0, now % 86400000) : 0;
-    if (projectedUsedMs >= c.budget)
+    }
+    if (budget.exhausted)
         return { reason: "budget_exhausted" };
     if (actor.env.QQ_DELIVERY_ENABLED !== "false")
         return { reason: "active_probe_delivery_must_remain_disabled" };
@@ -674,8 +691,8 @@ function setupStageView(status, active, budget) {
     const probe = receipt?.state === "sent" && receipt.reason === "provider_accepted" ? "✓ 已提交 QQ" : receipt?.state === "uncertain" ? "◌ 测试待确认" : receipt ? "⚠ 测试未完成" : active.eligible ? "○ 待主动测试" : "○ 待主动测试";
     let heading, next;
     if (budget?.exhausted) {
-        heading = "今日连接时间已用完";
-        next = "每日 00:00 UTC 重置后，再点「启动连接」。";
+        heading = "已达到你设置的暂停时长";
+        next = "在「运行预算」调整时长或改为仅提醒，再点「启动连接」。";
     }
     else if (!status.running) {
         heading = "连接已停止";
@@ -750,7 +767,7 @@ function setupPanelText({ status, proof, active, budget, notice = "", diagnostic
     if (active.eligible)
         lines.push("", `测试内容：${ACTIVE_PROBE_TEXT}`, "仅测试一次，失败不自动重发。");
     if (budget)
-        lines.push("", `-# ${setupBudgetBar(budget)} · ■ 已用 / □ 剩余`, `-# 今日连接 · 已用 ${setupMinutes(budget.usedMs)} · 剩余 ${setupMinutes(budget.remainingMs)} / ${setupMinutes(budget.limitMs)}`, "-# 每日 00:00 UTC 重置");
+        lines.push("", `-# 今日连接已用 ${setupMinutes(budget.usedMs)} · ${budget.mode === "stop" ? "到点暂停" : "仅提醒，不暂停"} · 阈值 ${setupMinutes(budget.limitMs)}`, budget.warningReached ? (budget.exhausted ? "⚠ 已达到你设置的暂停时长。" : "⚠ 已达到你设置的提醒时长，连接可以继续。") : "-# 可在「运行预算」自行调整；每日 00:00 UTC 重新计时", "-# 连接时长不等于 Cloudflare 账单额度；实际额度尚未接入。");
     lines.push("", `-# 通知自动推送：${deliveryEnabled === "true" ? "配置已开启" : deliveryEnabled === "false" ? "未开启" : "配置待检查"}`);
     return lines.join("\n");
 }
@@ -768,12 +785,20 @@ function setupControlSpecs({ status, proof, active, budget, diagnostics = false,
         specs.push(["review_binding", "核对绑定账户"]);
     if (active.eligible)
         specs.push(["active_probe", "发送一次主动测试"]);
-    specs.push(["status", status.pendingPairing ? "刷新候选" : "刷新状态"], ["diagnostics", "查看诊断"]);
+    specs.push(["status", status.pendingPairing ? "刷新候选" : "刷新状态"], ["diagnostics", "查看诊断"], ["budget_settings", "运行预算"]);
     if (status.bound && status.connected && status.ingestionHealthy && !status.revoked && proof.eligible)
         specs.push(["proof", "发送一次固定回复测试"]);
     if (status.running)
         specs.push(["stop", "停止连接"]);
     return specs;
+}
+function runtimeBudgetPanel(b) {
+    return ["**Rivule · 运行预算**", "", `当前：${b.mode === "stop" ? "到点暂停" : "仅提醒，不暂停"}`,
+        `每日阈值：${setupMinutes(b.limitMs)} · 今天已用 ${setupMinutes(b.usedMs)}`,
+        b.warningReached ? (b.exhausted ? "⚠ 已达到暂停时长。" : "⚠ 已达到提醒时长，连接仍可继续。") : "尚未达到你设置的时长。",
+        "", "默认只提醒。你可以调整时长，或选择到点暂停。修改不会清零已用时长，也不会自动启动连接或发送消息。",
+        "这是 Rivule 的连接时长，不是 Cloudflare 的实际账单额度。实际额度尚未接入，请在 Cloudflare 控制台查看。",
+        "不会修改套餐、消费上限或平台配额。每日 00:00 UTC 重新计时。"].join("\n");
 }
 var PREFIX = "qqsetup:";
 var reply = (content, components = []) => ({ type: 4, data: { content, components, flags: 64, allowed_mentions: { parse: [] } } });
@@ -855,22 +880,27 @@ async function ownerSetup(actor, p) {
         await (await continuousController(actor)).pause('owner_paused');
         text2 = '持续通知已暂停。';
     }
-    else if (!["status", "diagnostics", "review_binding", "continuous_settings"].includes(action.action))
+    else if (["budget_warn", "budget_stop", "budget_less", "budget_more", "budget_reset"].includes(action.action)) {
+        await actor.updateRuntimeBudget(action);
+        text2 = "运行预算已保存。不会修改 Cloudflare 套餐或扣费设置；通知需按当前会话重新开启。";
+    }
+    else if (!["status", "diagnostics", "review_binding", "continuous_settings", "budget_settings"].includes(action.action))
         throw Error("unknown_setup_action");
     const status = await actor.status();
     status.ingestionFault = actor.store.qqIngestionFault === true;
     const proof = await actor.store.transaction((s) => ({ receipt: s.qqProof?.receipt, eligible: actor.env.QQ_PROOF_ENABLED === "true" && !s.qqProof && !!proofReply(s, actor.now()) }));
     const active = await actor.store.transaction((s) => activeProbePanel(actor, s));
-    const budget = setupBudgetView(status, Number(actor.env.QQ_DAILY_ACTIVE_BUDGET_MS), actor.now());
+    const budget = status.runtimeBudget;
     const panel = { status, proof, active, budget, notice: text2, diagnostics: action.action === "diagnostics", reviewBinding: action.action === "review_binding", deliveryEnabled: actor.env.QQ_DELIVERY_ENABLED };
     const continuous = ['continuous_settings', 'continuous_enable', 'continuous_pause', 'continuous_review'].includes(action.action) ? await continuousPanel(actor) : null;
-    text2 = continuous ? [continuous.text, text2].filter(Boolean).join('\n\n') : setupPanelText(panel);
-    const specs = continuous ? continuous.specs : [...setupControlSpecs(panel), ...panel.diagnostics || panel.reviewBinding ? [] : [['continuous_settings', '持续通知']]];
+    const budgetPanel = action.action.startsWith("budget_");
+    text2 = budgetPanel ? [runtimeBudgetPanel(budget), text2].filter(Boolean).join("\n\n") : continuous ? [continuous.text, text2].filter(Boolean).join('\n\n') : setupPanelText(panel);
+    const specs = budgetPanel ? [["budget_warn", "仅提醒（不暂停）"], ["budget_stop", "到点暂停"], ["budget_less", "减少 30 分钟"], ["budget_more", "增加 30 分钟"], ["budget_reset", "重置为 120 分钟"], ["status", "返回设置"]] : continuous ? continuous.specs : [...setupControlSpecs(panel), ...panel.diagnostics || panel.reviewBinding ? [] : [['continuous_settings', '持续通知']]];
     const components = await actor.store.transaction((s) => {
         s.adminControls = {};
         const buttons = specs.map(([action2, label]) => {
             const ref2 = PREFIX + crypto.randomUUID();
-            s.adminControls[ref2] = { action: action2, expires: actor.now() + 3e5, ...action2 === "confirm" ? { confirmationId: status.pendingPairing.confirmationId } : {}, ...action2 === "active_probe" ? active.control : {}, ...action2 === "continuous_enable" ? continuous.control : {}, ...action2 === "continuous_review" ? continuous.reviewControl : {} };
+            s.adminControls[ref2] = { action: action2, expires: actor.now() + 3e5, ...action2.startsWith("budget_") ? { budgetRevision: budget?.revision } : {}, ...action2 === "confirm" ? { confirmationId: status.pendingPairing.confirmationId } : {}, ...action2 === "active_probe" ? active.control : {}, ...action2 === "continuous_enable" ? continuous.control : {}, ...action2 === "continuous_review" ? continuous.reviewControl : {} };
             return { type: 2, style: action2 === "confirm" ? 3 : ["start", "pair", "review_binding", "active_probe", "continuous_enable"].includes(action2) ? 1 : 2, label, custom_id: ref2 };
         });
         return Array.from({ length: Math.ceil(buttons.length / 5) }, (_, row) => ({ type: 1, components: buttons.slice(row * 5, row * 5 + 5) }));
@@ -1818,7 +1848,7 @@ function list(value) {
 }
 var RivuleContinuous = (() => {
     const DELIVERY_VERSION = 2;
-    const POLICY = Object.freeze({ revision: 1, sourceMode: 'all_currently_verified', dailyLimit: 100, minimumIntervalMs: 3000, sourceProofMaxAgeMs: 86400000, permitTtlMs: 30000, maxSessionMs: 7200000, maxAttempts: 1000 });
+    const POLICY = Object.freeze({ revision: 2, sourceMode: 'all_currently_verified', dailyLimit: 100, minimumIntervalMs: 3000, sourceProofMaxAgeMs: 86400000, permitTtlMs: 30000, maxSessionMs: 300000, expiryMode: 'current_runtime', maxAttempts: 1000 });
     const fail = reason => { throw Error(reason); };
     const integer = n => Number.isSafeInteger(n) && n >= 0;
     const text = (s, n = 256) => typeof s === 'string' && s.length > 0 && s.length <= n;
@@ -1832,11 +1862,11 @@ var RivuleContinuous = (() => {
     function currentGate(state, context, now, requireProducer = true) {
         if (!integer(now) || context.enabled !== true)
             fail('delivery_disabled');
-        if (context.credentialsCurrent !== true || context.runtimeLimitMs !== POLICY.maxSessionMs || context.ownerId !== context.binding?.ownerId || context.appId !== context.binding?.appId || !Array.isArray(context.projectIds) || context.projectIds.some(x => !text(x)))
+        if (context.credentialsCurrent !== true || !integer(context.runtimeLimitMs) || context.runtimeLimitMs < 60000 || context.runtimeLimitMs > 86400000 || context.ownerId !== context.binding?.ownerId || context.appId !== context.binding?.appId || !Array.isArray(context.projectIds) || context.projectIds.some(x => !text(x)))
             fail('configuration_changed');
         if (context.running !== true || context.ready !== true || context.healthy !== true || context.storageFault === true)
             fail('connection_unavailable');
-        if (!integer(context.remainingMs) || context.remainingMs <= 0 || context.remainingMs > POLICY.maxSessionMs)
+        if (!integer(context.remainingMs) || context.remainingMs <= 0)
             fail('runtime_budget_unavailable');
         const d = state.qqContinuous, g = d?.grant;
         if (!g || g.state !== 'active')
@@ -1847,6 +1877,8 @@ var RivuleContinuous = (() => {
             fail('policy_changed');
         if (g.bindingKey !== bindingKey(context.binding) || g.bindingFingerprint !== context.bindingFingerprint)
             fail('binding_changed');
+        if (g.budgetRevision !== context.budgetRevision || g.runtimeLimitMs !== context.runtimeLimitMs)
+            fail('configuration_changed');
         if (g.runtimeEpoch !== context.runtimeEpoch || !text(context.runtimeEpoch))
             fail('connection_continuity_changed');
         if (g.permissionKey !== permissionKey(context.permission) || context.permission.revision !== context.permissionRevision || context.permission.sessionFingerprint !== context.permissionSessionFingerprint)
@@ -1905,7 +1937,7 @@ var RivuleContinuous = (() => {
                 delete d.quotas[day];
         for (const [binding, records] of Object.entries(state.qqEnrollmentProbes ?? {})) {
             for (const [id, a] of Object.entries(records))
-                if (integer(a.reservedAt) && a.reservedAt < cutoff && (a.receipt?.state !== 'uncertain' || integer(a.reviewedAt)))
+                if (integer(a.reservedAt) && a.reservedAt < cutoff && (a.receipt?.state !== 'uncertain' || integer(a.reviewedAt)) && !(d.grant?.state === 'active' && d.grant.bindingFingerprint === binding && d.grant.approvalId === a.interactionId))
                     delete records[id];
             if (!Object.keys(records).length)
                 delete state.qqEnrollmentProbes[binding];
@@ -1914,11 +1946,13 @@ var RivuleContinuous = (() => {
     function enroll(state, context, approval, now) {
         if (!approval || approval.ownerAuthenticated !== true || !safeKey(approval.interactionId) || approval.policyFingerprint !== JSON.stringify(POLICY) || approval.policyRevision !== POLICY.revision || approval.backlog !== 'new_only')
             fail('approval_required');
+        if (approval.budgetRevision !== context.budgetRevision)
+            fail('configuration_changed');
         if (!integer(approval.startAfterRevision) || !integer(approval.expiresAt) || approval.expiresAt <= now || approval.expiresAt - now > POLICY.maxSessionMs)
             fail('approval_scope_invalid');
         if (context.enabled !== true || context.running !== true || context.ready !== true || context.healthy !== true || context.storageFault === true || !text(context.runtimeEpoch))
             fail('connection_unavailable');
-        if (context.credentialsCurrent !== true || context.runtimeLimitMs !== POLICY.maxSessionMs || context.ownerId !== context.binding?.ownerId || context.appId !== context.binding?.appId || !Array.isArray(context.projectIds) || context.projectIds.some(x => !text(x)))
+        if (context.credentialsCurrent !== true || !integer(context.runtimeLimitMs) || context.runtimeLimitMs < 60000 || context.runtimeLimitMs > 86400000 || context.ownerId !== context.binding?.ownerId || context.appId !== context.binding?.appId || !Array.isArray(context.projectIds) || context.projectIds.some(x => !text(x)))
             fail('configuration_changed');
         const b = bindingKey(context.binding), p = context.permission, pk = permissionKey(p), probe = context.probe;
         if (probe?.kind === 'continuous_enrollment_observation') {
@@ -1934,7 +1968,7 @@ var RivuleContinuous = (() => {
             fail('fresh_permission_required');
         if (!probe || !['isolated_active_probe_observation', 'continuous_enrollment_observation'].includes(probe.kind) || probe.bindingFingerprint !== context.bindingFingerprint || probe.confirmedAt !== context.binding.confirmedAt || probe.permissionRevision !== context.permissionRevision || probe.receipt?.state !== 'sent' || !text(probe.receipt.messageId, 1024) || !fresh(probe.checkedAt, now, 300000) || !integer(probe.validUntil) || probe.validUntil <= now)
             fail('fresh_probe_required');
-        if (!integer(context.remainingMs) || context.remainingMs <= 0 || context.remainingMs > POLICY.maxSessionMs)
+        if (!integer(context.remainingMs) || context.remainingMs <= 0)
             fail('runtime_budget_unavailable');
         if (unresolvedAttempts(state, context.bindingFingerprint, now).keys.length)
             fail('unknown_outcome_requires_review');
@@ -1948,7 +1982,7 @@ var RivuleContinuous = (() => {
             fail('approval_capacity');
         d.revision++;
         d.approvals[approval.interactionId] = { at: now, expiresAt: approval.expiresAt, revision: d.revision };
-        d.grant = { id: 'grant-' + d.revision, revision: d.revision, policyRevision: POLICY.revision, policyFingerprint: JSON.stringify(POLICY), sourceMode: POLICY.sourceMode, state: 'active', producerReady: false, projectScope: JSON.stringify([...context.projectIds].sort()), bindingKey: b, bindingFingerprint: context.bindingFingerprint, permissionKey: pk, runtimeEpoch: context.runtimeEpoch, issuedAt: now, hardUntil: Math.min(approval.expiresAt, now + context.remainingMs), startAfterRevision: approval.startAfterRevision, approvalId: approval.interactionId, probeCheckedAt: probe.checkedAt, probeMessageId: probe.receipt.messageId };
+        d.grant = { id: 'grant-' + d.revision, revision: d.revision, policyRevision: POLICY.revision, policyFingerprint: JSON.stringify(POLICY), sourceMode: POLICY.sourceMode, state: 'active', producerReady: false, projectScope: JSON.stringify([...context.projectIds].sort()), bindingKey: b, bindingFingerprint: context.bindingFingerprint, permissionKey: pk, runtimeEpoch: context.runtimeEpoch, budgetRevision: context.budgetRevision, runtimeLimitMs: context.runtimeLimitMs, expiryMode: 'current_runtime', issuedAt: now, hardUntil: Number.MAX_SAFE_INTEGER, startAfterRevision: approval.startAfterRevision, approvalId: approval.interactionId, probeCheckedAt: probe.checkedAt, probeMessageId: probe.receipt.messageId };
         return structuredClone(d.grant);
     }
     function acknowledgeProducer(state, context, ack, now) {
@@ -2107,7 +2141,7 @@ var RivuleContinuous = (() => {
         }
         const d = state.qqContinuous, g = d?.grant, q = d?.quotas[Math.floor(now / 86400000)];
         const bound = context.binding?.ownerId === context.ownerId && context.binding?.appId === context.appId && text(context.binding?.userOpenId) && integer(context.binding?.confirmedAt) && context.binding.confirmedAt <= now;
-        return { policyFingerprint: JSON.stringify(POLICY), enabled: reason === null, bound, gatewayReady, producerReady: g?.producerReady === true, grantState: g?.state ?? null, remainingGrantMs: g ? Math.max(0, g.hardUntil - now) : 0, reason, grantId: g?.id ?? null, bindingFingerprint: g?.bindingFingerprint ?? null, approvalInteractionId: g?.approvalId ?? null, expiresAt: g?.hardUntil ?? null, remainingDaily: Math.max(0, POLICY.dailyLimit - (q?.count ?? 0) - legacyActiveCount(state, Math.floor(now / 86400000))), remainingRuntimeMs: integer(context.remainingMs) ? context.remainingMs : 0 };
+        return { policyFingerprint: JSON.stringify(POLICY), enabled: reason === null, bound, gatewayReady, producerReady: g?.producerReady === true, grantState: g?.state ?? null, expiryMode: g?.expiryMode ?? null, remainingGrantMs: g?.expiryMode === 'current_runtime' ? null : g ? Math.max(0, g.hardUntil - now) : 0, reason, grantId: g?.id ?? null, bindingFingerprint: g?.bindingFingerprint ?? null, approvalInteractionId: g?.approvalId ?? null, expiresAt: g?.hardUntil ?? null, remainingDaily: Math.max(0, POLICY.dailyLimit - (q?.count ?? 0) - legacyActiveCount(state, Math.floor(now / 86400000))), remainingRuntimeMs: integer(context.remainingMs) ? context.remainingMs : 0 };
     }
     const state = { enroll, pause, status, prepare, commit, currentGate, sourceGate, recordResult, acknowledgeProducer };
     const reasons = new Set(['delivery_disabled', 'connection_unavailable', 'configuration_changed', 'runtime_budget_unavailable', 'grant_inactive', 'producer_not_ready', 'policy_changed', 'binding_changed', 'connection_continuity_changed', 'permission_changed', 'grant_expired', 'source_unverified', 'event_not_current', 'projection_not_authorized', 'project_not_authorized', 'grant_changed', 'intent_conflict', 'event_already_reserved', 'attempt_capacity', 'attempt_consumed', 'permit_mismatch', 'permit_expired', 'quota_corrupt', 'daily_quota_exhausted', 'paced', 'preparation_expired']);
@@ -2239,9 +2273,15 @@ async function continuousController(actor) {
     const context = (s) => {
         const c = actor.config(), client = actor.runtime?.client;
         continuousRuntimeEpoch(actor);
-        const budget = setupBudgetView({ budget: s.activeBudget, running: s.control?.running }, c.budget, actor.now());
+        let budget;
+        try {
+            budget = runtimeBudgetView(s, c.budget, actor.now());
+        }
+        catch {
+            budget = null;
+        }
         const b = s.binding, p = continuousPermissionProof(s);
-        return { credentialsCurrent: credentials.appSecret === actor.env.QQ_APP_SECRET && credentials.bridgeSecret === actor.env.QQ_BRIDGE_SECRET, runtimeLimitMs: c.budget, ownerId: c.ownerId, appId: c.appId, projectIds: c.allowedProjects, enabled: actor.env.QQ_DELIVERY_ENABLED === 'true', running: s.control?.running === true, ready: client?.ready === true && !client.stopped, healthy: s.qqIngestionHealth?.healthy === true, storageFault: actor.store.qqIngestionFault === true, remainingMs: budget?.remainingMs ?? 0, binding: b, bindingFingerprint: p?.bindingFingerprint ?? null, runtimeEpoch: continuousRuntimeEpoch(actor), permissionSessionFingerprint: actor.continuousSessionFingerprint, permissionRevision: s.qqActivePermission?.revision ?? 0, permission: p, probe: (s.qqEnrollmentObservedCapability?.validUntil ?? 0) > (s.qqActiveObservedCapability?.validUntil ?? 0) ? s.qqEnrollmentObservedCapability : s.qqActiveObservedCapability };
+        return { credentialsCurrent: credentials.appSecret === actor.env.QQ_APP_SECRET && credentials.bridgeSecret === actor.env.QQ_BRIDGE_SECRET, runtimeLimitMs: budget?.limitMs ?? 0, budgetRevision: budget?.revision ?? null, ownerId: c.ownerId, appId: c.appId, projectIds: c.allowedProjects, enabled: actor.env.QQ_DELIVERY_ENABLED === 'true', running: s.control?.running === true, ready: client?.ready === true && !client.stopped, healthy: s.qqIngestionHealth?.healthy === true, storageFault: actor.store.qqIngestionFault === true, remainingMs: budget?.availableMs ?? 0, binding: b, bindingFingerprint: p?.bindingFingerprint ?? null, runtimeEpoch: continuousRuntimeEpoch(actor), permissionSessionFingerprint: actor.continuousSessionFingerprint, permissionRevision: s.qqActivePermission?.revision ?? 0, permission: p, probe: (s.qqEnrollmentObservedCapability?.validUntil ?? 0) > (s.qqActiveObservedCapability?.validUntil ?? 0) ? s.qqEnrollmentObservedCapability : s.qqActiveObservedCapability };
     };
     actor.continuous = new RivuleContinuous.ContinuousDeliveryController({ store: actor.store, command: fn => actor.command(fn), context, now: () => actor.now(), random: () => randomHex(24),
         acquireToken: async () => {
@@ -2302,16 +2342,14 @@ async function continuousRequest(actor, packet) {
 }
 async function continuousEnrollmentEligibility(actor, state, expected) {
     const c = actor.config(), now = actor.now(), binding = state.binding;
-    if (c.budget !== ACTIVE_PROBE_BUDGET_MS)
+    let budget;
+    try {
+        budget = runtimeBudgetView(state, c.budget, now);
+    }
+    catch {
         return { reason: "active_probe_budget_configuration_changed" };
-    const budget = state.activeBudget;
-    if (!budget || !Number.isSafeInteger(budget.day) || !Number.isFinite(budget.usedMs) || budget.usedMs < 0 || !Number.isFinite(budget.lastAt) || budget.lastAt > now)
-        return { reason: "budget_exhausted" };
-    const running = state.control?.running === true;
-    const projectedUsedMs = budget.day === Math.floor(now / 86400000)
-        ? budget.usedMs + (running ? Math.max(0, now - budget.lastAt) : 0)
-        : running ? Math.max(0, now % 86400000) : 0;
-    if (projectedUsedMs >= c.budget)
+    }
+    if (budget.exhausted)
         return { reason: "budget_exhausted" };
     if (actor.env.QQ_DELIVERY_ENABLED !== "true")
         return { reason: "continuous_delivery_disabled" };
@@ -2325,7 +2363,7 @@ async function continuousEnrollmentEligibility(actor, state, expected) {
     const revision = state.qqActivePermission?.revision ?? 0;
     if (typeof actor.continuousSessionFingerprint !== "string" || !actor.continuousSessionFingerprint)
         return { reason: "active_probe_connection_not_healthy" };
-    if (expected && (expected.sessionFingerprint !== actor.continuousSessionFingerprint || expected.runtimeEpoch !== continuousRuntimeEpoch(actor) || expected.runtimeGeneration !== actor.runtime?.client.generation))
+    if (expected && (expected.budgetRevision !== budget.revision || expected.sessionFingerprint !== actor.continuousSessionFingerprint || expected.runtimeEpoch !== continuousRuntimeEpoch(actor) || expected.runtimeGeneration !== actor.runtime?.client.generation))
         return { reason: "active_probe_connection_changed" };
     let renewalEventKey = null;
     if (state.qqRevoked === true) {
@@ -2336,7 +2374,7 @@ async function continuousEnrollmentEligibility(actor, state, expected) {
     }
     if (expected && (expected.permissionRevision !== revision || expected.renewalEventKey !== renewalEventKey))
         return { reason: "active_probe_permission_changed" };
-    return { bindingFingerprint: fingerprint, confirmedAt: binding.confirmedAt, probeId: "continuous-enrollment-v1", permissionRevision: revision, renewalEventKey, sessionFingerprint: actor.continuousSessionFingerprint, runtimeEpoch: continuousRuntimeEpoch(actor), runtimeGeneration: actor.runtime?.client.generation };
+    return { bindingFingerprint: fingerprint, confirmedAt: binding.confirmedAt, probeId: "continuous-enrollment-v1", budgetRevision: budget.revision, permissionRevision: revision, renewalEventKey, sessionFingerprint: actor.continuousSessionFingerprint, runtimeEpoch: continuousRuntimeEpoch(actor), runtimeGeneration: actor.runtime?.client.generation };
 }
 async function continuousEnrollmentProbe(actor, approved, interactionId) {
     let reserved;
@@ -2441,7 +2479,7 @@ async function continuousEnrollmentProbe(actor, approved, interactionId) {
 function continuousReasonGuidance(reason) {
     const known = {
         continuous_delivery_disabled: '请由部署者开启持续通知配置，再点「刷新状态」。',
-        budget_exhausted: '今日连接时间已用完。每日 00:00 UTC 重置后，返回设置启动连接。',
+        budget_exhausted: '已达到你设置的暂停时长。返回设置，在「运行预算」调整时长或改为仅提醒。',
         active_probe_budget_configuration_changed: '连接预算配置需要核对。请由部署者检查预算设置。',
         active_probe_connection_not_healthy: 'QQ 连接尚未就绪。返回设置，查看连接阶段和下一步。',
         active_probe_binding_unverified: '请先确认接收账户。返回设置，完成本人 QQ 绑定。',
@@ -2462,7 +2500,7 @@ function continuousDisplayView({ status, eligibility, review, deliveryEnabled })
         reason = review.reviewable ? '先查看 QQ 中的消息，再点「我已查看 QQ」。' : '请稍后点「刷新状态」，查看这次发送的结果。';
     }
     else if (eligibility.reason === 'budget_exhausted') {
-        heading = '今日连接时间已用完';
+        heading = '已达到你设置的暂停时长';
         reason = continuousReasonGuidance(eligibility.reason);
     }
     else if (!quotaKnown) {
@@ -2514,12 +2552,12 @@ async function continuousPanel(actor) {
     const view = continuousDisplayView({ status, eligibility, review, deliveryEnabled: actor.env.QQ_DELIVERY_ENABLED });
     const { active, awaitingProducer, heading, reason, canOfferEnable } = view;
     const stage = active ? '✓ 本轮通知' : awaitingProducer ? '◌ 通知队列' : '○ 本轮通知';
-    const limit = Number(actor.env.QQ_DAILY_ACTIVE_BUDGET_MS), daily = { usedMs: Math.max(0, limit - status.remainingRuntimeMs), limitMs: limit };
+    const daily = (await actor.status()).runtimeBudget;
     const text = ['**Rivule · 持续通知**', `-# ${status.bound ? '✓ 已绑定' : '○ 待绑定'} · ${active || awaitingProducer ? '✓' : '○'} 主动验证 · ${stage}`, '', `**${heading}**`, reason,
         status.bound ? '\n发送到：已确认的本人 QQ' : '\n接收账户：尚未确认', '来源：已授权项目的全部已验证 PA', '通知：普通内容的进展 / 受阻 / 待办 / 完成',
         '\n每天最多 100 次尝试 · 每次至少间隔 3 秒', `-# 今日（UTC）还可尝试 ${view.quotaKnown ? status.remainingDaily + ' 次' : '待核对'}`,
-        `-# 今日连接 ${setupBudgetBar(daily)} 剩余 ${setupMinutes(status.remainingRuntimeMs)}`,
-        active ? `本轮授权剩余 ${setupMinutes(status.remainingGrantMs)}，可以随时暂停。` : awaitingProducer ? null : '只发送开启后的新动态。',
+        `-# 今日连接已用 ${setupMinutes(daily.usedMs)} · ${daily.mode === 'stop' ? '到点暂停' : '仅提醒，不暂停'} · 阈值 ${setupMinutes(daily.limitMs)}`,
+        active ? '本轮通知仅在当前连接会话有效，连接变化后需重新开启；可以随时暂停。' : awaitingProducer ? null : '只发送开启后的新动态。',
         canOfferEnable ? '先发一条「Rivule 持续通知验证：通道已就绪。」；提交成功后开启本轮通知。' : null].filter(Boolean).join('\n');
     const reviewSpecs = review.reviewable ? [['continuous_review', '我已查看 QQ'], ['continuous_settings', '刷新状态'], ['status', '返回设置']] : [['continuous_settings', '刷新状态'], ['status', '返回设置']];
     if (review.count && active)
@@ -2531,7 +2569,7 @@ async function enableContinuousFromControl(actor, action, interactionId) {
     if (actor.env.QQ_DELIVERY_ENABLED !== 'true' || typeof action.enrollmentId !== 'string' || !/^[a-f0-9-]{36}$/.test(action.enrollmentId))
         throw Error('enrollment_control_invalid');
     const eligible = await continuousPanel(actor);
-    if (!eligible.control || action.policyFingerprint !== JSON.stringify(RivuleContinuous.POLICY) || eligible.control.bindingFingerprint !== action.bindingFingerprint || eligible.control.confirmedAt !== action.confirmedAt || eligible.control.permissionRevision !== action.permissionRevision || eligible.control.renewalEventKey !== action.renewalEventKey)
+    if (!eligible.control || action.policyFingerprint !== JSON.stringify(RivuleContinuous.POLICY) || eligible.control.bindingFingerprint !== action.bindingFingerprint || eligible.control.confirmedAt !== action.confirmedAt || eligible.control.permissionRevision !== action.permissionRevision || eligible.control.renewalEventKey !== action.renewalEventKey || eligible.control.budgetRevision !== action.budgetRevision)
         throw Error('enrollment_permission_changed');
     const result = await continuousEnrollmentProbe(actor, action, interactionId);
     if (result.state !== 'sent')
@@ -2540,7 +2578,7 @@ async function enableContinuousFromControl(actor, action, interactionId) {
     if (!accepted)
         throw Error('enrollment_observation_changed');
     const ctl = await continuousController(actor), remaining = (await ctl.status()).remainingRuntimeMs;
-    await ctl.enroll({ ownerAuthenticated: true, interactionId, policyFingerprint: action.policyFingerprint, policyRevision: 1, backlog: 'new_only', startAfterRevision: 0, expiresAt: actor.now() + Math.min(remaining, 7200000) });
+    await ctl.enroll({ ownerAuthenticated: true, interactionId, policyFingerprint: action.policyFingerprint, policyRevision: RivuleContinuous.POLICY.revision, budgetRevision: action.budgetRevision, backlog: 'new_only', startAfterRevision: 0, expiresAt: actor.now() + 300000 });
     return '验证已提交 QQ，正在开启本轮通知。';
 }
 async function reviewContinuousOutcome(actor, action, interactionId) {
@@ -2585,7 +2623,7 @@ var GatewayActor = class {
         if (typeof e.QQ_OWNER_ID !== "string" || e.QQ_OWNER_ID !== e.OWNER_ID || !/^\d{1,32}$/.test(e.QQ_APP_ID ?? ""))
             throw Error("identity_config_invalid");
         const budget = Number(e.QQ_DAILY_ACTIVE_BUDGET_MS);
-        if (!Number.isSafeInteger(budget) || budget < 1e3 || budget > DAY)
+        if (!Number.isSafeInteger(budget) || budget < 60000 || budget > DAY)
             throw Error("active_budget_required");
         return { ownerId: e.QQ_OWNER_ID, appId: e.QQ_APP_ID, allowedSources: list(e.QQ_ALLOWED_SOURCE_IDS), allowedProjects: list(e.QQ_ALLOWED_PROJECT_IDS), budget };
     }
@@ -2707,14 +2745,20 @@ var GatewayActor = class {
         const c = this.config(), now = this.now(), day = Math.floor(now / DAY);
         return this.store.transaction((state) => {
             const running = state.control?.running;
+            if (state.activeBudget === null || (state.activeBudget === undefined && running === true))
+                throw Error("runtime_budget_ledger_invalid");
             let b = state.activeBudget ?? { day, usedMs: 0, lastAt: now };
+            if (!Number.isSafeInteger(b.day) || b.day < 0 || b.day > day || !Number.isFinite(b.usedMs) || b.usedMs < 0 || !Number.isSafeInteger(b.lastAt) || b.lastAt < 0 || b.lastAt > now)
+                throw Error("runtime_budget_ledger_invalid");
+            runtimeBudgetPolicy(state, c.budget);
             if (b.day !== day)
                 b = { day, usedMs: running ? Math.max(0, now - day * DAY) : 0, lastAt: now };
             else if (running)
                 b.usedMs += Math.max(0, now - b.lastAt);
             b.lastAt = now;
             state.activeBudget = b;
-            return { exhausted: b.usedMs >= c.budget, remaining: Math.max(0, c.budget - b.usedMs) };
+            const view = runtimeBudgetView(state, c.budget, now);
+            return { exhausted: view.exhausted, remaining: view.availableMs, warningReached: view.warningReached, mode: view.mode };
         });
     }
     async arm() {
@@ -2733,9 +2777,9 @@ var GatewayActor = class {
             await this.ctx.storage.deleteAlarm();
             return;
         }
-        const c = this.config(), state = await this.store.transaction((s) => s.activeBudget), remaining = Math.max(0, c.budget - (state?.usedMs ?? 0));
+        const c = this.config(), view = await this.store.transaction(s => runtimeBudgetView(s, c.budget, this.now()));
         const client = this.runtime?.client, now = this.now();
-        const times = [now + 3e4, now + remaining];
+        const times = [now + 3e4, ...view.mode === "stop" ? [now + view.remainingMs] : []];
         if (client?.ws) {
             if (!client.ready)
                 times.push(client.deadline);
@@ -2878,8 +2922,30 @@ var GatewayActor = class {
             return runtime.reviewAndDrainInbox(options);
         });
     }
+    async updateRuntimeBudget(action) {
+        return this.command(async () => {
+            await this.accountBudget();
+            const result = await this.store.transaction(state => {
+                const old = runtimeBudgetPolicy(state, this.config().budget);
+                if (action.budgetRevision !== old.revision)
+                    throw Error("runtime_budget_policy_changed");
+                const mode = action.action === "budget_warn" ? "warn" : action.action === "budget_stop" ? "stop" : old.mode;
+                const limitMs = action.action === "budget_less" ? Math.max(60000, old.limitMs - 1800000) : action.action === "budget_more" ? Math.min(86400000, old.limitMs + 1800000) : action.action === "budget_reset" ? 7200000 : old.limitMs;
+                if (old.revision >= Number.MAX_SAFE_INTEGER)
+                    throw Error("runtime_budget_policy_invalid");
+                state.qqRuntimeBudgetPolicy = { version: 1, mode, limitMs, revision: old.revision + 1 };
+                RivuleContinuous.pause(state, "runtime_budget_policy_changed", this.now());
+                return runtimeBudgetView(state, this.config().budget, this.now());
+            });
+            if (result.exhausted)
+                await this.stopInternal("active_budget_exhausted");
+            else
+                await this.arm();
+            return result;
+        });
+    }
     async status() {
-        return this.store.transaction(async (state) => ({ permissionEvidence: await continuousPermissionDiagnostic(this, state), running: state.control?.running === true, stopReason: state.control?.reason ?? null, connected: this.runtime?.client.ready === true, bound: !!state.binding, ingestionHealthy: state.qqIngestionHealth?.healthy === true, revoked: state.qqRevoked === true, inboxCount: state.inbox?.length ?? 0, budget: state.activeBudget ?? null, connectionStartedAt: diagnosticTime(state.qqConnectionStartedAt), connectionDiagnostics: diagnosticSnapshot(state.qqConnectionDiagnostics), pendingPairing: state.pairing?.candidate ? { confirmationId: state.pairing.candidate.confirmationId, userOpenId: state.pairing.candidate.userOpenId } : null }));
+        return this.store.transaction(async (state) => ({ runtimeBudget: state.activeBudget !== undefined || state.control?.running === true ? runtimeBudgetView(state, this.config().budget, this.now()) : { usedMs: 0, remainingMs: runtimeBudgetPolicy(state, this.config().budget).limitMs, limitMs: runtimeBudgetPolicy(state, this.config().budget).limitMs, ...runtimeBudgetPolicy(state, this.config().budget), warningReached: false, exhausted: false }, permissionEvidence: await continuousPermissionDiagnostic(this, state), running: state.control?.running === true, stopReason: state.control?.reason ?? null, connected: this.runtime?.client.ready === true, bound: !!state.binding, ingestionHealthy: state.qqIngestionHealth?.healthy === true, revoked: state.qqRevoked === true, inboxCount: state.inbox?.length ?? 0, budget: state.activeBudget ?? null, connectionStartedAt: diagnosticTime(state.qqConnectionStartedAt), connectionDiagnostics: diagnosticSnapshot(state.qqConnectionDiagnostics), pendingPairing: state.pairing?.candidate ? { confirmationId: state.pairing.candidate.confirmationId, userOpenId: state.pairing.candidate.userOpenId } : null }));
     }
     async receiveBridge(packet) {
         if (this.env.QQ_DELIVERY_ENABLED === 'true') {
@@ -2903,7 +2969,7 @@ var GatewayActor = class {
                 throw Error("qq_dispatch_configuration_changed");
             const budgetCheckedAt = this.now();
             const budget = await this.accountBudget();
-            if (budget.exhausted || !Number.isFinite(budget.remaining) || budget.remaining <= 0 || budget.remaining > current.budget) {
+            if (budget.exhausted || !Number.isFinite(budget.remaining) || budget.remaining <= 0) {
                 await this.stopInternal("active_budget_exhausted");
                 throw Error("qq_dispatch_budget_exhausted");
             }
