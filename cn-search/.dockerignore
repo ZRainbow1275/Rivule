@@ -1,7 +1,0 @@
-.runtime
-.spool
-.jobs
-.env
-__pycache__
-tests
-reports

@@ -43,13 +43,6 @@ node scripts/build.mjs
 
 ## 文档
 
-### 搜索与跨应用协作（开发中）
-
-- [`search-tool/`](search-tool/README.md)：本机 Grok、Exa、You、Tavily、Firecrawl、DeepSeek 与注册辅助工具的运行清单、脱敏调用示例和核验证据。
-- [`cn-search/`](cn-search/README.md)：Moli 优先、显式 Chromium 兼容的中俄公开网页 worker；包含安全抓取、截图和可恢复队列。
-- [`app-bridge/`](app-bridge/README.md)：多用户工作空间、任务依赖图、MCP、Google 受邀登录和限域浏览器连接器。
-- [实施与验收进度](reports/PROGRESS.md)：部署状态、已执行检查，以及 VPS / Google / 指定产品的实际验收门。
-
 - [分步入门](docs/GETTING_STARTED.zh.md)：从构建到第一条实收
 - [部署与维护](docs/OPERATIONS.md)：配置、绑定、发送开关与回滚
 - [助手接入](docs/INTEGRATIONS.md)：MCP、HTTP、任务快照与回执
