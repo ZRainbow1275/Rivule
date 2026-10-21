@@ -537,7 +537,7 @@ const qqDiagnosticStages = new Set(['owner_activation', 'owner_select', 'owner_s
 function qqSafeDiagnostic(stage, code) { return { stage: qqDiagnosticStages.has(stage) ? stage : 'owner_activation', code: qqDiagnosticCodes.has(code) ? code : 'preflight_unavailable' }; }
 function qqStoredDiagnostic(value) { if (!value || typeof value !== 'object' || Object.keys(value).sort().join(',') !== 'code,stage' || !qqDiagnosticStages.has(value.stage) || !qqDiagnosticCodes.has(value.code) && value.code !== 'preflight_unavailable')
     return null; return { stage: value.stage, code: value.code }; }
-function qqProducerView(rows) {
+function qqProducerView(rows, now = Date.now()) {
     const row = rows("SELECT v FROM qq_continuous_meta WHERE k='activation'")[0];
     if (!row)
         return { active: false, reason: 'not_activated', diagnostic: null };
@@ -548,20 +548,26 @@ function qqProducerView(rows) {
     catch {
         return { active: null, reason: 'state_unavailable', diagnostic: null };
     }
-    const reasons = new Set(['preflight_not_sent', 'bridge_outcome_unknown', 'source_unverified', 'token_unavailable', 'grant_inactive', 'connection_unavailable', 'policy_changed', 'permission_changed', 'runtime_budget_unavailable']);
+    const reasons = new Set(['provider_outcome_unknown', 'grant_expired', 'preflight_not_sent', 'bridge_outcome_unknown', 'source_unverified', 'token_unavailable', 'grant_inactive', 'connection_unavailable', 'policy_changed', 'permission_changed', 'runtime_budget_unavailable']);
+    if (a?.active === true && !Number.isSafeInteger(a.expiresAt))
+        return { active: null, reason: 'state_unavailable', diagnostic: null };
+    if (a?.active === true && Number.isSafeInteger(a.expiresAt) && a.expiresAt <= now)
+        return { active: false, reason: 'grant_expired', diagnostic: null };
     return { active: typeof a?.active === 'boolean' ? a.active : null, reason: a?.active === true ? null : reasons.has(a?.pauseReason) ? a.pauseReason : 'state_unavailable', diagnostic: qqStoredDiagnostic(a?.pauseDiagnostic) };
 }
 function qqProducerPanel(response, queue) {
-    if (typeof response?.data?.content !== 'string' || !response.data.content.includes('Rivule · 持续通知'))
+    if (typeof response?.data?.content !== 'string' || !['Rivule · 持续通知', 'Rivule · QQ 设置'].some(t => response.data.content.includes(t)))
         return;
     const d = queue?.delivery;
-    if (d?.active === true)
-        return;
     const known = { connection_continuity_changed: 'QQ 连接会话已变化，原会话授权不再适用。', connection_unavailable: 'QQ 连接当前未就绪。', permission_changed: '当前 QQ 权限证据已变化。', policy_changed: '项目或通知策略与本轮授权不一致。', configuration_changed: '运行配置与本轮授权不一致。', runtime_budget_unavailable: '当前运行预算不允许继续发送。', grant_inactive: '本轮通知授权已暂停。', grant_expired: '本轮通知授权已失效。', producer_not_ready: '任务通知队列尚未完成开启。', source_unverified: '当前 PA 来源的验证证据不可用。', daily_quota_exhausted: '今日通知尝试额度已用完。', paced: '尚未达到最小发送间隔。' };
     const code = qqStoredDiagnostic(d?.diagnostic)?.code;
-    const detail = d?.active === false ? (Object.hasOwn(known, code) ? known[code] : d.reason === 'not_activated' ? '任务通知队列尚未开启。' : d.reason === 'bridge_outcome_unknown' ? '任务通知的发送结果尚未确认，请勿重复发送。' : d.reason === 'preflight_not_sent' ? '任务通知在发送前检查阶段暂停；尚无可确认的具体原因。' : '任务通知队列已暂停；具体原因尚未确认。') : '暂时无法核对任务通知队列状态，不能确认已开启。';
-    let content = response.data.content.replaceAll('**本轮通知已开启**', d?.active === false ? '**任务通知已暂停**' : '**通知队列状态待确认**').replaceAll('本轮持续通知已开启。', '').replaceAll('✓ 本轮通知', '○ 任务队列').replaceAll('本轮只推送新的进展，可以随时暂停。', '');
-    const suffix = '\n\n任务队列：' + detail + '\n这次刷新不会重新授权或补发消息。';
+    const detail = d?.active === true ? '本轮任务队列已开启；每条事件仍须通过入队与发送检查。' : d?.active === false ? (Object.hasOwn(known, code) ? known[code] : d.reason === 'not_activated' ? '任务通知队列尚未开启。' : ['bridge_outcome_unknown', 'provider_outcome_unknown'].includes(d.reason) ? '上一条任务通知的发送结果尚未确认，本轮任务队列已暂停。不会自动重发。' : d.reason === 'preflight_not_sent' ? '任务通知在发送前检查阶段暂停；尚无可确认的具体原因。' : '任务通知队列已暂停；具体原因尚未确认。') : '暂时无法核对任务通知队列状态，不能确认已开启。';
+    let content = response.data.content.replace('通知自动推送：配置已开启', '自动推送配置：已开启（不代表本轮任务队列已开启）').replaceAll('**本轮通知已开启**', d?.active === false ? '**任务通知已暂停**' : '**通知队列状态待确认**').replaceAll('本轮持续通知已开启。', '').replaceAll('✓ 本轮通知', '○ 任务队列').replaceAll('本轮只推送新的进展，可以随时暂停。', '');
+    if (d?.active === true)
+        content = response.data.content.replace('通知自动推送：配置已开启', '自动推送配置：已开启（不代表本轮任务队列已开启）');
+    const admission = queue?.latestAdmission;
+    const admissionText = !admission ? '尚无可核对的事件记录。' : admission.reason === 'admission_not_recorded' ? '最近一条事件没有 QQ 入队记录，历史原因未知。' : admission.state === 'queued' ? '最近一条事件已入队，尚未确认发送。' : admission.state === 'sent' && admission.reason === 'provider_accepted' ? '最近一条事件已提交 QQ；实收仍以 QQ 客户端为准。' : admission.reason === 'activation_inactive' ? '最近一条事件被跳过：本轮任务队列未开启或已暂停。' : admission.reason === 'activation_expired' ? '最近一条事件被跳过：本轮任务队列授权已过期。' : admission.state === 'suppressed' ? '最近一条事件被跳过，原因可在诊断回执中核对。' : '最近一条事件的发送结果尚未确认。';
+    const suffix = '\n\n本轮任务队列：' + detail + '\n事件入队：' + admissionText + '\n连接或绑定即使正常，也不代表本轮授权、任务入队或真实送达均成功。\n这次刷新不会重新授权或补发消息。';
     if (content.length + suffix.length <= 2000)
         content += suffix;
     else {
@@ -571,16 +577,67 @@ function qqProducerPanel(response, queue) {
     }
     response.data.content = content;
 }
+const qqAdmissionCodes = new Set(['queue_capacity', 'delivery_disabled', 'activation_inactive', 'activation_expired', 'project_not_authorized', 'source_unverified', 'sensitivity_excluded', 'heartbeat_excluded', 'event_not_current', 'admission_history_excluded', 'projection_not_authorized', 'admission_unavailable']);
+function qqAdmissionReason(value) { return qqAdmissionCodes.has(value) ? value : 'admission_unavailable'; }
+function qqSkipReceipt(storage, sourceId, receiptId) {
+    const rows = (q, ...a) => storage.sql.exec(q, ...a).toArray();
+    if (!rows("SELECT name FROM sqlite_master WHERE type='table' AND name='qq_continuous_skips'").length)
+        return null;
+    const hasReason = rows('PRAGMA table_info(qq_continuous_skips)').some(c => c.name === 'reason');
+    const row = rows('SELECT ' + (hasReason ? 'reason' : 'receipt') + ' FROM qq_continuous_skips WHERE receipt=? AND source_id=?', receiptId, sourceId)[0];
+    return row ? { state: 'suppressed', reason: hasReason ? qqAdmissionReason(row.reason) : 'queue_capacity' } : null;
+}
+function qqAdmissionSnapshot(storage) {
+    const rows = (q, ...a) => storage.sql.exec(q, ...a).toArray(), tables = new Set(rows("SELECT name FROM sqlite_master WHERE type='table'").map(x => x.name));
+    if (!tables.has('events'))
+        return null;
+    const accepted = rows("SELECT revision,receipt,source_id FROM events WHERE decision='applied' ORDER BY revision DESC LIMIT 1")[0];
+    if (!accepted)
+        return null;
+    let result;
+    for (const [table, key] of [['qq_continuous_outbox', 'receipt'], ['qq_outbox', 'receipt_id']])
+        if (!result && tables.has(table)) {
+            const row = rows('SELECT status,result FROM ' + table + ' WHERE ' + key + '=? AND source_id=?', accepted.receipt, accepted.source_id)[0];
+            if (row)
+                result = row.status === 'sending' ? { state: 'uncertain', reason: 'dispatch_outcome_unknown' } : row.result ? JSON.parse(row.result) : { state: row.status };
+        }
+    result ??= qqSkipReceipt(storage, accepted.source_id, accepted.receipt);
+    const states = new Set(['queued', 'sent', 'suppressed', 'not_sent', 'uncertain', 'blocked']);
+    const reasons = new Set([...qqAdmissionCodes, ...qqDiagnosticCodes, 'provider_accepted', 'provider_outcome_unknown', 'bridge_outcome_unknown', 'preflight_not_sent', 'dispatch_outcome_unknown', 'restart_during_dispatch', 'new_activation_skips_backlog', 'receipt_history_unavailable']);
+    return { revision: accepted.revision, state: result ? (states.has(result.state) ? result.state : 'uncertain') : 'uncertain', reason: result ? (result.reason === undefined ? (result.state === 'queued' ? 'awaiting_dispatch' : 'state_unavailable') : reasons.has(result.reason) ? result.reason : 'state_unavailable') : 'admission_not_recorded' };
+}
 const qqLocalSuppression = new Set(['source_or_event_changed', 'projection_changed', 'source_changed_during_projection', 'job_changed', 'source_unverified', 'event_not_current', 'projection_not_authorized', 'project_not_authorized']);
 const QQBridgeQueueV1 = QQBridgeQueue;
 QQBridgeQueue = class extends QQBridgeQueueV1 {
     attachAuthority(read) { this.readAuthority = read; }
-    async initialize() { await super.initialize(); }
+    async initialize() { await super.initialize(); if (this.rows("SELECT name FROM sqlite_master WHERE type='table' AND name='qq_continuous_skips'").length)
+        this.migrateAdmissionReason(); }
+    migrateAdmissionReason() { if (!this.rows('PRAGMA table_info(qq_continuous_skips)').some(c => c.name === 'reason'))
+        this.rows("ALTER TABLE qq_continuous_skips ADD COLUMN reason TEXT NOT NULL DEFAULT 'queue_capacity'"); }
+    static skipReceipt(storage, sourceId, receiptId) { return qqSkipReceipt(storage, sourceId, receiptId); }
+    static statusSnapshot(storage, sources, now = Date.now()) {
+        const rows = (q, ...a) => storage.sql.exec(q, ...a).toArray();
+        const capacity = QQBridgeQueue.capacityStatus(storage, sources);
+        const delivery = rows("SELECT name FROM sqlite_master WHERE type='table' AND name='qq_continuous_meta'").length ? qqProducerView(rows, now) : { active: false, reason: 'not_activated', diagnostic: null };
+        return { ...capacity, delivery, latestAdmission: qqAdmissionSnapshot(storage) };
+    }
+    recordAdmissionSkip(event, receiptId, reason) {
+        if (!/^rcpt_[a-f0-9]{32}$/.test(receiptId ?? '') || !this.rows("SELECT name FROM sqlite_master WHERE type='table' AND name='qq_continuous_skips'").length)
+            return;
+        const row = this.rows('SELECT revision,source_id,decision FROM events WHERE receipt=?', receiptId)[0];
+        if (!row || row.source_id !== event.source_id || row.decision !== 'applied')
+            return;
+        this.storage.transactionSync(() => {
+            this.rows('INSERT OR IGNORE INTO qq_continuous_skips(receipt,source_id,revision,recorded_at,reason) VALUES(?,?,?,?,?)', receiptId, row.source_id, row.revision, this.now(), qqAdmissionReason(reason));
+            this.rows('DELETE FROM qq_continuous_skips WHERE recorded_at<? OR receipt IN (SELECT receipt FROM qq_continuous_skips ORDER BY revision DESC LIMIT -1 OFFSET 1000)', this.now() - 72 * 3600000);
+        });
+    }
     async initializeContinuous() {
         if (this.continuousInitialized)
             return;
         await this.storage.transaction(async () => {
             this.storage.sql.exec("CREATE TABLE IF NOT EXISTS qq_continuous_outbox(receipt TEXT PRIMARY KEY,source_id TEXT NOT NULL,source_generation INTEGER NOT NULL,revision INTEGER NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,result TEXT,recorded_at INTEGER NOT NULL DEFAULT 0);CREATE TABLE IF NOT EXISTS qq_continuous_meta(k TEXT PRIMARY KEY,v TEXT NOT NULL);CREATE TABLE IF NOT EXISTS qq_continuous_skips(receipt TEXT PRIMARY KEY,source_id TEXT NOT NULL,revision INTEGER NOT NULL,recorded_at INTEGER NOT NULL);");
+            this.migrateAdmissionReason();
             if (!this.rows('PRAGMA table_info(qq_continuous_outbox)').some(c => c.name === 'recorded_at'))
                 this.rows('ALTER TABLE qq_continuous_outbox ADD COLUMN recorded_at INTEGER NOT NULL DEFAULT 0');
             this.rows('UPDATE qq_continuous_outbox SET recorded_at=? WHERE recorded_at=0', this.now());
@@ -661,19 +718,35 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
             throw Error('activation_changed'); this.saveActivation({ ...a, active: true }); return { state: 'active', startAfterRevision: a.startAfterRevision }; });
     }
     enqueue(event, receiptId) {
+        const skip = reason => { try {
+            this.recordAdmissionSkip(event, receiptId, reason);
+        }
+        catch { } return false; };
         try {
             const c = this.config(), a = this.activation();
-            if (!c?.enabled || !a?.active || a.expiresAt <= this.now() || !c.allowedProjects.includes(event.project_id))
-                return false;
+            if (!c?.enabled)
+                return skip('delivery_disabled');
+            if (!a?.active)
+                return skip('activation_inactive');
+            if (a.expiresAt <= this.now())
+                return skip('activation_expired');
+            if (!c.allowedProjects.includes(event.project_id))
+                return skip('project_not_authorized');
             const source = this.sources.find(s => s.source_id === event.source_id && s.enabled), proof = this.readAuthority?.(event.source_id);
-            if (!source || proof?.selectable !== true || !Number.isSafeInteger(proof.connection_generation) || event.sensitivity !== 'normal' || event.kind === 'heartbeat')
-                return false;
+            if (!source || proof?.selectable !== true || !Number.isSafeInteger(proof.connection_generation))
+                return skip('source_unverified');
+            if (event.sensitivity !== 'normal')
+                return skip('sensitivity_excluded');
+            if (event.kind === 'heartbeat')
+                return skip('heartbeat_excluded');
             const row = this.rows('SELECT revision,source_id,payload,decision FROM events WHERE receipt=?', receiptId)[0];
-            if (!row || row.decision !== 'applied' || row.source_id !== source.source_id || row.revision <= a.startAfterRevision || row.revision <= this.retentionFloor() || row.revision <= this.capacityFloor())
-                return false;
+            if (!row || row.decision !== 'applied' || row.source_id !== source.source_id || row.revision <= a.startAfterRevision)
+                return skip('event_not_current');
+            if (row.revision <= this.retentionFloor() || row.revision <= this.capacityFloor())
+                return skip('admission_history_excluded');
             const projected = projection(validateEvent(JSON.parse(row.payload), source, this.now()));
             if (JSON.stringify(projected) !== JSON.stringify(projection(validateEvent(event, source, this.now()))))
-                return false;
+                return skip('projection_not_authorized');
             if (this.rows('SELECT COUNT(*) AS n FROM qq_continuous_outbox')[0].n >= 10000) {
                 this.recordCapacitySkip(source.source_id, receiptId, row.revision);
                 return false;
@@ -682,17 +755,31 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
             return true;
         }
         catch {
-            return false;
+            return skip('admission_unavailable');
         }
     }
     nextAlarmAt() { const a = this.activation(); if (!this.config()?.enabled || !a?.active || a.expiresAt <= this.now())
         return null; return this.rows("SELECT receipt FROM qq_continuous_outbox WHERE status='queued' LIMIT 1").length ? this.now() + 3100 : null; }
-    receipt(source, receiptId) { const configured = this.sources.find(s => s.source_id === source.source_id && s.enabled); if (!configured || JSON.stringify(configured) !== JSON.stringify(source))
-        throw Error('qq_source_not_authorized'); if (!this.hasContinuousSchema())
-        return super.receipt(source, receiptId); if (this.rows("SELECT name FROM sqlite_master WHERE type='table' AND name='qq_continuous_skips'").length && this.rows('SELECT receipt FROM qq_continuous_skips WHERE receipt=? AND source_id=?', receiptId, source.source_id).length)
-        return { state: 'suppressed', reason: 'queue_capacity' }; const row = this.rows('SELECT status,result FROM qq_continuous_outbox WHERE receipt=? AND source_id=?', receiptId, source.source_id)[0]; if (row)
-        return row.status === 'sending' ? { state: 'uncertain', reason: 'dispatch_outcome_unknown' } : row.result ? JSON.parse(row.result) : { state: row.status }; const legacy = super.receipt(source, receiptId); if (legacy)
-        return legacy; const accepted = this.rows('SELECT revision FROM events WHERE receipt=? AND source_id=?', receiptId, source.source_id)[0]; return accepted && accepted.revision <= Math.max(this.capacityFloor(), this.retentionFloor()) ? { state: 'uncertain', reason: 'receipt_history_unavailable' } : null; }
+    receipt(source, receiptId) {
+        const configured = this.sources.find(s => s.source_id === source.source_id && s.enabled);
+        if (!configured || JSON.stringify(configured) !== JSON.stringify(source))
+            throw Error('qq_source_not_authorized');
+        if (this.hasContinuousSchema()) {
+            const row = this.rows('SELECT status,result FROM qq_continuous_outbox WHERE receipt=? AND source_id=?', receiptId, source.source_id)[0];
+            if (row)
+                return row.status === 'sending' ? { state: 'uncertain', reason: 'dispatch_outcome_unknown' } : row.result ? JSON.parse(row.result) : { state: row.status };
+        }
+        const legacy = super.receipt(source, receiptId);
+        if (legacy)
+            return legacy;
+        const skipped = qqSkipReceipt(this.storage, source.source_id, receiptId);
+        if (skipped)
+            return skipped;
+        if (!this.hasContinuousSchema())
+            return null;
+        const accepted = this.rows('SELECT revision FROM events WHERE receipt=? AND source_id=?', receiptId, source.source_id)[0];
+        return accepted ? { state: 'uncertain', reason: accepted.revision <= Math.max(this.capacityFloor(), this.retentionFloor()) ? 'receipt_history_unavailable' : 'admission_not_recorded' } : null;
+    }
     async currentJob(row, a) {
         const source = this.sources.find(s => s.source_id === row.source_id && s.enabled), proof = this.readAuthority?.(row.source_id);
         const accepted = this.rows('SELECT revision,source_id,payload,decision FROM events WHERE receipt=?', row.receipt)[0];

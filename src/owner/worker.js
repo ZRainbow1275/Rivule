@@ -27871,9 +27871,9 @@ var __rivuleDisplay = (function (__displayBridge) {
         function buildOverviewMessage(snapshot) {
             const graph = renderOverview(snapshot), detail = !!snapshot.selection?.branch_key;
             const fields = graph.views.map((v) => {
-                const context = safeDiscord(`${v.sourceName} / ${v.projectName} · ${v.branchName}`, 170);
+                const context = safeDiscord(`来源：${v.sourceName} / ${v.projectName} · ${v.branchName}`, 170);
                 const body = [clipNative(v.warning, 140), clipNative(v.actionable ? "待你处理：" + v.question : v.blocker ? "阻塞：" + v.blocker : v.summary || "来源尚未提供摘要", v.actionable ? 280 : 360), v.actionable ? "请在原平台确认" : "", v.actionable && v.impact ? clipNative("影响：" + v.impact, 140) : "", v.deadline ? "请在 " + asTime(v.deadline) + " 前处理" : "", v.phase ? clipNative("当前：" + v.phase, 80) : "", clipNative(v.progress, 80)].filter(Boolean).join("\n");
-                return { name: safeDiscord(`${v.state.symbol} ${fitText(v.taskName, 27)} / ${fitText(v.branchName, 18)} · ${v.state.label}`, 190), value: context + "\n" + utf16Limit(body, 680) + "\n" + safeDiscord("来源更新 " + asTime(v.updatedAt), 80), inline: false };
+                return { name: safeDiscord(`【${fitText(v.sourceName, 20)}】${v.state.symbol} ${fitText(v.taskName, 27)} / ${fitText(v.branchName, 18)} · ${v.state.label}`, 190), value: context + "\n" + utf16Limit(body, 680) + "\n" + safeDiscord("来源更新 " + asTime(v.updatedAt), 80), inline: false };
             });
             if (!graph.rows.length) {
                 const visible = (snapshot.sources ?? []).filter((s) => s.visible !== false && (!snapshot.selection?.source_id || snapshot.selection.source_id === s.source_id));
@@ -27935,10 +27935,10 @@ var __rivuleDisplay = (function (__displayBridge) {
             const v = displayBranch(event, { rendered_at: p.rendered_at ?? (new Date()).toISOString(), sources, request: p.intent === "request" ? p.request : void 0, review });
             const request = p.intent === "request", requestState = p.request?.state;
             const label = review ? "状态待核对" : request && requestState === "expired" ? "请求已过期" : request && ["changed", "resolved_by_source"].includes(requestState) ? "请求已更新" : v.state.label;
-            const title = `${safeDiscord(v.projectName, 48)} · ${safeDiscord(v.taskName, 90)} / ${safeDiscord(v.branchName, 60)}｜${label}`;
+            const title = `【${safeDiscord(v.sourceName, 32)}】${safeDiscord(v.projectName, 36)} · ${safeDiscord(v.taskName, 70)} / ${safeDiscord(v.branchName, 40)}｜${label}`;
             const main = review ? v.summary || "收到一条待核对的更新" : v.actionable ? v.question : v.blocker ? "阻塞：" + v.blocker : v.summary || "来源尚未提供摘要";
             const description = [main, v.actionable && v.impact ? "影响：" + v.impact : "", v.deadline ? "请在 " + asTime(v.deadline) + " 前处理" : "", v.warning, requestState === "resolved_by_source" ? "原任务已不再等待此请求" : "", requestState === "changed" ? "请求内容已变化，请回原平台核对" : "", request ? v.actionable ? "请在原平台确认；打开原任务不等于批准" : "请求现状以原平台为准；打开原任务不等于批准" : "", v.phase && !request ? "当前：" + v.phase : "", v.progress && !request ? v.progress : "", `分支：${v.branchName}`, `来源：${v.sourceName} · ${asTime(v.updatedAt)}`].filter(Boolean).join("\n");
-            return { content: safeDiscord(`${v.taskName}：${main}${p.test_only ? "（合成演示）" : ""}`, 240), allowed_mentions: mentionPolicy(), embeds: [{ title, description: safeDiscord(description, 3500), color: Number.parseInt((review ? "#875914" : v.state.color).slice(1), 16) }], components: p.test_only === true ? [] : originalButton(event, sources, v.actionable ? "去原任务确认" : "打开原任务"), attachments: [] };
+            return { content: safeDiscord(`${v.sourceName} · ${v.taskName}：${main}${p.test_only ? "（合成演示）" : ""}`, 240), allowed_mentions: mentionPolicy(), embeds: [{ title, description: safeDiscord(description, 3500), color: Number.parseInt((review ? "#875914" : v.state.color).slice(1), 16) }], components: p.test_only === true ? [] : originalButton(event, sources, v.actionable ? "去原任务确认" : "打开原任务"), attachments: [] };
         }
         function createMessagePreparer(renderer, options = {}) {
             return async (dispatch) => {
@@ -28059,8 +28059,6 @@ function readDeliveryContract(storage, b, source, id) {
     const deliveries = readonlyRows(storage, 'SELECT status,intent,attempts,last_error FROM outbox WHERE receipt=?', id).map(d => d.status === 'sending' ? { ...d, status: 'uncertain', last_error: 'dispatch_outcome_unknown' } : d), states = new Set(deliveries.map(d => d.status));
     const delivery = states.size === 0 ? 'not_required' : states.has('uncertain') ? 'uncertain' : states.has('blocked') || states.has('dead_letter') || states.has('suppressed') ? 'blocked_or_partial' : [...states].every(s => s === 'sent') ? 'sent' : [...states].every(s => s === 'sent' || s === 'coalesced') ? 'coalesced_not_individually_confirmed' : 'pending_or_partial';
     let qq;
-    if (tables.has('qq_continuous_skips') && readonlyRows(storage, 'SELECT receipt FROM qq_continuous_skips WHERE receipt=? AND source_id=?', id, source.source_id).length)
-        qq = { state: 'suppressed', reason: 'queue_capacity' };
     if (!qq && tables.has('qq_continuous_outbox')) {
         const r = readonlyRows(storage, 'SELECT status,result FROM qq_continuous_outbox WHERE receipt=? AND source_id=?', id, source.source_id)[0];
         if (r)
@@ -28071,13 +28069,15 @@ function readDeliveryContract(storage, b, source, id) {
         if (r)
             qq = r.status === 'sending' ? { state: 'uncertain', reason: 'dispatch_outcome_unknown' } : r.result ? JSON.parse(r.result) : { state: r.status, reason: 'awaiting_dispatch' };
     }
+    if (!qq)
+        qq = QQBridgeQueue.skipReceipt(storage, source.source_id, id);
     if (!qq && tables.has('qq_continuous_meta')) {
         const floors = ['capacity_floor', 'retention_floor'].map(key => { const r = readonlyRows(storage, 'SELECT v FROM qq_continuous_meta WHERE k=?', key)[0], n = r ? Number(r.v) : 0; if (!Number.isSafeInteger(n) || n < 0)
             throw new Rejected('operation_result_unknown', 503); return n; });
         if (row.revision <= Math.max(...floors))
             qq = { state: 'uncertain', reason: 'receipt_history_unavailable' };
     }
-    return { receipt_id: row.receipt, duplicate: false, projection_action: row.decision, revision: row.revision, delivery, deliveries, ...qq ? { channels: { qq } } : {} };
+    return { receipt_id: row.receipt, duplicate: false, projection_action: row.decision, revision: row.revision, delivery, deliveries, channels: { qq: qq ?? { state: 'uncertain', reason: 'admission_not_recorded' } } };
 }
 function readDiagnosticContract(storage, b, query, context, now = Date.now()) {
     const tables = readonlyTables(storage);
@@ -28095,7 +28095,15 @@ function readDiagnosticContract(storage, b, query, context, now = Date.now()) {
         const deliveryEvidence = valid && Number.isSafeInteger(row.last_verified_at) ? now - row.last_verified_at < READONLY_SOURCE_PROOF_MAX_AGE_MS ? 'fresh' : 'stale' : 'unavailable';
         return { source_id: s.source_id, delivery_evidence_status: deliveryEvidence, status: !s.enabled ? 'disabled' : matching && row.revoked ? 'revoked' : valid ? 'verified' : 'unverified', evidence_kind: valid ? row.evidence_kind : null, last_verified_at: valid ? row.last_verified_at : null, generation: matching && Number.isSafeInteger(row.generation) && row.generation >= 1 ? row.generation : null };
     });
-    return { ...result, current_source_verifications: { scope: 'current_configuration_only_not_request_history', delivery_evidence_scope: 'source_proof_age_only_not_delivery_authorization', source_proof_max_age_ms: READONLY_SOURCE_PROOF_MAX_AGE_MS, schema_available: available, sources: proofs } };
+    let currentQQ;
+    try {
+        const q = QQBridgeQueue.statusSnapshot(storage, b.sources, now);
+        currentQQ = { scope: 'current_owner_state_not_historical_event_cause', producer: q.delivery, latest_event: q.latestAdmission };
+    }
+    catch {
+        currentQQ = { scope: 'current_owner_state_not_historical_event_cause', producer: { active: null, reason: 'state_unavailable', diagnostic: null }, latest_event: null };
+    }
+    return { ...result, current_qq_delivery: currentQQ, current_source_verifications: { scope: 'current_configuration_only_not_request_history', delivery_evidence_scope: 'source_proof_age_only_not_delivery_authorization', source_proof_max_age_ms: READONLY_SOURCE_PROOF_MAX_AGE_MS, schema_available: available, sources: proofs } };
 }
 async function recordProofContract(storage, b, source, context, kind, now = Date.now()) {
     const current = readonlySource(b, source);
@@ -28253,7 +28261,7 @@ var OwnerTerminal = class extends DurableObject {
         return /^[0-9]{1,25}$/.test(dm ?? "") && /^[0-9]{1,25}$/.test(map?.message_id ?? "") ? { url: "https://discord.com/channels/@me/" + dm + "/" + map.message_id } : null;
     }
     async qqQueueStatus() {
-        return QQBridgeQueue.capacityStatus(this.ctx.storage, loadBindings(this.env).sources);
+        return QQBridgeQueue.statusSnapshot(this.ctx.storage, loadBindings(this.env).sources);
     }
     async activateQQForInteraction(interactionId) {
         await this.initializeLegacy();
