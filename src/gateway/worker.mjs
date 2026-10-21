@@ -1005,6 +1005,7 @@ function cloudflareSocket(network = globalThis.fetch) {
     };
 }
 function flatten(state) {
+    validateContinuousGroups(state.qqContinuous);
     const rows = new Map();
     for (const [key2, value] of Object.entries(state)) {
         if (key2 === "bridge") {
@@ -1033,6 +1034,7 @@ function flatten(state) {
 }
 function inflate(rows) {
     const state = {};
+    const continuousShape = { full: false, split: false, version2: false, invalidPath: false };
     for (const { k, v } of rows) {
         const path = JSON.parse(k), value = JSON.parse(v);
         if (path[0] === "bridge") {
@@ -1040,6 +1042,18 @@ function inflate(rows) {
             state.bridge[path[1]][path[2]] = value;
         }
         else if (path[0] === "qqContinuous") {
+            if (path.length === 1)
+                continuousShape.full = true;
+            else
+                continuousShape.split = true;
+            const metadata = path.length === 1 || (path.length === 2 && path[1] === "meta");
+            if (metadata) {
+                continuousShape.version2 ||= value?.version === 2;
+                validateContinuousGroups(value);
+            }
+            else if (path.length !== 3 || !["attempts", "events", "approvals", "quotas", "enrollments"].includes(path[1])) {
+                continuousShape.invalidPath = true;
+            }
             if (path.length === 1)
                 state.qqContinuous = value;
             else {
@@ -1063,7 +1077,26 @@ function inflate(rows) {
         else
             state[path[0]] = value;
     }
+    if (continuousShape.version2 && (continuousShape.invalidPath || (continuousShape.full && continuousShape.split)))
+        throw Error("durable_state_schema_invalid");
+    validateContinuousGroups(state.qqContinuous);
+    if (state.qqContinuous?.version === 2) {
+        for (const group of ["attempts", "events", "approvals", "quotas", "enrollments"])
+            if (!Object.hasOwn(state.qqContinuous, group))
+                state.qqContinuous[group] = {};
+    }
     return state;
+}
+function validateContinuousGroups(value) {
+    if (value?.version !== 2)
+        return;
+    for (const group of ["attempts", "events", "approvals", "quotas", "enrollments"]) {
+        if (!Object.hasOwn(value, group))
+            continue;
+        const items = value[group];
+        if (items === null || typeof items !== "object" || Array.isArray(items) || Object.prototype.toString.call(items) !== "[object Object]")
+            throw Error("durable_state_schema_invalid");
+    }
 }
 var DurableStateStore = class {
     constructor(storage) {
