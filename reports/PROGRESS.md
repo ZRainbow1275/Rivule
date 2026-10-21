@@ -1,8 +1,8 @@
-# Rivule 搜索与跨应用协作
+# Rivule v2：搜索与跨应用协作
 
 ## 当前任务
 
-按已确认方案实施三项交付：搜索资料归档、公开网页 worker、多用户应用协作桥。当前源码已快进同步 GitHub `origin/main` 的 **`41a407b` / v0.4.2**；初始实现基线为 `1d0f060`，开发分支为 `work/search-and-collaboration`，本轮发布目标为 `main`。
+搜索资料归档、公开网页 worker、多用户应用协作桥归入 **`v2` 分支**，作为第二代版本的开发与发布成果；`main` 保持现有通知版本，不包含这些新增模块。通知模块沿用 **`41a407b` / v0.4.2** 基线，初始实现基线为 `1d0f060`；原开发分支为 `work/search-and-collaboration`。
 
 ## 状态
 
@@ -90,6 +90,12 @@
 - 区域 worker 已完成显式 Linux Chromium 构建、sandbox 与真实 TASS / VK 兼容验证：原生 2/2、出口 / profile 11/11；TASS 403，VK 仍无正文。默认 Moli 已恢复，12:10 UTC 正式服务 enabled / active、唯一容器 running，恢复以来日志 0 字节。详见区域模块报告。
 - 所有者本轮确认 Google OAuth 客户端仍未创建。现有 ShardBrowser profile 返回“being operated by another MCP process”；网页配置等待该任务释放浏览器后，由所有者完成登录 / 客户端配置。没有另开相同 profile 或绕过 lease。
 - 首次根包构建发现本机缺少依赖 / 字体资源；按现有入口完成 `npm ci --ignore-scripts`、固定官方字体安装后，v0.4.2 `npm run build` 成功，owner / gateway 产物写入忽略目录 `dist/`。
-- 所有者已明确要求合并到 GitHub **main**，并选择**暂不重启现有主机**。本轮以兼容验收和公开候选审查为提交门，精确提交并正常推送 main；不执行整机、Docker 或 NetBird 重启。
+- 所有者当时要求合并到 GitHub **main**，审查通过后以 `bac9bbe` 推送；随后修正为按第二代版本拆分，见下节。**暂不重启现有主机**的决定保持。
 - main 发布审查另复现连接器完整回执的 JSON 转义膨胀：原始正文虽小于限额，序列化后可能 413 并卡在待确认重传。已在标记终态前按完整 packet 检查，超限交付小型 unknown，保留原页面完整输出；新增真实双脚本回归先失败后通过。本轮连接器 / 源码包 8/8、strict tsc、JS 语法和 dry-run 通过。官方设备授权恢复后已部署修复，最终 `/source` 读回全部标记；配置包检查还覆盖 preview URLs 关闭、日志 / trace 抽样 0.1 与查询脱敏。
 - 发布前再次 fetch 发现 `41a407b` 仅更新根 README / RELEASES 的原通知服务部署状态，已完整核对两处差异并再次快进同步。保留上游“v0.4.2 已部署、双渠道实收仍待验收”的记录；本轮没有操作该通知服务，其既有构建证据仍适用。
+
+## 2026-10-21：拆分为第二代版本
+
+- 按所有者修正后的版本边界，从 `bac9bbe` 建立独立 `v2` 分支，保留本轮完整实现、部署文件、许可证与验收记录；README 明确区分第二代协作能力与现有通知模块。
+- `main` 通过回退 `bac9bbe` 移除本轮新增模块与文档入口，保留正常提交历史；后续第二代工作在 `v2` 继续。
+- 本次只调整 Git 分支与版本说明，不停止既有独立 Cloudflare / VPS 服务，不删除运行数据。Google OAuth、真实双用户与 Pro / Gemini Tasks 消息回路的剩余验收门保持。

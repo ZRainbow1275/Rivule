@@ -4,7 +4,9 @@
 
 **让进展汇到一起。**
 
-当前源码版本：**v0.4.2** · [版本说明](docs/RELEASES.md)
+当前分支：**v2 · 第二代搜索与多助手协作**。现有通知版本继续在 [`main`](https://github.com/ZRainbow1275/Rivule/tree/main) 维护。
+
+通知模块基线版本：**v0.4.2** · [版本说明](docs/RELEASES.md)
 
 本次冷恢复补丁已完成生产部署；QQ、Discord 双渠道实收验收仍待完成，部署成功不代表通知已经送达。其他自托管安装仍需自行更新和验收。
 
@@ -43,7 +45,7 @@ node scripts/build.mjs
 
 ## 文档
 
-### 搜索与跨应用协作（开发中）
+### 搜索与跨应用协作（v2 开发中）
 
 - [`search-tool/`](search-tool/README.md)：本机 Grok、Exa、You、Tavily、Firecrawl、DeepSeek 与注册辅助工具的运行清单、脱敏调用示例和核验证据。
 - [`cn-search/`](cn-search/README.md)：Moli 优先、显式 Chromium 兼容的中俄公开网页 worker；包含安全抓取、截图和可恢复队列。
