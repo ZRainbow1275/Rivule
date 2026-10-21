@@ -2323,10 +2323,10 @@ async function continuousController(actor) {
             return transport.accessToken();
         },
         post: async (payload, token) => {
-            const c = actor.config();
+            const c = actor.config(), network = actor.network;
             let r;
             try {
-                r = await actor.network(QQ_API_ORIGIN + '/v2/users/' + encodeURIComponent(payload.userOpenId) + '/messages', { method: 'POST', headers: { Authorization: 'QQBot ' + token, 'content-type': 'application/json', 'X-Union-Appid': c.appId }, body: JSON.stringify({ msg_type: 0, content: payload.content }), redirect: 'manual', signal: AbortSignal.timeout(15000) });
+                r = await network(QQ_API_ORIGIN + '/v2/users/' + encodeURIComponent(payload.userOpenId) + '/messages', { method: 'POST', headers: { Authorization: 'QQBot ' + token, 'content-type': 'application/json', 'X-Union-Appid': c.appId }, body: JSON.stringify({ msg_type: 0, content: payload.content }), redirect: 'manual', signal: AbortSignal.timeout(15000) });
             }
             catch {
                 return { state: 'uncertain' };
