@@ -1,0 +1,21 @@
+# 结构示例，非可直接启用的凭据配置。不要覆盖现有共享 TOML。
+# Grok stdio 入口复用原有私密配置；环境变量的优先级高于此类文件。
+openai_compatible_api_url = "http://127.0.0.1:8100/v1"
+openai_compatible_api_key = "<GROK2API_KEY>"
+openai_compatible_model = "grok-4.20-0309-non-reasoning"
+
+tavily_api_url = "http://127.0.0.1:9874/api"
+tavily_api_key = "<LOCAL_PROXY_TOKEN>"
+tavily_enabled = true
+
+firecrawl_api_url = "http://127.0.0.1:9874/firecrawl/v2"
+firecrawl_api_key = "<LOCAL_PROXY_TOKEN>"
+firecrawl_enabled = true
+
+exa_api_url = "http://127.0.0.1:9874/exa"
+exa_api_key = "<LOCAL_PROXY_TOKEN>"
+exa_enabled = true
+
+default_extra_sources = 3
+fallback_sources = 5
+timeout_seconds = 180

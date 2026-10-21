@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Rivule Task Connector",
+  "version": "0.1.0",
+  "description": "只协调你明确绑定的 ChatGPT Pro / Gemini 任务会话。",
+  "permissions": ["storage", "alarms", "activeTab"],
+  "host_permissions": ["https://rivule-bridge.hybridrevis.workers.dev/*", "http://127.0.0.1:8791/*"],
+  "background": {"service_worker": "background.js", "type": "module"},
+  "action": {"default_popup": "options.html"},
+  "options_page": "options.html",
+  "content_scripts": [{"matches": ["https://chatgpt.com/*", "https://gemini.google.com/*"], "js": ["content.js"], "run_at": "document_idle"}]
+}

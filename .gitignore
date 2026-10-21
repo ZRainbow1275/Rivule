@@ -7,3 +7,13 @@ assets/font.otf.tmp
 !.env.example
 .dev.vars*
 config/*.private.json
+
+# Imported local Capture projects contain their own environments and runtime data.
+/capture-mcp/
+/Capture_MCP_0.9.1_D1/
+.serena/
+**/.runtime/
+**/.private/
+**/__pycache__/
+**/.pytest_cache/
+/app-bridge/src/source.generated.ts

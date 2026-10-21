@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "rivule-bridge",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-13",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "account_id": "59f31145f0804b5a74488dcad11f7e4c",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {"PUBLIC_ORIGIN": "https://rivule-bridge.hybridrevis.workers.dev"},
+  "durable_objects": {"bindings": [{"name": "WORKSPACES", "class_name": "WorkspaceObject"}, {"name": "DIRECTORY", "class_name": "DirectoryObject"}]},
+  "migrations": [{"tag": "bridge-v1", "new_sqlite_classes": ["WorkspaceObject", "DirectoryObject"]}],
+  "kv_namespaces": [{"binding": "AUTH_KV", "id": "9a7af4e8a1b64b96b2a19365466bbb52"}],
+  "r2_buckets": [{"binding": "ARTIFACTS", "bucket_name": "rivule-bridge-artifacts"}],
+  "observability": {"enabled": true, "head_sampling_rate": 0.1, "logs": {"head_sampling_rate": 0.1}, "traces": {"head_sampling_rate": 0.1}, "redact_query_string": true}
+}

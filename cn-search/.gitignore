@@ -1,0 +1,7 @@
+.runtime/
+.spool/
+.jobs/
+__pycache__/
+*.pyc
+.env
+reports/*-raw.*

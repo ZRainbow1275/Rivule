@@ -1,0 +1,262 @@
+{
+  "schema_version": 1,
+  "snapshot_date": "2026-10-21",
+  "timezone": "Asia/Shanghai",
+  "scope": "现有搜索工具与注册辅助工具的文档和证据索引；不部署新网关、不迁移凭据或服务",
+  "runtime_observation_window": {
+    "from": "2026-10-20",
+    "through": "2026-10-21",
+    "timezone": "Asia/Shanghai"
+  },
+  "provenance": {
+    "root_session": "主线程 /root 在本次会话取得的工具结果，由委派任务包提供给文档切片；本目录没有复制原始工具转录",
+    "local_review": "本切片只读核对指定源码、版本清单及配置白名单字段",
+    "public_document_fetch": "本切片于 2026-10-21 通过 Fetch 读取的公开官方页面",
+    "evidence_log": "evidence/2026-10-21.md"
+  },
+  "status_meanings": {
+    "passed_with_quality_issue": "真实搜索成功，但已记录具体答案质量错误",
+    "passed_tested_paths": "列明的调用路径取得实际结果",
+    "partial": "仅部分能力已验证",
+    "passed_search": "搜索取得实际结果，其他能力未测试",
+    "documented_only": "官方接口已确认，未做本机鉴权调用",
+    "passed_static_md": "静态页面转 Markdown 样例通过",
+    "verified_selected_routes": "选定代理路径通过，不覆盖全部路由或控制台写操作",
+    "verified_search_chain": "作为真实搜索链的一环得到验证",
+    "unit_tests_only": "单元测试通过，未执行真实注册",
+    "source_review_only": "只读核对源码或说明，未执行其业务流程",
+    "manifest_only": "只确认源码清单信息，未做实时 UI 验证"
+  },
+  "records": [
+    {
+      "id": "grok_search",
+      "status": "passed_with_quality_issue",
+      "runtime_health": "passed",
+      "answer_quality": "specific_error_recorded",
+      "source_manifest_version": "0.1.22",
+      "configured_primary_alias": "grok-4.20-0309-non-reasoning",
+      "entrypoint": "C:/Users/HP/.codex/tools/grok-search-rs/grok-search-rs.exe",
+      "capabilities": [
+        {"name": "doctor", "status": "passed", "evidence_ids": ["ROOT-DOCTOR"]},
+        {"name": "web_search", "status": "passed", "fallback_used": false, "evidence_ids": ["ROOT-GROK-SEARCH"]}
+      ],
+      "quality_issue_ids": ["GROK-QUALITY-01"],
+      "evidence_ids": ["ROOT-DOCTOR", "ROOT-GROK-SEARCH", "DOC-GEMINI", "LOCAL-MANIFESTS"]
+    },
+    {
+      "id": "tavily",
+      "status": "passed_tested_paths",
+      "base_url": "http://127.0.0.1:9874/api",
+      "capabilities": [
+        {"name": "supplementary_search", "status": "passed", "evidence_ids": ["ROOT-TAVILY"]},
+        {"name": "map", "status": "passed", "returned_url_count": 3, "test_url": "https://api-docs.deepseek.com", "evidence_ids": ["ROOT-TAVILY"]},
+        {"name": "extract_doctor_sample", "status": "passed", "evidence_ids": ["ROOT-DOCTOR"]}
+      ],
+      "evidence_ids": ["ROOT-DOCTOR", "ROOT-TAVILY", "LOCAL-PROXY-SOURCE"]
+    },
+    {
+      "id": "firecrawl",
+      "status": "partial",
+      "base_url": "http://127.0.0.1:9874/firecrawl/v2",
+      "capabilities": [
+        {"name": "fetch_doctor_sample", "status": "passed", "evidence_ids": ["ROOT-FIRECRAWL"]},
+        {"name": "independent_search", "status": "not_tested", "path": "/firecrawl/v2/search"}
+      ],
+      "evidence_ids": ["ROOT-DOCTOR", "ROOT-FIRECRAWL", "LOCAL-PROXY-SOURCE"]
+    },
+    {
+      "id": "exa",
+      "status": "passed_tested_paths",
+      "capabilities": [
+        {"name": "grok_search.exa_search", "status": "passed", "endpoint": "http://127.0.0.1:9874/exa/search", "evidence_ids": ["ROOT-EXA-PROXY"]},
+        {"name": "MetaMCP.web_search_exa", "status": "passed_after_earlier_timeout", "earlier_timeout_seconds": 30, "later_latency_seconds_approximate": 7, "evidence_ids": ["ROOT-EXA-METAMCP"]}
+      ],
+      "evidence_ids": ["ROOT-EXA-PROXY", "ROOT-EXA-METAMCP"]
+    },
+    {
+      "id": "you",
+      "status": "passed_search",
+      "installed_package": "@youdotcom-oss/mcp",
+      "installed_package_version": "4.0.3",
+      "entrypoint": "C:/Users/HP/.codex/tools/mcp-consolidated-20261005/you-mcp/node_modules/@youdotcom-oss/mcp/bin/stdio.js",
+      "upstream_url": "https://api.you.com/mcp",
+      "credential_env_field_name": "YDC_API_KEY",
+      "not_tested": ["content_tools", "research_tools", "live_full_page_extraction"],
+      "evidence_ids": ["ROOT-YOU", "LOCAL-YOU"]
+    },
+    {
+      "id": "deepseek",
+      "status": "documented_only",
+      "registered_tool_in_root_session": false,
+      "deepseek_environment_item_found_in_root_process": false,
+      "live_authentication_verified": false,
+      "search_endpoint": "https://api.deepseek.com/v1/tools/search",
+      "fetch_endpoint": "https://api.deepseek.com/v1/tools/fetch",
+      "method": "POST",
+      "authentication": "Bearer API key",
+      "evidence_ids": ["ROOT-DEEPSEEK-LOCAL", "DOC-DEEPSEEK"]
+    },
+    {
+      "id": "crawl4ai",
+      "status": "passed_static_md",
+      "base_url": "http://127.0.0.1:18235",
+      "test_url": "https://example.com",
+      "success": true,
+      "markdown_nonempty": true,
+      "not_tested": ["dynamic_pages", "authenticated_pages", "pdf", "screenshot"],
+      "evidence_ids": ["ROOT-CRAWL4AI"]
+    },
+    {
+      "id": "mysearch_proxy",
+      "status": "verified_selected_routes",
+      "local_source": "D:/MySearch-Proxy/proxy",
+      "base_url": "http://127.0.0.1:9874",
+      "documented_routes": ["/api/search", "/api/extract", "/api/map", "/firecrawl/v2/search", "/firecrawl/v2/scrape", "/exa/search"],
+      "not_tested": ["independent_firecrawl_search", "all_routes", "console_write_operations"],
+      "evidence_ids": ["ROOT-TAVILY", "ROOT-FIRECRAWL", "ROOT-EXA-PROXY", "LOCAL-PROXY-SOURCE"]
+    },
+    {
+      "id": "grok2api",
+      "status": "verified_search_chain",
+      "local_source": "D:/grok2api",
+      "base_url": "http://127.0.0.1:8100/v1",
+      "source_manifest_version": "2.0.4.rc4",
+      "deployment_version_provenance_checked_in_this_slice": false,
+      "evidence_ids": ["ROOT-GROK-SEARCH", "LOCAL-MANIFESTS"]
+    },
+    {
+      "id": "tavily_key_generator",
+      "status": "unit_tests_only",
+      "local_source": "D:/tavily-key-generator",
+      "native_python": "D:/tavily-key-generator/venv/Scripts/python.exe",
+      "effective_local_defaults": {"count": 1, "concurrency": 1, "upload": true, "exa_concurrency": 1, "exa_max_concurrency": 1},
+      "source_fallback_defaults": {"count": 5, "concurrency": 2, "upload": true},
+      "tests": [
+        {"runtime": "host_Anaconda", "suite": "test_run_bootstrap.py", "status": "failed", "failed_test_count": 5, "missing_dependencies": ["cloakbrowser", "quart"]},
+        {"runtime": "project_venv", "suite": "test_run_bootstrap.py", "status": "passed", "test_count": 5, "uses_mocks": true, "cwd": "D:/tavily-key-generator", "command": "D:/tavily-key-generator/venv/Scripts/python.exe -B -m unittest discover -s tests -p test_run_bootstrap.py"},
+        {"runtime": "project_venv", "suite": "test_config_placeholders.py", "status": "passed", "test_count": 2, "cwd": "D:/tavily-key-generator", "command": "D:/tavily-key-generator/venv/Scripts/python.exe -B -m unittest discover -s tests -p test_config_placeholders.py"}
+      ],
+      "real_registration_tested": false,
+      "new_key_upload_tested": false,
+      "tavily_email_registration_policy": "historical_README_claim_not_reverified",
+      "evidence_ids": ["ROOT-REGISTRAR-TESTS", "LOCAL-REGISTRAR-DEFAULTS", "ROOT-NO-REGISTRATION"]
+    },
+    {
+      "id": "grok_register",
+      "status": "source_review_only",
+      "local_source": "D:/Desktop/grok-register",
+      "reviewed_file": "D:/Desktop/grok-register/readme.md",
+      "source_template_registration_count": 50,
+      "sanitized_example_registration_count": 1,
+      "not_tested": ["console", "network_exit", "registration", "token_sink"],
+      "evidence_ids": ["LOCAL-GROK-REGISTER", "ROOT-NO-REGISTRATION"]
+    },
+    {
+      "id": "easygrok",
+      "status": "source_review_only",
+      "reviewed_file": "D:/Desktop/easygrok/get_sso.py",
+      "operation": "existing_account_login_and_SSO_extraction",
+      "source_browser_preference": ["Edge", "Chrome"],
+      "source_local_port": 9988,
+      "source_extension": "turnstilePatch",
+      "sensitive_source_input_filename": "accounts.json",
+      "sensitive_source_output_filenames": ["sso_results.json", "sso_tokens.txt"],
+      "source_prints_SSO_prefix": true,
+      "sensitive_runtime_files_read": false,
+      "executed": false,
+      "evidence_ids": ["LOCAL-EASYGROK", "ROOT-NO-REGISTRATION"]
+    },
+    {
+      "id": "capture_d1",
+      "status": "manifest_only",
+      "local_source": "D:/Desktop/Rivule/Capture_MCP_0.9.1_D1",
+      "source_manifest_version": "0.10.6",
+      "source_version_state": "candidate",
+      "live_screenshot_tested": false,
+      "evidence_ids": ["ROOT-CAPTURE"]
+    },
+    {
+      "id": "capture_webshot",
+      "status": "manifest_only",
+      "local_source": "D:/Desktop/Rivule/capture-mcp/webshot_mcp_app",
+      "source_manifest_version": "0.4.0",
+      "live_screenshot_tested": false,
+      "evidence_ids": ["ROOT-CAPTURE"]
+    }
+  ],
+  "quality_issues": [
+    {
+      "id": "GROK-QUALITY-01",
+      "provider_id": "grok_search",
+      "classification": "synthesis_contradicts_official_source",
+      "root_observation": "真实搜索有来源且 fallback_used=false，但答案断言消费者 Gemini 无 MCP 或仅 Enterprise 支持",
+      "official_correction": "Google 帮助页介绍个人 Google 账号连接 Gemini Apps 自定义 MCP；当前要求美国、18+、英文与 Keep Activity 开启，工作/学校账号当前不可用",
+      "official_url": "https://support.google.com/gemini/answer/17209137?co=GENIE.Platform%3DDesktop&hl=en",
+      "correction_document_fetched_on": "2026-10-21",
+      "action": "保留运行成功记录；引用官方原文修正该结论",
+      "evidence_ids": ["ROOT-GROK-SEARCH", "DOC-GEMINI"]
+    }
+  ],
+  "safe_configuration_review": {
+    "private_file_path": "C:/Users/HP/.config/grok-search-rs/config.toml",
+    "read_method": "anchored_allowlist_fields_only",
+    "values": {
+      "openai_compatible_api_url": "http://127.0.0.1:8100/v1",
+      "openai_compatible_model": "grok-4.20-0309-non-reasoning",
+      "tavily_api_url": "http://127.0.0.1:9874/api",
+      "tavily_enabled": true,
+      "firecrawl_api_url": "http://127.0.0.1:9874/firecrawl/v2",
+      "firecrawl_enabled": true,
+      "exa_api_url": "http://127.0.0.1:9874/exa",
+      "exa_enabled": true,
+      "default_extra_sources": 3,
+      "fallback_sources": 5,
+      "timeout_seconds": 180
+    },
+    "credential_values_exported": false,
+    "evidence_ids": ["LOCAL-SAFE-CONFIG"]
+  },
+  "adjacent_capture_notes": {
+    "ownership": "由主线程保留原目录；本切片不编辑或运行 Capture",
+    "candidate_directory_name_is_not_version_evidence": true,
+    "capture_d1_README_online_version": "0.10.5",
+    "capture_d1_README_online_version_state": "historical",
+    "evidence_ids": ["ROOT-CAPTURE"]
+  },
+  "observations": [
+    {"id": "ROOT-DOCTOR", "origin": "root_session", "result": "Grok、Tavily、Firecrawl、Exa reachable；Tavily extract 样例通过"},
+    {"id": "ROOT-GROK-SEARCH", "origin": "root_session", "result": "真实 Grok 搜索有来源且 fallback_used=false；同时记录 GROK-QUALITY-01"},
+    {"id": "ROOT-TAVILY", "origin": "root_session", "result": "Tavily 补充来源成功；web_map 对 DeepSeek 文档站返回 3 个 URL"},
+    {"id": "ROOT-FIRECRAWL", "origin": "root_session", "result": "doctor 样例 fetch 通过；独立 search 未测"},
+    {"id": "ROOT-EXA-PROXY", "origin": "root_session", "result": "Grok exa_search 返回实际结果"},
+    {"id": "ROOT-EXA-METAMCP", "origin": "root_session", "result": "首次 30 秒超时；后一次约 7 秒返回实际搜索结果"},
+    {"id": "ROOT-YOU", "origin": "root_session", "result": "you_search 返回官方 MCP 结果"},
+    {"id": "ROOT-CRAWL4AI", "origin": "root_session", "result": "md 对 example.com 返回 success=true 且 Markdown 非空"},
+    {"id": "ROOT-DEEPSEEK-LOCAL", "origin": "root_session", "result": "当前会话未注册工具，当前进程未发现 DEEPSEEK 环境项；未测鉴权"},
+    {"id": "ROOT-REGISTRAR-TESTS", "origin": "root_session", "result": "宿主 Anaconda 启动测试 5 项失败；项目 venv 启动测试 5 过、配置测试 2 过"},
+    {"id": "ROOT-NO-REGISTRATION", "origin": "root_session", "result": "没有创建账号或提交注册表单；本切片也未执行注册/登录/上传"},
+    {"id": "ROOT-CAPTURE", "origin": "root_session", "result": "D1 pyproject 0.10.6 candidate 与 README 历史 online 0.10.5；webshot_mcp_app pyproject 0.4.0；无实时截图测试"},
+    {"id": "LOCAL-SAFE-CONFIG", "origin": "local_review", "source": "C:/Users/HP/.config/grok-search-rs/config.toml", "result": "只读取 11 个非敏感白名单字段"},
+    {"id": "LOCAL-REGISTRAR-DEFAULTS", "origin": "local_review", "sources": ["D:/tavily-key-generator/config.py", "D:/tavily-key-generator/.env", "D:/tavily-key-generator/run.py"], "result": ".env 仅白名单读取数量/并发/上传；生效 1/1/true；源码数量/并发回退为 5/2"},
+    {"id": "LOCAL-PROXY-SOURCE", "origin": "local_review", "source": "D:/MySearch-Proxy/proxy/server.py", "result": "核对六个公开代理路由及下游 token / 上游 key 分界"},
+    {"id": "LOCAL-MANIFESTS", "origin": "local_review", "sources": ["D:/GrokSearch-rs/Cargo.toml", "D:/grok2api/pyproject.toml"], "result": "源码清单版本分别为 0.1.22、2.0.4.rc4；未据此宣称部署版本一致"},
+    {"id": "LOCAL-YOU", "origin": "local_review", "source": "C:/Users/HP/.codex/tools/mcp-consolidated-20261005/you-mcp/node_modules/@youdotcom-oss/mcp", "result": "已安装包 4.0.3；stdio bridge 使用 YDC_API_KEY 连接 https://api.you.com/mcp"},
+    {"id": "LOCAL-GROK-REGISTER", "origin": "local_review", "source": "D:/Desktop/grok-register/readme.md", "result": "完整读取指定 readme；记录单轮入口和模板默认数量 50"},
+    {"id": "LOCAL-EASYGROK", "origin": "local_review", "source": "D:/Desktop/easygrok/get_sso.py", "result": "完整读取脚本，未打开账号/token 文件；记录终端与文件的敏感输出风险"},
+    {"id": "DOC-DEEPSEEK", "origin": "public_document_fetch", "url": "https://api-docs.deepseek.com/guides/search", "fetched_on": "2026-10-21", "result": "Search & Fetch 的 POST 接口、Bearer 鉴权、请求字段与 Markdown fetch 返回已确认"},
+    {"id": "DOC-GEMINI", "origin": "public_document_fetch", "url": "https://support.google.com/gemini/answer/17209137?co=GENIE.Platform%3DDesktop&hl=en", "fetched_on": "2026-10-21", "result": "确认个人 Google 账号自定义 MCP 支持与当前地区/年龄/语言/活动设置条件"}
+  ],
+  "not_performed": [
+    "new_search_gateway_implementation",
+    "credential_or_service_migration",
+    "upstream_source_edits",
+    "paid_authenticated_requests_in_documentation_slice",
+    "new_account_registration",
+    "registration_form_submission",
+    "new_key_upload_or_token_pool_write",
+    "DeepSeek_authenticated_API_calls",
+    "independent_Firecrawl_search",
+    "live_Capture_screenshot",
+    "repeat_of_already_valid_root_session_tests"
+  ]
+}

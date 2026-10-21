@@ -1,0 +1,497 @@
+{
+  "follow_up_fixes": [
+    {
+      "id": "bridge-application-user-agent",
+      "user_agent": "Rivule-regional-worker/0.1",
+      "vps_evidence_owner": "root",
+      "vps_evidence": "Same authorization and claim data: Python-urllib/3.12 returned HTTP 403 / Cloudflare 1010; Rivule-regional-worker/0.1 returned HTTP 200 with job:null.",
+      "local_regression_before_fix": "New real-HTTP test failed because all four routes sent Python-urllib/3.12.",
+      "local_checks": [
+        {
+          "command": "PYTHONPATH=tests python -m unittest test_worker.BridgeTests -v",
+          "status": "passed",
+          "tests": 7,
+          "coverage": [
+            "claim/heartbeat/result/artifact share the fixed application User-Agent",
+            "unknown-ack result replay retains the same packet and User-Agent without re-execution or confirmed artifact re-upload",
+            "existing redirect, interruption, expiration and revocation contracts"
+          ],
+          "observed_warnings": [
+            "ResourceWarning: unclosed <socket.socket [closed] ...>"
+          ]
+        },
+        {
+          "command": "python -m py_compile worker.py tests/test_worker.py",
+          "status": "passed"
+        }
+      ],
+      "vps_updated_worker_poll_once_exit": 0,
+      "remaining_action": "Completed: updated source is in final VPS image c3d29466ee19; the actual container poll --once exited 0 and the service is enabled/running."
+    },
+    {
+      "id": "close-http-error-and-filter-baidu-paid-clicks",
+      "changed_files": ["worker.py", "page_parser.py", "tests/test_worker.py"],
+      "observations": ["HTTPError response objects were not closed on rejected control requests", "A real VPS Baidu result included a baidu.com /baidu.php paid-click link"],
+      "old_candidate_regression": {"checks": 4, "failures": 3, "errors": 1},
+      "fix": "Close HTTPError before preserving BridgeError status/cause; skip Baidu paid-click URLs even in nested containers, retain normal links and other hosts, reject malformed authorities/non-web ports.",
+      "targeted_tests": {"suites": ["BridgeTests", "ParserTests"], "passed": 18, "warnings": []},
+      "compile": "passed",
+      "final_vps_baidu": {"status": "succeeded", "sources_count": 3, "baidu_paid_clicks_included": false}
+    }
+  ],
+  "vps_follow_up": {
+    "checked_on": "2026-10-21",
+    "host": "160.236.111.203",
+    "ssh_user": "secure-remote-admin",
+    "ssh_authentication": "passed using user-unlocked destination-constrained agent",
+    "sudo_noninteractive": "passed",
+    "source_path": "/opt/rivule-cn-search",
+    "os": "Ubuntu 24.04.5 x64",
+    "docker": "29.1.3",
+    "compose": "2.40.3",
+    "cgroup": "v2",
+    "worker_secret_configured": true,
+    "worker_env_mode": "0600",
+    "actual_claim": {"status": 200, "body": {"job": null}},
+    "updated_worker_poll_once_exit": 0,
+    "container_poll_once_exit": 0,
+    "container_status": "running",
+    "container_name": "rivule-cn-search-regional-worker-1",
+    "image_build": {"status": "passed", "image_id": "c3d29466ee19", "tag": "rivule-cn-search-regional-worker:latest", "builder": "existing legacy builder with DOCKER_BUILDKIT=0", "build_network": "rivule-search-egress", "moli": "1.1.18"},
+    "initial_build_failure": {"stage": "apt-get update", "reason": "Existing forward default-drop denied new-container DNS; resolved using the owner-approved project-only egress network"},
+    "firewall_change": {
+      "authorization": "owner confirmed continuing the proposed scoped plan",
+      "network": "rivule-search-egress",
+      "bridge": "rv-search",
+      "subnet": "172.20.0.0/16",
+      "icc": false,
+      "table": "inet secure_remote_v1",
+      "chain": "rivule_search_out",
+      "dns": ["8.8.8.8", "1.1.1.1"],
+      "allowed": ["specified DNS UDP/TCP 53", "public IPv4 TCP 80/443 via ens3"],
+      "nonpublic_and_other_traffic": "drop",
+      "kernel_check_apply_remove_reapply": "passed",
+      "original_policy_structural_preservation": "passed",
+      "actual_traffic": {"udp_dns": "passed", "tcp_dns": "passed", "https": "passed", "private_10.255.255.254_80": "blocked", "reserved_192.0.2.1_80": "blocked", "public_1.1.1.1_853": "blocked", "default_docker_bridge_public_443": "still blocked"},
+      "preflight_rule_packet_counts": {"nonpublic": 4, "dns_udp": 1, "dns_tcp": 1, "web": 1, "other": 2},
+      "new_inbound_ports": 0,
+      "final_own_chain_count": 1,
+      "final_own_jump_count": 1
+    },
+    "effective_runtime": {
+      "uid": 10001, "gid": 10001, "root_write_errno": "EROFS", "cap_eff": "0000000000000000", "no_new_privs": 1, "seccomp": 2,
+      "memory_max": "1073741824", "cpu_max": "100000 100000", "pids_max": "128", "spool_mode": "0700",
+      "host_directory_mounts": 0, "docker_socket_mounts": 0, "published_ports": 0, "egress_ipv4": "160.236.111.203",
+      "restart_policy": "on-failure", "docker_live_restore": false, "log_max_size": "5m", "log_max_files": 2
+    },
+    "service": {
+      "unit": "rivule-cn-search.service", "enabled": true, "active_state": "active", "sub_state": "exited", "unit_type": "oneshot with RemainAfterExit",
+      "after_and_requires": ["docker.service", "secure-remote-firewall.service"],
+      "part_of": ["docker.service", "secure-remote-firewall.service"], "reload_propagated_from": "secure-remote-firewall.service",
+      "start_reload_stop_start": "passed", "firewall_removed_on_stop": true, "firewall_restored_on_start": true,
+      "owned_worker_sigkill_recovery": "passed", "restart_count_before": 0, "restart_count_after": 1,
+      "container_started_at_after_recovery": "2026-10-21T10:54:59.220386374Z", "png_retained_after_manual_and_crash_restart": true,
+      "worker_log_bytes_after_recovery": 0, "original_netbird_containers_running_without_restart": true,
+      "whole_host_docker_netbird_restart_test": "not run to preserve existing remote services"
+    },
+    "final_linux_tests": {"command": "python -W error::ResourceWarning -m unittest discover -s tests -v", "tests": 39, "worker_tests": 29, "firewall_plan_tests": 10, "status": "passed", "native_moli_skipped": false, "warnings": [], "production_python_source": "copied from final image into tmpfs alongside explicitly transferred test/deployment fixtures"},
+    "live_web": [
+      {"name": "rust-screenshot", "url": "https://rust-lang.org/", "status": "succeeded", "engine": "moli/1.1.18", "content_chars": 2781, "png_bytes": 201521, "png_dimensions": [1920, 1080], "screenshot_navigation": "separate from text navigation", "visually_inspected": true, "spool_relative_path": "local.m6n83e_y/viewport.png"},
+      {"name": "baidu-final", "query": "中国 开源 浏览器", "status": "succeeded", "retrieval_engine": "moli/1.1.18", "sources_count": 3, "provider": "baidu", "language": "zh", "baidu_paid_clicks_included": false, "source_titles": ["浏览器 - 开源软件 - OSCHINA - 中文开源技术交流社区", "weolar (weolar) · GitHub", "曾经最好用的浏览器凉了?网友直呼:好事!-腾讯云开发者社区-腾讯云"]},
+      {"name": "wechat", "url": "https://mp.weixin.qq.com/s/qginKyKMlRqQM2O-zkoVfw", "status": "succeeded", "engine": "moli/1.1.18", "title": "8 款不容错过的开源项目", "content_chars": 6178, "http_status": 200},
+      {"name": "zhihu", "url": "https://www.zhihu.com/question/2019722609273631935/answer/2043652551678112660", "status": "succeeded", "engine": "moli/1.1.18", "title": "浏览器自动化操作工具有哪些？ - 知乎", "content_chars": 20577, "http_status": 200},
+      {"name": "interfax", "url": "https://www.interfax.ru/", "status": "succeeded", "engine": "moli/1.1.18", "title": "Интерфакс: новости", "content_chars": 7959, "http_status": 200},
+      {"name": "telegram", "url": "https://t.me/s/rian_ru", "status": "succeeded", "engine": "moli/1.1.18", "title": "РИА Новости – Telegram", "content_chars": 5727, "http_status": 200},
+      {"name": "yandex", "query": "новости науки", "status": "blocked", "error_code": "captcha"},
+      {"name": "tass", "url": "https://tass.ru/nauka", "status": "blocked", "error_code": "empty_content"},
+      {"name": "vk", "url": "https://vk.com/rtnews", "status": "failed", "error_code": "timeout"}
+    ],
+    "remaining_integration": "Actual Google-authorized user dispatch and production queued task/result/private artifact retrieval after owner OAuth setup"
+  },
+  "vps_chromium_follow_up": {
+    "checked_at": "2026-10-21T12:00:00.822622+00:00",
+    "host": "160.236.111.203",
+    "image_build": {
+      "status": "passed",
+      "image_id": "sha256:0688af9ee042044dbe1f7a0311aa435acfbc1473d4196514a5bb1e23b7594130",
+      "tag": "rivule-cn-search-regional-worker:chromium-1.61.0",
+      "size_bytes": 589409828,
+      "builder": "DOCKER_BUILDKIT=0 legacy builder",
+      "network": "rivule-search-egress",
+      "playwright": "1.61.0",
+      "chromium": "149.0.7827.55",
+      "browser_revision": "1228",
+      "default_executable": "/opt/playwright/chromium_headless_shell-1228/chrome-headless-shell-linux64/chrome-headless-shell",
+      "explicit_full_executable": "/opt/playwright/chromium-1228/chrome-linux64/chrome",
+      "moli_image_preserved": "sha256:c3d29466ee19d445221f46f85257a9d2a3601715714482076530908118bdc901"
+    },
+    "real_configuration_fixes": [
+      {
+        "id": "compose-security-opt-inheritance",
+        "before": "Compose rejected merged security_opt items at 0 and 1 as equal",
+        "fix": "Remove repeated no-new-privileges from Chromium overlay; inherit it once from base and append seccomp",
+        "actual_merged_security_opt": ["no-new-privileges:true", "seccomp=./chromium-seccomp.json"]
+      },
+      {
+        "id": "namespace-chroot-under-cap-drop-all",
+        "before": "sys_chroot(\"/proc/self/fdinfo/\") check failed; zygote exited with SIGTRAP",
+        "root_decision": "Approved only container-level chroot syscall allowance; no added capability or host policy changes",
+        "fix": "Add chroot to the existing unconditional clone/setns/unshare allow group",
+        "base_profile": "https://github.com/microsoft/playwright/blob/v1.61.0/utils/docker/seccomp_profile.json",
+        "profile_provenance": "Derived modification, not byte-identical official profile",
+        "default_action": "SCMP_ACT_ERRNO",
+        "chromium_source": "https://chromium.googlesource.com/chromium/src/+/149.0.7827.55/sandbox/linux/services/credentials.cc",
+        "regression_failed_before_fix": true
+      }
+    ],
+    "effective_runtime": {
+      "user": "10001:10001",
+      "cap_drop": ["ALL"],
+      "no_new_privileges": true,
+      "apparmor": "docker-default",
+      "root_write_errno": "EROFS",
+      "seccomp_default": "SCMP_ACT_ERRNO",
+      "unconditional_namespace_syscalls": ["chroot", "clone", "setns", "unshare"],
+      "memory_max_bytes": 1073741824,
+      "cpu_max": "100000 100000",
+      "pids_max": 256,
+      "shm_size_bytes": 268435456,
+      "memory_peak_bytes": 453881856,
+      "oom_events": 0,
+      "oom_kill_events": 0,
+      "pids_limit_events": 0,
+      "test_container_mounts": [],
+      "published_ports": {},
+      "worker_token_in_test_container": false
+    },
+    "sandbox": {
+      "headless_shell": {
+        "started": true,
+        "no_sandbox_flag": false,
+        "renderer_cap_eff": "0000000000000000",
+        "renderer_no_new_privs": 1,
+        "renderer_seccomp": 2,
+        "renderer_seccomp_filters": 2,
+        "renderer_uid_map": "10001 10001 1",
+        "chrome_sandbox_page": "Not provided by headless shell; ERR_INVALID_URL"
+      },
+      "full_chromium_diagnostic": {
+        "version": "149.0.7827.55",
+        "chrome_sandbox_page": "You are adequately sandboxed.",
+        "layer_1": "Namespace",
+        "pid_namespaces": true,
+        "network_namespaces": true,
+        "seccomp_bpf": true,
+        "seccomp_tsync": true
+      },
+      "namespace_helper_capability": "Temporary SYS_ADMIN observed only in its own single-UID user namespace; container capability set remains dropped",
+      "native_private_initial_navigation": "blocked by real SOCKS even with no route interception",
+      "native_private_subresource": "blocked; executed fixture script settled",
+      "native_private_replacement_navigation": "blocked",
+      "loopback_server_requests": 0
+    },
+    "checks": [
+      {
+        "command": "python -m unittest discover -s tests -p test_vps_egress.py -v",
+        "environment": "Windows local source",
+        "tests": 11,
+        "status": "passed"
+      },
+      {
+        "command": "RUN_NATIVE_CHROMIUM_CHECKS=1 PYTHONPATH=/tmp/regional-tests/tests:/opt/regional-worker python -W error::ResourceWarning -m unittest test_chromium_runtime -v",
+        "environment": "Final bounded Linux Chromium image; production source from image, tests in tmpfs",
+        "tests": 2,
+        "skipped": 0,
+        "status": "passed",
+        "warnings": []
+      }
+    ],
+    "other_compatibility_checks": {
+      "safety_passed": 7,
+      "guard_passed": 2,
+      "firewall_lifecycle_profile_passed": 11,
+      "log": ".runtime/chromium-tests-20261021.log",
+      "initial_native_fixture_adjustment": "The initial composite run also contained a failed native fixture that incorrectly expected an HTTP main response for a data URL. Replaced it with actual SOCKS/server observations, then the two native checks passed in the separate final command. These other 20 passing checks were unchanged."
+    },
+    "live_web": [
+      {
+        "name": "tass-headless",
+        "url": "https://tass.ru/nauka",
+        "explicit_engine": "chromium/playwright-1.61.0",
+        "status": "blocked",
+        "error_code": "access_denied",
+        "http_status": 403,
+        "elapsed_seconds": 4.477,
+        "content_improvement": false,
+        "diagnostic_screenshot": {"file": ".runtime/chromium-tass-diagnostic-20261021.png", "bytes": 21308, "dimensions": [1280, 800], "visually_inspected": true, "observed": "Forbidden page with site refusal report", "diagnostic_only": true, "separate_navigation": true, "uploaded_as_content_artifact": false}
+      },
+      {
+        "name": "vk-headless",
+        "url": "https://vk.com/rtnews",
+        "explicit_engine": "chromium/playwright-1.61.0",
+        "status": "failed",
+        "error_code": "compatibility_engine_failed",
+        "underlying_error": "Target page, context or browser has been closed",
+        "elapsed_seconds": 5.004,
+        "content_improvement": false,
+        "resource_limit_events": 0
+      },
+      {
+        "name": "vk-explicit-full-chromium",
+        "url": "https://vk.com/rtnews",
+        "explicit_engine": "chromium/playwright-1.61.0",
+        "executable": "/opt/playwright/chromium-1228/chrome-linux64/chrome",
+        "status": "blocked",
+        "error_code": "empty_content",
+        "elapsed_seconds": 11.083,
+        "content_improvement": false,
+        "diagnostic_screenshot": {"file": ".runtime/chromium-vk-diagnostic-20261021.png", "bytes": 11822, "dimensions": [1280, 800], "visually_inspected": true, "observed": "VK logo and grey loading skeleton; no public posts", "diagnostic_only": true, "separate_navigation": true, "uploaded_as_content_artifact": false}
+      }
+    ],
+    "recommendation": "Keep Moli as the formal default; retain the validated independent Chromium image for explicitly selected compatibility needs. Neither target gained usable content.",
+    "final_service": {
+      "delivery_state_checked_at": "2026-10-21T12:10:38.396311+00:00",
+      "worker_log_bytes_since_restore": 0,
+      "unit": "rivule-cn-search.service",
+      "enabled": true,
+      "active": true,
+      "container": "rivule-cn-search-regional-worker-1",
+      "container_status": "running",
+      "container_started_at": "2026-10-21T12:00:01.495681531Z",
+      "engine": "moli",
+      "formal_executors": 1,
+      "pending_states": 0,
+      "chromium_dropin_installed": false,
+      "temporary_check_container_removed": true,
+      "original_spool_preserved": true,
+      "original_netbird_containers_running_since": "2026-10-17",
+      "host_docker_netbird_restart": "Not performed; user decided not to reboot the existing host",
+      "yandex_retried": false,
+      "captcha_bypass": false,
+      "host_policy_changes": [],
+      "added_container_capabilities": []
+    },
+    "private_evidence": [
+      ".runtime/chromium-build-20261021-sandbox.log",
+      ".runtime/chromium-sandbox-20261021-headless.json",
+      ".runtime/chromium-sandbox-20261021-full.json",
+      ".runtime/chromium-native-tests-20261021.log",
+      ".runtime/chromium-samples-20261021.json",
+      ".runtime/chromium-vk-full-summary-20261021.json",
+      ".runtime/chromium-final-state-20261021.json",
+      ".runtime/chromium-delivery-state-20261021.json"
+    ]
+  },
+  "recorded_at": "2026-10-20T16:55:44.553702+00:00",
+  "evidence_scope": "Top-level environment/checks/live_web retain the initial Windows baseline; deployed Moli evidence is in vps_follow_up and current explicit Linux Chromium evidence is in vps_chromium_follow_up.",
+  "environment": {
+    "os": "Windows",
+    "machine": "AMD64",
+    "python": "3.12.3",
+    "moli": "1.1.18",
+    "playwright": "1.61.0",
+    "chromium": "151.0.7922.34"
+  },
+  "source_base_commit": "1d0f060",
+  "checks": [
+    {
+      "command": "python -m unittest discover -s tests -v",
+      "status": "passed",
+      "tests": 26,
+      "native_moli_skipped": false
+    },
+    {
+      "command": "PYTHONPATH=tests python -m unittest test_worker.ParserTests -v",
+      "status": "passed",
+      "tests": 9,
+      "note": "Final credential-free source URL change checked here."
+    },
+    {
+      "command": "python -m py_compile worker.py page_parser.py network_guard.py chromium_fetch.py platform_limits.py install_moli.py",
+      "status": "passed"
+    },
+    {
+      "command": "BRIDGE_ORIGIN=<fixture HTTPS origin> WORKER_TOKEN=<fixture> docker compose config --quiet",
+      "status": "passed"
+    },
+    {
+      "command": "BRIDGE_ORIGIN=<fixture HTTPS origin> WORKER_TOKEN=<fixture> docker compose -f compose.yaml -f compose.chromium.yaml config --quiet",
+      "status": "passed"
+    },
+    {
+      "command": "PYTHONPATH=tests python -m unittest test_worker.SafetyTests -v",
+      "status": "passed",
+      "tests": 7,
+      "note": "Final browser-cache environment change checked here."
+    },
+    {
+      "command": "Internal chromium_fetch.py with a trusted data fixture and no CHROMIUM_BIN",
+      "status": "expected_error_observed",
+      "error_code": "chromium_unavailable",
+      "note": "Pinned SDK default revision 1228 is absent locally; installed revision 1234 was explicitly selected for the successful Interfax smoke."
+    }
+  ],
+  "live_web": [
+    {
+      "name": "rust",
+      "command": "python worker.py fetch https://www.rust-lang.org/",
+      "status": "succeeded",
+      "engine": "moli/1.1.18",
+      "url": "https://www.rust-lang.org/",
+      "final_url": "https://rust-lang.org/",
+      "title": "Rust Programming Language",
+      "egress": "direct; inherited proxies disabled",
+      "warnings": [
+        "retrieval_engine=moli/1.1.18",
+        "http_status=200"
+      ],
+      "content_chars": 2781
+    },
+    {
+      "name": "rust-screenshot",
+      "command": "python worker.py fetch https://rust-lang.org/ --screenshot",
+      "status": "succeeded",
+      "engine": "moli/1.1.18",
+      "url": "https://rust-lang.org/",
+      "final_url": "https://rust-lang.org/",
+      "title": "Rust Programming Language",
+      "egress": "direct; inherited proxies disabled",
+      "warnings": [
+        "retrieval_engine=moli/1.1.18",
+        "http_status=200",
+        "screenshot_separate_navigation: viewport.png is a separate moli/1.1.18 navigation, not a precision Capture artifact"
+      ],
+      "content_chars": 2781,
+      "artifacts": [
+        {
+          "filename": "viewport.png",
+          "relative_path": ".spool/local.mh4_qc2b/viewport.png",
+          "size_bytes": 201521,
+          "png_dimensions": [
+            1920,
+            1080
+          ]
+        }
+      ]
+    },
+    {
+      "name": "baidu",
+      "command": "python worker.py search '中国 开源 浏览器' --engine baidu --limit 3",
+      "status": "succeeded",
+      "engine": "baidu",
+      "url": "https://www.baidu.com/s?wd=%E4%B8%AD%E5%9B%BD+%E5%BC%80%E6%BA%90+%E6%B5%8F%E8%A7%88%E5%99%A8&rn=3",
+      "final_url": "https://www.baidu.com/s?wd=%E4%B8%AD%E5%9B%BD+%E5%BC%80%E6%BA%90+%E6%B5%8F%E8%A7%88%E5%99%A8&rn=3",
+      "title": "中国 开源 浏览器_百度搜索",
+      "egress": "direct; inherited proxies disabled",
+      "warnings": [
+        "retrieval_engine=moli/1.1.18",
+        "http_status=200"
+      ],
+      "sources_count": 3,
+      "sources": [
+        {
+          "title": "浏览器 - 开源软件 - OSCHINA - 中文开源技术交流社区",
+          "url": "http://www.baidu.com/link?url=j_BW0yow_C3y_QS_hn7OoYvKW7ysM4iGQx_EaFf9Bw7dpeplwQUJlFvbj2YspTpcV9a2WRxRW0IoVV9lSICbVa",
+          "provider": "baidu",
+          "language": "zh"
+        },
+        {
+          "title": "FIREFOX开源浏览器,隐私保护功能突出,跨平台同步体验佳,安全高效日常必备【哔哩哔哩】【bilibili】",
+          "url": "http://www.baidu.com/link?url=bJuP1mPJ7hFaNQUMWx7gAdffpcRT-j1faHJI0OHU9PvHwu5T5NMgM9UivaFw_p-Aru8zgL1BKP2HkQsDzj8fr0uhpsO_eMDcRxV_-uS7kLC",
+          "provider": "baidu",
+          "language": "zh"
+        },
+        {
+          "title": "weolar (weolar) · GitHub",
+          "url": "http://www.baidu.com/link?url=STbZKz6FqCIYf34yQFVLe987W-7fSr47ZQR3dpzAnHeTKmxckalwhMMRQEGgEjb7",
+          "provider": "baidu",
+          "language": "zh"
+        }
+      ]
+    },
+    {
+      "name": "yandex",
+      "command": "python worker.py search 'новости науки' --engine yandex --limit 3",
+      "status": "blocked",
+      "error": {
+        "code": "captcha",
+        "message": "The site returned an access challenge; no bypass was attempted."
+      }
+    },
+    {
+      "name": "chromium-interfax",
+      "command": "CHROMIUM_BIN=<existing Chromium executable> python worker.py --browser chromium fetch https://www.interfax.ru/",
+      "status": "succeeded",
+      "engine": "chromium/playwright-1.61.0",
+      "url": "https://www.interfax.ru/",
+      "final_url": "https://www.interfax.ru/",
+      "title": "Интерфакс: новости",
+      "egress": "direct; inherited proxies disabled",
+      "warnings": [
+        "retrieval_engine=chromium/playwright-1.61.0",
+        "http_status=200",
+        "non_get_requests_blocked",
+        "networkidle_not_reached; content checked after DOMContentLoaded",
+        "explicit_chromium_compatibility_mode; no automatic fallback",
+        "browser_version=151.0.7922.34"
+      ],
+      "content_chars": 8180
+    },
+    {
+      "name": "tass",
+      "command": "python worker.py fetch https://tass.ru/nauka",
+      "status": "blocked",
+      "error": {
+        "code": "empty_content",
+        "message": "No substantive public page content was extracted."
+      }
+    },
+    {
+      "name": "runoob",
+      "command": "python worker.py fetch https://www.runoob.com/python3/python3-tutorial.html --screenshot",
+      "status": "failed",
+      "error": {
+        "code": "timeout",
+        "message": "Moli could not complete the page within its readiness deadline."
+      }
+    }
+  ],
+  "native_network_checks": {
+    "initial_private_navigation": "blocked",
+    "private_fetch_subresource": "blocked with script execution marker and network trace",
+    "private_replacement_navigation": "blocked",
+    "loopback_server_requests": 0
+  },
+  "recovery_checks": {
+    "transport": "real local HTTP server with identified fixture jobs",
+    "unknown_result_ack": "same serialized job packet replayed without browser initialization or artifact re-upload",
+    "interrupted_active_job": "worker_interrupted without re-execution",
+    "heartbeat_revocation": "cancellation propagated; retained until result 2xx",
+    "control_redirect": "bearer not forwarded"
+  },
+  "remaining_gates": [
+    {
+      "gate": "Google-authorized actual user task/result/private artifact integration",
+      "owner": "owner for OAuth setup, then root for integration",
+      "reason": "The final image is deployed with actual authenticated poll and runtime/recovery evidence. Google OAuth client is not configured, so production user dispatch and complete result/artifact retrieval remain."
+    },
+    {
+      "gate": "Public access to remaining restricted regional sources",
+      "owner": "operator if these sources remain required",
+      "reason": "Linux Chromium build, sandbox and limits are accepted. Explicit TASS returned HTTP 403; VK headless closed the page and explicitly selected full Chromium still returned empty content. Yandex retains its earlier captcha state without another request. Keep Moli and obtain a site-permitted public entry point for further targeted checks."
+    },
+    {
+      "gate": "Optional Windows Chromium default browser installation",
+      "owner": "operator if default SDK discovery is desired",
+      "reason": "Current SDK 1.61.0 expects revision 1228; existing revision 1234 works with explicit CHROMIUM_BIN. No heavyweight browser download was performed."
+    }
+  ],
+  "source_documents": [
+    "https://github.com/lexmount/moli/blob/v1.1.18/README.md",
+    "https://github.com/lexmount/moli/blob/v1.1.18/skills/moli-webfetch/SKILL.md",
+    "https://github.com/lexmount/moli/releases/tag/v1.1.18",
+    "https://github.com/microsoft/playwright/blob/v1.61.0/utils/docker/seccomp_profile.json",
+    "https://playwright.dev/python/docs/docker",
+    "https://chromium.googlesource.com/chromium/src/+/149.0.7827.55/sandbox/linux/services/credentials.cc"
+  ]
+}

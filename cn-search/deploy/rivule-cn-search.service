@@ -1,0 +1,22 @@
+[Unit]
+Description=Rivule isolated public-web worker
+Requires=docker.service secure-remote-firewall.service
+After=docker.service secure-remote-firewall.service
+PartOf=secure-remote-firewall.service docker.service
+ReloadPropagatedFrom=secure-remote-firewall.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/rivule-cn-search
+Environment="COMPOSE_FILE=/opt/rivule-cn-search/compose.yaml:/opt/rivule-cn-search/compose.vps.yaml"
+ExecStartPre=/usr/bin/python3 /usr/local/libexec/rivule-cn-search-egress apply
+ExecStart=/usr/bin/docker compose -p rivule-cn-search up -d --no-build
+ExecReload=/usr/bin/python3 /usr/local/libexec/rivule-cn-search-egress apply
+ExecStop=/usr/bin/docker compose -p rivule-cn-search stop regional-worker
+ExecStopPost=/usr/bin/python3 /usr/local/libexec/rivule-cn-search-egress remove
+TimeoutStartSec=120
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
