@@ -463,6 +463,7 @@ async function qqInteractionResponse(request, b, key, guild, select, env, intera
             if (typeof response?.data?.content === 'string') {
                 try {
                     const queue = await env.OWNERS.get(env.OWNERS.idFromName('owner:' + b.ownerId)).qqQueueStatus();
+                    qqProducerPanel(response, queue);
                     if (Number.isSafeInteger(queue?.skipped) && queue.skipped > 0) {
                         const notice = '累计 ' + queue.skipped + ' 条新动态因队列容量未加入推送，项目记录已保存。';
                         const suffix = '\n\n**QQ 推送记录**\n' + notice;
@@ -476,7 +477,9 @@ async function qqInteractionResponse(request, b, key, guild, select, env, intera
                         }
                     }
                 }
-                catch { }
+                catch {
+                    qqProducerPanel(response, null);
+                }
             }
             panelResponse = response;
             let navigationTimer;
@@ -529,6 +532,45 @@ async function qqV2Request(queue, operation, payload) {
         throw Error('continuous_response_mismatch');
     return response.result;
 }
+const qqDiagnosticCodes = new Set(['delivery_disabled', 'connection_unavailable', 'configuration_changed', 'runtime_budget_unavailable', 'grant_inactive', 'producer_not_ready', 'policy_changed', 'binding_changed', 'connection_continuity_changed', 'permission_changed', 'grant_expired', 'source_unverified', 'event_not_current', 'projection_not_authorized', 'project_not_authorized', 'grant_changed', 'intent_conflict', 'event_already_reserved', 'attempt_capacity', 'attempt_consumed', 'permit_mismatch', 'permit_expired', 'quota_corrupt', 'daily_quota_exhausted', 'paced', 'preparation_expired', 'source_or_event_changed', 'projection_changed', 'source_changed_during_projection', 'job_changed', 'activation_changed']);
+const qqDiagnosticStages = new Set(['owner_activation', 'owner_select', 'owner_sync', 'owner_projection', 'gateway_prepare', 'owner_recheck']);
+function qqSafeDiagnostic(stage, code) { return { stage: qqDiagnosticStages.has(stage) ? stage : 'owner_activation', code: qqDiagnosticCodes.has(code) ? code : 'preflight_unavailable' }; }
+function qqStoredDiagnostic(value) { if (!value || typeof value !== 'object' || Object.keys(value).sort().join(',') !== 'code,stage' || !qqDiagnosticStages.has(value.stage) || !qqDiagnosticCodes.has(value.code) && value.code !== 'preflight_unavailable')
+    return null; return { stage: value.stage, code: value.code }; }
+function qqProducerView(rows) {
+    const row = rows("SELECT v FROM qq_continuous_meta WHERE k='activation'")[0];
+    if (!row)
+        return { active: false, reason: 'not_activated', diagnostic: null };
+    let a;
+    try {
+        a = JSON.parse(row.v);
+    }
+    catch {
+        return { active: null, reason: 'state_unavailable', diagnostic: null };
+    }
+    const reasons = new Set(['preflight_not_sent', 'bridge_outcome_unknown', 'source_unverified', 'token_unavailable', 'grant_inactive', 'connection_unavailable', 'policy_changed', 'permission_changed', 'runtime_budget_unavailable']);
+    return { active: typeof a?.active === 'boolean' ? a.active : null, reason: a?.active === true ? null : reasons.has(a?.pauseReason) ? a.pauseReason : 'state_unavailable', diagnostic: qqStoredDiagnostic(a?.pauseDiagnostic) };
+}
+function qqProducerPanel(response, queue) {
+    if (typeof response?.data?.content !== 'string' || !response.data.content.includes('Rivule · 持续通知'))
+        return;
+    const d = queue?.delivery;
+    if (d?.active === true)
+        return;
+    const known = { connection_continuity_changed: 'QQ 连接会话已变化，原会话授权不再适用。', connection_unavailable: 'QQ 连接当前未就绪。', permission_changed: '当前 QQ 权限证据已变化。', policy_changed: '项目或通知策略与本轮授权不一致。', configuration_changed: '运行配置与本轮授权不一致。', runtime_budget_unavailable: '当前运行预算不允许继续发送。', grant_inactive: '本轮通知授权已暂停。', grant_expired: '本轮通知授权已失效。', producer_not_ready: '任务通知队列尚未完成开启。', source_unverified: '当前 PA 来源的验证证据不可用。', daily_quota_exhausted: '今日通知尝试额度已用完。', paced: '尚未达到最小发送间隔。' };
+    const code = qqStoredDiagnostic(d?.diagnostic)?.code;
+    const detail = d?.active === false ? (Object.hasOwn(known, code) ? known[code] : d.reason === 'not_activated' ? '任务通知队列尚未开启。' : d.reason === 'bridge_outcome_unknown' ? '任务通知的发送结果尚未确认，请勿重复发送。' : d.reason === 'preflight_not_sent' ? '任务通知在发送前检查阶段暂停；尚无可确认的具体原因。' : '任务通知队列已暂停；具体原因尚未确认。') : '暂时无法核对任务通知队列状态，不能确认已开启。';
+    let content = response.data.content.replaceAll('**本轮通知已开启**', d?.active === false ? '**任务通知已暂停**' : '**通知队列状态待确认**').replaceAll('本轮持续通知已开启。', '').replaceAll('✓ 本轮通知', '○ 任务队列').replaceAll('本轮只推送新的进展，可以随时暂停。', '');
+    const suffix = '\n\n任务队列：' + detail + '\n这次刷新不会重新授权或补发消息。';
+    if (content.length + suffix.length <= 2000)
+        content += suffix;
+    else {
+        const embeds = response.data.embeds ?? [], used = embeds.reduce((n, e) => n + (e.title?.length ?? 0) + (e.description?.length ?? 0) + (e.footer?.text?.length ?? 0) + (e.author?.name?.length ?? 0) + (e.fields ?? []).reduce((m, f) => m + (f.name?.length ?? 0) + (f.value?.length ?? 0), 0), 0);
+        if (embeds.length < 10 && used + suffix.length + 7 <= 6000)
+            response.data.embeds = [...embeds, { title: '任务队列状态', description: suffix.trim(), color: 0xB1772F }];
+    }
+    response.data.content = content;
+}
 const qqLocalSuppression = new Set(['source_or_event_changed', 'projection_changed', 'source_changed_during_projection', 'job_changed', 'source_unverified', 'event_not_current', 'projection_not_authorized', 'project_not_authorized']);
 const QQBridgeQueueV1 = QQBridgeQueue;
 QQBridgeQueue = class extends QQBridgeQueueV1 {
@@ -558,7 +600,7 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
         const entries = Object.entries(data).filter(([id]) => !sourceId || id === sourceId);
         if (entries.some(([, v]) => !Number.isSafeInteger(v.count) || v.count < 0 || !Number.isSafeInteger(v.lastAt)))
             throw Error('capacity_status_corrupt');
-        return { skipped: entries.reduce((n, [, v]) => n + v.count, 0), lastAt: entries.length ? Math.max(...entries.map(([, v]) => v.lastAt)) : null, sources: entries.map(([source_id, v]) => ({ source_id, count: v.count, lastAt: v.lastAt })) };
+        return { skipped: entries.reduce((n, [, v]) => n + v.count, 0), lastAt: entries.length ? Math.max(...entries.map(([, v]) => v.lastAt)) : null, sources: entries.map(([source_id, v]) => ({ source_id, count: v.count, lastAt: v.lastAt })), ...sourceId === null ? { delivery: qqProducerView(rows) } : {} };
     }
     capacityStatus(sourceId = null) { return QQBridgeQueue.capacityStatus(this.storage, this.sources, sourceId); }
     capacityFloor() { const row = this.rows("SELECT v FROM qq_continuous_meta WHERE k='capacity_floor'")[0]; const n = row ? Number(row.v) : 0; if (!Number.isSafeInteger(n) || n < 0)
@@ -676,21 +718,29 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
         if (this.v2Busy)
             return { state: 'idle', reason: 'already_draining' };
         this.v2Busy = true;
-        let row, commitStarted = false;
+        let row, commitStarted = false, diagnosticStage = 'owner_activation';
         try {
             const a = this.activation();
             if (!this.config()?.enabled || !a?.active || a.expiresAt <= this.now())
                 return { state: 'idle', reason: 'inactive' };
+            diagnosticStage = 'owner_select';
             await this.storage.transaction(async () => { this.compactHistory(); row = this.rows("SELECT * FROM qq_continuous_outbox WHERE status='queued' ORDER BY revision LIMIT 1")[0]; if (row)
                 this.rows("UPDATE qq_continuous_outbox SET status='sending' WHERE receipt=?", row.receipt); });
             if (!row)
                 return { state: 'idle', reason: 'nothing_due' };
+            diagnosticStage = 'owner_sync';
             await this.storage.sync();
-            const first = await this.currentJob(row, a), prepared = await qqV2Request(this, 'prepare', first);
+            diagnosticStage = 'owner_projection';
+            const first = await this.currentJob(row, a);
+            diagnosticStage = 'gateway_prepare';
+            const prepared = await qqV2Request(this, 'prepare', first);
             let result;
-            if (prepared.state !== 'prepared')
-                result = { state: 'suppressed', reason: prepared.reason ?? 'not_prepared' };
+            if (prepared.state !== 'prepared') {
+                const diagnostic = qqStoredDiagnostic(prepared.diagnostic);
+                result = { state: 'suppressed', reason: prepared.reason === 'preflight_not_sent' && diagnostic && qqLocalSuppression.has(diagnostic.code) ? diagnostic.code : prepared.reason ?? 'not_prepared', ...diagnostic ? { diagnostic } : {} };
+            }
             else {
+                diagnosticStage = 'owner_recheck';
                 const latest = this.activation();
                 if (!latest?.active || latest.grantId !== a.grantId)
                     throw Error('activation_changed');
@@ -703,16 +753,16 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
             await this.storage.transaction(async () => { this.rows('UPDATE qq_continuous_outbox SET status=?,result=?,recorded_at=? WHERE receipt=?', result.state, JSON.stringify(result), this.now(), row.receipt); if (result.state !== 'sent' && !qqLocalSuppression.has(result.reason)) {
                 const current = this.activation();
                 if (current?.grantId === a.grantId)
-                    this.saveActivation({ ...current, active: false, pauseReason: result.reason });
+                    this.saveActivation({ ...current, active: false, pauseReason: result.reason, pauseDiagnostic: qqStoredDiagnostic(result.diagnostic) });
             } });
             return result;
         }
         catch (error) {
             const local = !commitStarted && qqLocalSuppression.has(error?.message);
-            const result = { state: commitStarted ? 'uncertain' : 'suppressed', reason: commitStarted ? 'bridge_outcome_unknown' : local ? error.message : 'preflight_not_sent' };
+            const result = { state: commitStarted ? 'uncertain' : 'suppressed', reason: commitStarted ? 'bridge_outcome_unknown' : local ? error.message : 'preflight_not_sent', ...commitStarted ? {} : { diagnostic: qqSafeDiagnostic(diagnosticStage, error?.message) } };
             if (row)
                 await this.storage.transaction(async () => { this.rows('UPDATE qq_continuous_outbox SET status=?,result=?,recorded_at=? WHERE receipt=?', result.state, JSON.stringify(result), this.now(), row.receipt); const a = this.activation(); if (a && !local)
-                    this.saveActivation({ ...a, active: false, pauseReason: result.reason }); });
+                    this.saveActivation({ ...a, active: false, pauseReason: result.reason, pauseDiagnostic: qqStoredDiagnostic(result.diagnostic) }); });
             return result;
         }
         finally {

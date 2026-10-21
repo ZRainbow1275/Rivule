@@ -2217,7 +2217,7 @@ var RivuleContinuous = (() => {
             }
         }
     }
-    return { ContinuousDeliveryController, POLICY, pause, maintainHistory, reserveEnrollmentAttempt, unresolvedAttempts, acknowledgeUnknown };
+    return { ContinuousDeliveryController, POLICY, pause, maintainHistory, reserveEnrollmentAttempt, unresolvedAttempts, acknowledgeUnknown, safeReason };
 })();
 function continuousPermissionProof(state) {
     if (state.qqRevoked === true)
@@ -2328,7 +2328,12 @@ async function continuousRequest(actor, packet) {
         const job = envelope.payload.job;
         if (typeof job?.content !== 'string' || job.payloadHash !== await hash(job.content))
             throw Error('continuous_payload_digest_mismatch');
-        result = await ctl.prepare(job, envelope.payload.source);
+        try {
+            result = await ctl.prepare(job, envelope.payload.source);
+        }
+        catch (error) {
+            result = { state: 'suppressed', reason: 'preflight_not_sent', diagnostic: { stage: 'gateway_prepare', code: RivuleContinuous.safeReason(error) } };
+        }
     }
     else if (envelope.operation === 'commit') {
         if (!envelope.payload || Object.keys(envelope.payload).sort().join(',') !== 'intentId,permit,source')
