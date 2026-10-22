@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { ownerDashboardHtml, dashboardClient } from '../src/owner/presentation.mjs';
 
-function clientFixture(fetch, storage) {
+function clientFixture(fetch, storage, timers = {}) {
   class Element {
     constructor() { this.textContent = ''; this.hidden = false; this.children = []; this.listeners = {}; this.attributes = {}; this.classList = { toggle() {} }; }
     addEventListener(type, fn) { this.listeners[type] = fn; }
@@ -15,8 +15,8 @@ function clientFixture(fetch, storage) {
   const elements = new Map(), window = new Element(), document = new Element();
   document.getElementById = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   document.createElement = () => new Element(); document.body = new Element();
-  vm.runInNewContext('(' + dashboardClient.toString() + ')()', { document, window, fetch, Date, localStorage: storage });
-  return { get: document.getElementById, load: () => window.listeners.pageshow() };
+  vm.runInNewContext('(' + dashboardClient.toString() + ')()', { document, window, fetch, Date, localStorage: storage, AbortController, setTimeout, clearTimeout, ...timers });
+  return { get: document.getElementById, load: () => window.listeners.pageshow(), hide: () => window.listeners.pagehide() };
 }
 
 test('PA canvas has native auth forms, honest preview, accessible controls and reduced motion', () => {
@@ -135,4 +135,39 @@ test('status copy stays concise while retaining read-only scope', () => {
  const html=ownerDashboardHtml('nonce');
  assert.match(html,/只读：已选任务与连接状态/);
  assert.doesNotMatch(html,/非实时|未展示旧数据|不批准操作|不扩大权限/);
+});
+
+
+test('read deadline bounds headers and body, allows retry and ignores late responses', async () => {
+ for (const phase of ['headers', 'body']) {
+  const timers = new Map(); let timerId = 0, resolveOld, resolveNew, calls = 0, signal;
+  const stalled = new Promise(resolve => { resolveOld = resolve; });
+  const c = clientFixture((_, options) => {
+   calls++; signal = options.signal;
+   if (calls === 1) return phase === 'headers' ? stalled : Promise.resolve({status:200,ok:true,json:()=>stalled});
+   return new Promise(resolve => { resolveNew = resolve; });
+  }, undefined, {setTimeout(fn, ms) { assert.equal(ms,15000); timers.set(++timerId,fn); return timerId; },clearTimeout(id) { timers.delete(id); }});
+  const old = c.load(); await Promise.resolve(); await Promise.resolve();
+  const oldSignal = signal; [...timers.values()][0](); await old;
+  assert.equal(oldSignal.aborted,true); assert.equal(timers.size,0);
+  assert.equal(c.get('refresh').disabled,false); assert.match(c.get('status').textContent,/可重试/);
+  const next = c.load(); assert.equal(calls,2); assert.equal(c.get('refresh').disabled,true);
+  resolveOld(phase === 'headers' ? {status:401} : {items:[{task_name:'obsolete private data'}]});
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(c.get('refresh').disabled,true); assert.match(c.get('status').textContent,/正在读取/);
+  resolveNew({status:200,ok:true,json:async()=>({state:'ready',items:[{task_name:'current'}]})}); await next;
+  assert.equal(c.get('items').children[0].children[1].textContent,'current');
+  assert.equal(timers.size,0);
+ }
+});
+
+test('page departure cancels the old read without resetting the returning page request', async () => {
+ let calls=0,resolveOld,resolveNew,oldSignal;
+ const c=clientFixture((_,{signal})=>new Promise(resolve=>{if(++calls===1){resolveOld=resolve;oldSignal=signal;}else resolveNew=resolve;}));
+ const old=c.load(); c.hide(); const next=c.load(); await old;
+ assert.equal(oldSignal.aborted,true); assert.equal(calls,2); assert.equal(c.get('refresh').disabled,true);
+ resolveOld({status:401}); await Promise.resolve();
+ assert.match(c.get('status').textContent,/正在读取/);
+ resolveNew({status:200,ok:true,json:async()=>({state:'ready',items:[]})}); await next;
+ assert.equal(c.get('refresh').disabled,false);assert.equal(c.get('login').hidden,true);
 });

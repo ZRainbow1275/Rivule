@@ -767,16 +767,21 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
                 return false;
             }
             let receivedAt = this.now();
+            const superseded = [];
             // Merge only unsent ordinary progress from this exact source generation and branch.
             // Keep the oldest window start; updates cannot postpone the notification indefinitely.
             for (const prior of this.rows("SELECT * FROM qq_continuous_outbox WHERE status='queued' AND source_id=?", source.source_id)) {
                 const previous = JSON.parse(prior.payload);
                 if (prior.revision < row.revision && prior.receipt !== receiptId && prior.source_generation === proof.connection_generation && isRoutineProgress(previous) && sameNotificationBranch(previous, projected)) {
                     if (isRoutineProgress(projected)) receivedAt = Math.min(receivedAt, prior.recorded_at);
-                    this.rows("UPDATE qq_continuous_outbox SET status='coalesced',result=? WHERE receipt=? AND status='queued'", JSON.stringify({ state: 'coalesced', reason: 'newer_branch_update' }), prior.receipt);
+                    superseded.push(prior.receipt);
                 }
             }
-            this.rows("INSERT OR IGNORE INTO qq_continuous_outbox(receipt,source_id,source_generation,revision,payload,status,recorded_at) VALUES(?,?,?,?,?,'queued',?)", receiptId, source.source_id, proof.connection_generation, row.revision, JSON.stringify(projected), receivedAt);
+            // Admission failure must leave the previous queued notification deliverable.
+            // The duplicate check above runs in the same synchronous transaction.
+            this.rows("INSERT INTO qq_continuous_outbox(receipt,source_id,source_generation,revision,payload,status,recorded_at) VALUES(?,?,?,?,?,'queued',?)", receiptId, source.source_id, proof.connection_generation, row.revision, JSON.stringify(projected), receivedAt);
+            for (const receipt of superseded)
+                this.rows("UPDATE qq_continuous_outbox SET status='coalesced',result=? WHERE receipt=? AND status='queued'", JSON.stringify({ state: 'coalesced', reason: 'newer_branch_update' }), receipt);
             return true;
         }
         catch {

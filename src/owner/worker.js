@@ -26572,7 +26572,12 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,at REAL NO
                     await this.storage.deleteAlarm();
                     return;
                 }
-                await this.storage.setAlarm(Math.max(this.clock() + 1, at));
+                const scheduledAt = Math.max(this.clock() + 1, at);
+                const existing = await this.storage.getAlarm();
+                // Incoming events must not push a pending wake past QQ's rolling delay.
+                // A running alarm is consumed by the host, so the next wake retains its delay.
+                if (existing === null || existing > scheduledAt)
+                    await this.storage.setAlarm(scheduledAt);
             }
             enqueue(receipt, view, intent, payload, revision) {
                 if (!this.projectAllowed(payload.project_id))

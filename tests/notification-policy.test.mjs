@@ -144,3 +144,25 @@ test('QQ transport stays within 4000 UTF-16 units without trimming identity, act
   }
  }
 });
+
+test('failed QQ replacement admission preserves prior queued progress across committed outer transaction',()=>{
+ const db=new DatabaseSync(':memory:');
+ db.exec(`CREATE TABLE events(receipt TEXT PRIMARY KEY,revision INTEGER,source_id TEXT,payload TEXT,decision TEXT);CREATE TABLE qq_continuous_outbox(receipt TEXT PRIMARY KEY,source_id TEXT,source_generation INTEGER,revision INTEGER,payload TEXT,status TEXT,recorded_at INTEGER,result TEXT);CREATE TRIGGER reject_replacement BEFORE INSERT ON qq_continuous_outbox WHEN NEW.receipt='e2' BEGIN SELECT RAISE(ABORT,'fixture insert failure'); END;`);
+ const rows=(sql,...args)=>db.prepare(sql).all(...args), skips=[];
+ const queue=Object.create(QQBridgeQueue.prototype);
+ Object.assign(queue,{rows,now:()=>1000,sources:[{source_id:'a',enabled:true}],config:()=>({enabled:true,allowedProjects:['p']}),activation:()=>({active:true,expiresAt:1e9,startAfterRevision:0}),readAuthority:()=>({selectable:true,connection_generation:1}),retentionFloor:()=>0,capacityFloor:()=>0,recordAdmissionSkip:(_,id,reason)=>skips.push({id,reason})});
+ const events=[1,2].map(i=>({...event,event_id:'e'+i,sensitivity:'normal',occurred_at:new Date(0).toISOString()}));
+ for(const [i,e] of events.entries()) rows('INSERT INTO events VALUES(?,?,?,?,?)',e.event_id,i+1,'a',JSON.stringify(e),'applied');
+ assert.equal(queue.enqueue(events[0],'e1'),true);
+ db.exec('BEGIN'); assert.equal(queue.enqueue(events[1],'e2'),false); db.exec('COMMIT');
+ assert.equal(rows("SELECT status FROM qq_continuous_outbox WHERE receipt='e1'")[0].status,'queued');
+ assert.equal(rows("SELECT receipt FROM qq_continuous_outbox WHERE receipt='e2'").length,0);
+ assert.deepEqual(skips,[{id:'e2',reason:'admission_unavailable'}]);
+ db.exec('DROP TRIGGER reject_replacement');assert.equal(queue.enqueue(events[1],'e2'),true);
+ assert.equal(rows("SELECT status FROM qq_continuous_outbox WHERE receipt='e1'")[0].status,'coalesced');
+ assert.equal(rows("SELECT status FROM qq_continuous_outbox WHERE receipt='e2'")[0].status,'queued');
+ assert.equal(queue.enqueue(events[0],'e1'),true);assert.equal(queue.enqueue(events[1],'e2'),true);
+ assert.equal(rows("SELECT COUNT(*) n FROM qq_continuous_outbox WHERE status='queued'")[0].n,1);
+ assert.equal(rows("SELECT status FROM qq_continuous_outbox WHERE receipt='e2'")[0].status,'queued');
+ db.close();
+});

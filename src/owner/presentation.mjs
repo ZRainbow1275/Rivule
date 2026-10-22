@@ -27,7 +27,7 @@ export function dashboardClient(brandImages = {}) {
   const el = id => document.getElementById(id);
   const status = el('status'), items = el('items'), login = el('login'), controls = el('controls'), refresh = el('refresh');
   const labels = { available: '已读取', not_found: '未找到所选任务', withheld: '敏感内容未展示', unavailable: '读取失败' };
-  let loading = false, iconTarget = null, previewCount = 0;
+  let loading = false, iconTarget = null, previewCount = 0, requestId = 0, cancelRead = null;
   const appearanceKey = 'rivule.appearance.zot-main.v1';
   let appearance = {};
   function saveAppearance() { try { localStorage.setItem(appearanceKey, JSON.stringify(appearance)); } catch {} }
@@ -47,15 +47,24 @@ export function dashboardClient(brandImages = {}) {
     if (loading) return;
     loading = true; refresh.disabled = true; el('zot-card').setAttribute('data-state','unknown');
     status.textContent = '正在读取所选任务快照…';
+    const id = ++requestId, controller = new AbortController();
+    let timer;
+    const deadline = new Promise((_, reject) => {
+      cancelRead = () => { controller.abort(); reject(Error('interrupted')); };
+      timer = setTimeout(cancelRead, 15000);
+    });
     try {
-      const response = await fetch('/dashboard/data', { credentials: 'same-origin', cache: 'no-store', redirect: 'error' });
+      const response = await Promise.race([fetch('/dashboard/data', { credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal }), deadline]);
+      if (id !== requestId) return;
       if (response.status === 401) {
         login.hidden = false; controls.hidden = true; items.replaceChildren(); el('item-count').textContent = '—'; el('read-time').textContent = '尚未读取';
         el('qq-channel').textContent = '尚未读取'; el('connection').textContent = '等待本人验证'; el('zot-card').setAttribute('data-state','disconnected'); status.textContent = '等待本人验证';
         empty('验证本人后显示任务'); return;
       }
       if (!response.ok) throw Error('unavailable');
-      const data = await response.json(); if (!Array.isArray(data.items)) throw Error('invalid');
+      const data = await Promise.race([response.json(), deadline]);
+      if (id !== requestId) return;
+      if (!Array.isArray(data.items)) throw Error('invalid');
       login.hidden = true; controls.hidden = false; items.replaceChildren();
       const proof = data.connection?.source;
       const proofAge = Date.parse(data.connection?.observed_at) - Date.parse(proof?.last_verified_at);
@@ -78,14 +87,21 @@ export function dashboardClient(brandImages = {}) {
         card.append(tag, title, summary, detail); items.append(card);
       }
     } catch {
+      if (id !== requestId) return;
       el('qq-channel').textContent = '状态待确认'; el('zot-card').setAttribute('data-state','warning'); el('connection').textContent = '读取中断 · 可重试'; status.textContent = '读取失败 · 可重试';
       items.replaceChildren(); el('item-count').textContent = '—'; el('read-time').textContent = '本次读取失败';
       empty('读取失败，请重试。');
       // A retry remains available even if the very first status request failed.
       controls.hidden = false;
-    } finally { loading = false; refresh.disabled = false; }
+    } finally {
+      clearTimeout(timer);
+      if (id === requestId) { loading = false; refresh.disabled = false; cancelRead = null; }
+    }
   }
   refresh.addEventListener('click', load); window.addEventListener('pageshow', load);
+  window.addEventListener('pagehide', () => {
+    ++requestId; cancelRead?.(); cancelRead = null; loading = false; refresh.disabled = false;
+  });
   const toggle = el('settings-toggle'), settings = el('settings');
   function closeSettings() { settings.hidden = true; toggle.setAttribute('aria-expanded', 'false'); toggle.focus(); }
   toggle.addEventListener('click', () => { settings.hidden = !settings.hidden; toggle.setAttribute('aria-expanded', String(!settings.hidden)); if (!settings.hidden) el('settings-close').focus(); });
