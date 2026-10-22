@@ -49,7 +49,7 @@ test('successful snapshot uses text content, not markup, and marks verified test
   const nodes = c.get('items').children[0].children;
   assert.match(nodes[0].textContent, /测试任务/); assert.equal(nodes[1].textContent, '<img src=x onerror=alert(1)>');
   assert.equal(nodes[2].textContent, '<script>bad()</script>'); assert.match(nodes[3].textContent, /待决定：0/);
-  assert.match(c.get('status').textContent, /非实时/);
+  assert.equal(c.get('status').textContent, '快照已更新');
 });
 
 test('initial failure preserves retry and never displays stale snapshots', async () => {
@@ -58,7 +58,8 @@ test('initial failure preserves retry and never displays stale snapshots', async
   assert.equal(c.get('controls').hidden, false); assert.equal(c.get('refresh').disabled, false);
   assert.equal(c.get('read-time').textContent, '本次读取失败');
   assert.doesNotMatch(c.get('status').textContent, /private/);
-  assert.match(c.get('items').children[0].textContent, /未展示旧数据/);
+  assert.equal(c.get('items').children[0].textContent, '读取失败，请重试。');
+  assert.doesNotMatch(JSON.stringify(c.get('items').children), /old-private-snapshot/);
 });
 
 test('repeat refresh is deduplicated while current read is pending', async () => {
@@ -100,7 +101,7 @@ test('connection coloring requires a valid readable snapshot, not owner login', 
 
 test('appearance storage is bounded and never stores task data or changes source identity', () => {
  const writes=[];const storage={getItem:()=>JSON.stringify({name:'小助理',icon:'★',token:'discard',items:['discard']}),setItem:(k,v)=>writes.push([k,JSON.parse(v)])};
- const c=clientFixture(()=>{},storage);assert.equal(c.get('zot-name').textContent,'小助理');assert.equal(c.get('zot-emblem').textContent,'★');
+ const c=clientFixture(()=>{},storage);assert.equal(c.get('zot-name').textContent,'小助理');assert.equal(c.get('zot-emblem').textContent,'★');assert.equal(c.get('zot-emblem').attributes['aria-label'],'编辑 小助理 图标');
  c.get('name-dialog').close=()=>{};c.get('display-name').value='新名字';c.get('name-form').listeners.submit({preventDefault(){}});
  assert.deepEqual(writes,[['rivule.appearance.zot-main.v1',{name:'新名字',icon:'★'}]]);
  const broken=clientFixture(()=>{},{getItem(){throw Error('blocked')},setItem(){throw Error('blocked')}});
@@ -128,4 +129,10 @@ test('malformed and oversized appearance state is ignored; HTML-like names remai
 test('connection freshness expires at the exact server boundary', async () => {
  const c=clientFixture(async()=>({status:200,ok:true,json:async()=>({items:[],connection:{observed_at:'2026-10-22T15:00:00Z',source:{status:'verified',evidence_kind:'read_probe',last_verified_at:'2026-10-21T15:00:00Z',proof_max_age_ms:86400000}}})}));
  await c.load();assert.equal(c.get('zot-card').attributes['data-state'],'unknown');
+});
+
+test('status copy stays concise while retaining read-only scope', () => {
+ const html=ownerDashboardHtml('nonce');
+ assert.match(html,/只读：已选任务与连接状态/);
+ assert.doesNotMatch(html,/非实时|未展示旧数据|不批准操作|不扩大权限/);
 });
