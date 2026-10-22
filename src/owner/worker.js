@@ -1,4 +1,5 @@
 // Rivule — AGPL-3.0. Third-party notices: ../../third-party-licenses/
+import { readDashboardTestReceipt } from "./dashboard-receipt.mjs";
 import { dashboardResponse, isDashboardRoute } from "./dashboard.mjs";
 import { QQBridgeQueue, qqInteractionResponse } from "./qq-integration.mjs";
 var __create = Object.create;
@@ -28197,6 +28198,7 @@ var OwnerTerminal = class extends DurableObject {
                     authorizationUrl: state => createDiscordIdentity(this.env, { bindings }).authorizationUrl(state),
                     authenticate: code => createDiscordIdentity(this.env, { bindings }).authenticate(code)
                 },
+                readTestReceipt: (source, selector) => readDashboardTestReceipt(this.ctx.storage, bindings, source, selector),
                 readSnapshot: (source, query) => readTaskSnapshot(this.ctx.storage, bindings, source, query)
             });
         }

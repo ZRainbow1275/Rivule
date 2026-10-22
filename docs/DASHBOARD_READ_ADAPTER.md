@@ -40,3 +40,9 @@ Connected means the selected snapshots were read, not a live subscription. Indiv
 Run `npm run check` and `npm test`. Offline tests cover state replay/concurrency, wrong-owner and expired login, cookie binding, session expiry, same-origin restrictions, configuration revocation, storage bounds, private reads, callback isolation and markup safety. These use fixtures; they do not prove the first live Discord login or browser redirect behavior.
 
 After deployment, verify the configured origin's `/dashboard`, unauthenticated `/dashboard/data` rejection, then owner login, selected-task reads and logout in the browser. Do not send a task notification as a dashboard test. Disable `DASHBOARD_ENABLED` to close the new access path; existing source MCP OAuth behavior remains unchanged.
+
+### Existing verified test receipt
+
+An optional private `DASHBOARD_TEST_RECEIPT_JSON` selects one already-known test receipt without enumerating tasks. Its exact object contains `receipt_id`, `event_id`, `run_id` and positive integer `revision`; unset or `null` disables it. Keep real values out of the repository. Selection plus explicit tuples must fit the 20-item limit.
+
+After owner session and same-origin checks, the resolver reads only that unique receipt under enabled `zot-main`, verifies persisted owner identity, expected event/run/revision, payload source, canonical branch key and existing project allowlist, and returns only four branch identifiers to the existing snapshot reader. A missing or inconsistent receipt is an explicit read error. The selector is part of session configuration binding. No new public resolver API, source permission, event or notification is created. Receipt-selected entries are labeled “测试任务”; their snapshots are not evidence of current project activity.

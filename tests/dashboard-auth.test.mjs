@@ -93,3 +93,13 @@ test('watchlist/source changes revoke sessions; invalid or disallowed config fai
  const f=fixture(),s=await f.complete();change(f);assert.equal((await f.send('/dashboard/data','GET',s.cookie,{'sec-fetch-site':'same-origin'})).status,401);assert.equal(f.reads,0);}
  for(const list of ['bad',JSON.stringify([{...query,project_id:'other'}]),JSON.stringify([query,query])]){const f=fixture();f.ctx.env.DASHBOARD_WATCHLIST_JSON=list;assert.equal((await f.send('/dashboard')).status,503);assert.equal(f.reads,0);}
 });
+test('receipt selection resolves only after owner auth, labels test data, and config revokes session',async()=>{
+ const f=fixture(),selector={receipt_id:'rcpt_'+'b'.repeat(32),event_id:'test-event',run_id:query.run_id,revision:12};let resolves=0;
+ f.ctx.env.DASHBOARD_TEST_RECEIPT_JSON=JSON.stringify(selector);f.ctx.env.DASHBOARD_WATCHLIST_JSON='[]';
+ f.ctx.readTestReceipt=async(source,s)=>{resolves++;assert.equal(source.source_id,'zot-main');assert.deepEqual(s,selector);return {...query};};
+ assert.equal((await f.send('/dashboard/data','GET','',{'sec-fetch-site':'same-origin'})).status,401);assert.equal(resolves,0);
+ const session=await f.complete();assert.equal(resolves,0);
+ const response=await f.send('/dashboard/data','GET',session.cookie,{'sec-fetch-site':'same-origin'});assert.equal(response.status,200);assert.equal((await response.json()).items[0].selection_kind,'verified_test');assert.equal(resolves,1);
+ f.ctx.readTestReceipt=async()=>{throw Error('private payload must not escape');};const failure=await f.send('/dashboard/data','GET',session.cookie,{'sec-fetch-site':'same-origin'});assert.equal(failure.status,503);assert.equal(await failure.text(),JSON.stringify({error:'dashboard_receipt_unavailable'}));
+ f.ctx.env.DASHBOARD_TEST_RECEIPT_JSON=JSON.stringify({...selector,revision:13});assert.equal((await f.send('/dashboard/data','GET',session.cookie,{'sec-fetch-site':'same-origin'})).status,401);
+});

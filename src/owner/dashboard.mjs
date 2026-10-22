@@ -1,4 +1,5 @@
 import { readDashboardWatchlist } from './dashboard-read-model.mjs';
+import { validateDashboardTestReceipt } from './dashboard-receipt.mjs';
 const LOGIN_TTL = 5 * 60_000, SESSION_TTL = 15 * 60_000;
 const LOGIN_COOKIE = '__Host-rivule-dashboard-login', SESSION_COOKIE = '__Host-rivule-dashboard-session';
 const fields = ['project_id', 'task_id', 'run_id', 'branch_id'];
@@ -28,7 +29,9 @@ function configuration(env, bindings) {
       !bindings.allowedProjectIds.includes(q.project_id))) throw Error('dashboard_configuration_unavailable');
   if (new Set(watchlist.map(q => JSON.stringify(fields.map(key => q[key])))).size !== watchlist.length)
     throw Error('dashboard_configuration_unavailable');
-  return { source: selected, watchlist };
+  const testReceipt = validateDashboardTestReceipt(JSON.parse(env.DASHBOARD_TEST_RECEIPT_JSON || 'null'));
+  if (testReceipt && watchlist.length >= 20) throw Error('dashboard_configuration_unavailable');
+  return { source: selected, watchlist, testReceipt };
 }
 export function isDashboardRoute(url) {
   return url.pathname === '/dashboard' || url.pathname.startsWith('/dashboard/') ||
@@ -44,7 +47,7 @@ function page() {
 <script nonce="${nonce}">
 const status=document.getElementById('status'),items=document.getElementById('items'),login=document.getElementById('login'),controls=document.getElementById('controls'),refresh=document.getElementById('refresh');
 const labels={available:'已读取',not_found:'未找到所选任务',withheld:'敏感内容未展示',unavailable:'读取失败'};
-async function load(){refresh.disabled=true;items.replaceChildren();status.textContent='正在读取所选任务快照…';try{const response=await fetch('/dashboard/data',{credentials:'same-origin',cache:'no-store',redirect:'error'});if(response.status===401){login.hidden=false;controls.hidden=true;status.textContent='尚未登录或会话已过期。请验证本人身份。';return;}if(!response.ok)throw Error();const data=await response.json();login.hidden=true;controls.hidden=false;status.textContent=data.state==='error'?'部分或全部任务读取失败；不能视为没有任务。':data.items.length?'已读取所选任务快照，不是实时订阅。':'尚未配置要展示的任务，没有加载演示数据。';for(const item of data.items){const card=document.createElement('article'),title=document.createElement('h2'),summary=document.createElement('p'),detail=document.createElement('small');title.textContent=item.task_name||labels[item.state]||'任务状态未知';summary.textContent=item.summary||labels[item.state]||'';detail.textContent=[item.project_name,item.source_status,item.stale?'状态可能已过期':'',item.archived?'已归档':'',item.last_confirmed_at?'来源最后确认：'+item.last_confirmed_at:'',item.observed_at?'读取时间：'+item.observed_at:'',Number.isInteger(item.pending_action_count)?'待决定：'+item.pending_action_count:''].filter(Boolean).join(' · ');card.append(title,summary,detail);items.append(card);}}catch{status.textContent='读取失败，无法确认当前任务状态。请稍后重试。';}finally{refresh.disabled=false;}}
+async function load(){refresh.disabled=true;items.replaceChildren();status.textContent='正在读取所选任务快照…';try{const response=await fetch('/dashboard/data',{credentials:'same-origin',cache:'no-store',redirect:'error'});if(response.status===401){login.hidden=false;controls.hidden=true;status.textContent='尚未登录或会话已过期。请验证本人身份。';return;}if(!response.ok)throw Error();const data=await response.json();login.hidden=true;controls.hidden=false;status.textContent=data.state==='error'?'部分或全部任务读取失败；不能视为没有任务。':data.items.length?'已读取所选任务快照，不是实时订阅。':'尚未配置要展示的任务，没有加载演示数据。';for(const item of data.items){const card=document.createElement('article'),title=document.createElement('h2'),summary=document.createElement('p'),detail=document.createElement('small');title.textContent=(item.selection_kind==='verified_test'?'测试任务 · ':'')+(item.task_name||labels[item.state]||'任务状态未知');summary.textContent=item.summary||labels[item.state]||'';detail.textContent=[item.project_name,item.source_status,item.stale?'状态可能已过期':'',item.archived?'已归档':'',item.last_confirmed_at?'来源最后确认：'+item.last_confirmed_at:'',item.observed_at?'读取时间：'+item.observed_at:'',Number.isInteger(item.pending_action_count)?'待决定：'+item.pending_action_count:''].filter(Boolean).join(' · ');card.append(title,summary,detail);items.append(card);}}catch{status.textContent='读取失败，无法确认当前任务状态。请稍后重试。';}finally{refresh.disabled=false;}}
 refresh.addEventListener('click',load);window.addEventListener('pageshow',load);
 </script></html>`;
   const h = headers('text/html; charset=utf-8');
@@ -52,7 +55,7 @@ refresh.addEventListener('click',load);window.addEventListener('pageshow',load);
   return new Response(body, { headers: h });
 }
 /** Called only by the owner Durable Object's internal dashboard route. */
-export async function dashboardResponse(request, { env, bindings, storage, identity, readSnapshot, now = Date.now }) {
+export async function dashboardResponse(request, { env, bindings, storage, identity, readSnapshot, readTestReceipt, now = Date.now }) {
   const url = new URL(request.url);
   if (url.origin !== 'https://owner.internal' || !isDashboardRoute(url)) return json('internal_route_required', 403);
   let config;
@@ -61,7 +64,7 @@ export async function dashboardResponse(request, { env, bindings, storage, ident
   if (url.hash || url.pathname !== '/callback' && url.search) return json('invalid_dashboard_request', 400);
   const sameOrigin = request.headers.get('origin') === bindings.publicOrigin;
   if (request.method === 'POST' && !sameOrigin) return json('origin_not_accepted', 403);
-  const binding = await digest(JSON.stringify([bindings.ownerId, bindings.appId, bindings.userId, bindings.publicOrigin, config.source, config.watchlist]));
+  const binding = await digest(JSON.stringify([bindings.ownerId, bindings.appId, bindings.userId, bindings.publicOrigin, config.source, config.watchlist, config.testReceipt]));
   if (url.pathname === '/dashboard' && request.method === 'GET') return page();
   if (url.pathname === '/dashboard/login' && request.method === 'POST') {
     const state = 'rd_' + random(), browser = random(), key = 'dashboard:login:' + await digest(state);
@@ -126,6 +129,14 @@ export async function dashboardResponse(request, { env, bindings, storage, ident
     await storage.delete(sessionKey);const h = headers();h.set('location', '/dashboard');h.append('set-cookie', cookie(SESSION_COOKIE, '', 0, 'Strict'));
     return new Response(null, { status: 303, headers: h });
   }
-  const model = await readDashboardWatchlist({ sourceId: 'zot-main', watchlist: config.watchlist, readSnapshot: query => readSnapshot(config.source, query) });
+  let selectedTest = null;
+  const watchlist = [...config.watchlist];
+  if (config.testReceipt) {
+    try { selectedTest = await readTestReceipt(config.source, config.testReceipt); } catch { return json('dashboard_receipt_unavailable', 503); }
+    if (!selectedTest || fields.some(k => !validId(selectedTest[k])) || !bindings.allowedProjectIds.includes(selectedTest.project_id)) return json('dashboard_receipt_unavailable', 503);
+    if (!watchlist.some(q => fields.every(k => q[k] === selectedTest[k]))) watchlist.push(selectedTest);
+  }
+  const model = await readDashboardWatchlist({ sourceId: 'zot-main', watchlist, readSnapshot: query => readSnapshot(config.source, query) });
+  if (selectedTest) for (const item of model.items) if (fields.every(k => item[k] === selectedTest[k])) item.selection_kind = 'verified_test';
   return new Response(JSON.stringify(model), { headers: headers() });
 }
