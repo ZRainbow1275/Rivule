@@ -8,6 +8,7 @@
   "scripts": {
     "resources": "node scripts/install-font.mjs",
     "build": "node scripts/build.mjs",
+    "build:showcase": "node scripts/build-showcase.mjs",
     "check": "node scripts/check.mjs",
     "test": "node --test tests/*.test.mjs"
   },
