@@ -1,41 +1,42 @@
-# Private dashboard read adapter
+# Owner-only read dashboard
 
-Status: server-side integration code, not a deployed dashboard. The public showcase remains fictional and disconnected.
+Status: implemented on the existing owner Worker, disabled by default. Deployment and first owner login must be verified separately. The public showcase remains fictional and disconnected.
 
-`src/dashboard/read-model.mjs` consumes the existing `get_task_snapshot` response contract. It accepts only the existing `zot-main` source and an explicit watchlist of at most 20 exact `{ project_id, task_id, run_id, branch_id }` records. No task discovery, other-source access, notifications, approval actions, sequence assignment, retries or subscriptions are added.
+## Existing backend and login boundary
 
-## Existing backend boundary
+The owner Worker serves `/dashboard`, `/dashboard/login`, `/dashboard/data` and `/dashboard/logout`. It reuses the existing Discord application and `identify`-only identity verifier. The configured application and exact `OWNER_DISCORD_ID` must match. No assistant OAuth token is copied into the browser and no additional source grant is issued.
 
-- MCP `get_task_snapshot` uses `pa:receipt` and an already authenticated source principal.
-- HMAC `POST /v1/task/snapshot` also authenticates the source before reading the exact branch.
-- The owner implementation `taskSnapshot(principal, query)` revalidates the principal/source and project allowlist. The adapter does not replace these checks.
-- Neither route establishes a browser-owner session. No authenticated browser dashboard route currently exists.
+The registered redirect remains `PUBLIC_ORIGIN + /callback`. Dashboard transactions use a separate `rd_` state namespace; all other callback states retain the existing MCP OAuth flow. Namespaced failures never fall back into the MCP grant handler. No extra Discord callback registration is needed when the existing callback is correctly registered.
 
-## Host injection
+Login is initiated by a same-origin POST, with a five-minute random state and separate HttpOnly/Secure browser-binding cookie. The hashed state record is atomically consumed before exchanging the code. Successful owner verification creates a 15-minute non-refreshing HttpOnly/Secure/SameSite=Strict session cookie. Only token hashes are stored in the existing owner Durable Object. Login requests, pending transactions and active sessions are bounded. Logout revokes the session; owner/source/watchlist configuration changes invalidate it. No new signing secret or external credential is required.
 
-An owner-authenticated server host can call:
+The page uses a nonce CSP, no external assets, textContent rendering and no-store responses. `/dashboard/data` additionally requires same-origin Fetch Metadata. No CORS access is granted. Dashboard routes bypass legacy task/delivery initialization and connection-diagnostic writes.
 
-```js
-const model = await readDashboardWatchlist({
-  sourceId: 'zot-main',
-  watchlist: privateServerConfiguration.watchlist,
-  readSnapshot: query => existingAuthenticatedSnapshotReader(query),
-});
-const view = dashboardViewState(model);
+## Private configuration
+
+Keep public templates disabled:
+
+```json
+{"DASHBOARD_ENABLED":"false","DASHBOARD_WATCHLIST_JSON":"[]"}
 ```
 
-`existingAuthenticatedSnapshotReader` must return the decoded snapshot object from the existing authorized backend. Inside the owner integration, use the existing principal-bound `taskSnapshot` flow and existing result/error unwrapping. Do not synthesize a principal, broaden scopes, or pass a browser-supplied source identity. Store the selected task identifiers on the private server, not in this repository or the showcase bundle.
+After authorizing the owner-browser access path, configure the existing private owner deployment:
 
-Before returning any model, the host must independently authenticate the visitor as the owner, enforce owner-only access, and return `Cache-Control: no-store`. Render returned text using textContent, not HTML. Never expose OAuth/HMAC credentials to the browser. Hosting a private static Site alone does not establish the backend authorization or grant it access to the assistant's connector.
+- `DASHBOARD_ENABLED`: `true` to enable; `false` disables all dashboard routes and dashboard callback handling.
+- `DASHBOARD_WATCHLIST_JSON`: a JSON array of at most 20 exact `{ project_id, task_id, run_id, branch_id }` tuples. Keep actual identifiers private. Projects must already be allowed. Only configured, enabled `zot-main` is supported.
 
-## Display semantics
+An empty watchlist is valid and shows an explicit unconfigured-task state, not demo rows. Do not guess identifiers or discover other sources. The UI does not accept arbitrary task IDs from URL parameters.
 
-`dashboardViewState(null)` means unconfigured and returns no rows. Connected means the selected snapshots were read, not a live subscription. A read failure is explicit and must not become an empty-success view or demo data. Individual rows distinguish unavailable, not found and withheld; stale/archive flags are preserved. Restricted/secret payloads are withheld. Action questions, raw errors and sequence advice are never forwarded.
+Build with the existing owner build workflow. `scripts/build.mjs` copies the dashboard and read-model modules into `dist/owner`, inside the existing Wrangler `base_dir`. Deploy only to the existing authorized owner service with its retained bindings/secrets; do not deploy the example configuration over production. The QQ gateway does not need a dashboard change.
 
-## Required decision before wiring a live page
+## Read contract and display
 
-Choose an owner-authenticated backend host/bridge that can invoke the existing source-bound reader without transferring assistant credentials, and supply the exact private watchlist. If a new browser login, service binding, credential or access grant is needed, obtain the required approval first. No new endpoint or grant is created by this adapter.
+`src/owner/dashboard-read-model.mjs` consumes the existing snapshot contract and exact source/project allowlist. The owner-authenticated route calls the existing storage reader directly with the configured source; it does not fabricate a source OAuth principal. Normal task content only is shown. Restricted/secret content, action questions, raw errors and sequence advice are withheld.
 
-A Rivule Sites publication is a separate operation: inspect/persist its own Site identity, prepare/push its source, save the exact version and deploy privately. Any source-write credential approval must name Rivule; approval for other projects does not cover it. A published static showcase still does not make this adapter live.
+Connected means the selected snapshots were read, not a live subscription. Individual rows distinguish unavailable, not found and withheld; stale/archive flags and source observation times are preserved. Read failures never become empty-success views. There are no notification, approval, scheduling or write controls.
 
-Run `npm test` for offline contract and presentation-state tests. These use fixtures, not production task data, and do not prove browser authentication or live integration.
+## Validation and rollback
+
+Run `npm run check` and `npm test`. Offline tests cover state replay/concurrency, wrong-owner and expired login, cookie binding, session expiry, same-origin restrictions, configuration revocation, storage bounds, private reads, callback isolation and markup safety. These use fixtures; they do not prove the first live Discord login or browser redirect behavior.
+
+After deployment, verify the configured origin's `/dashboard`, unauthenticated `/dashboard/data` rejection, then owner login, selected-task reads and logout in the browser. Do not send a task notification as a dashboard test. Disable `DASHBOARD_ENABLED` to close the new access path; existing source MCP OAuth behavior remains unchanged.

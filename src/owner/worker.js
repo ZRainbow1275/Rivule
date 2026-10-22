@@ -1,4 +1,5 @@
 // Rivule — AGPL-3.0. Third-party notices: ../../third-party-licenses/
+import { dashboardResponse, isDashboardRoute } from "./dashboard.mjs";
 import { QQBridgeQueue, qqInteractionResponse } from "./qq-integration.mjs";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -8711,6 +8712,10 @@ async function taskSnapshotOwnerRequest(request, env, storage) {
     }
 }
 async function suppressTaskSnapshotTrace(request, trace) {
+    if (isDashboardRoute(new URL(request.url))) {
+        trace.skip();
+        return;
+    }
     const path = new URL(request.url).pathname;
     if (path === "/v1/task/snapshot" || path === "/v1/muse/receipt") {
         trace.skip();
@@ -25336,6 +25341,10 @@ async function gatewayCore(request, env, ctx, trace) {
         const b = loadBindings(env), url = new URL(request.url);
         if (url.origin !== b.publicOrigin)
             throw new Rejected("origin_not_accepted", 403);
+        if (isDashboardRoute(url)) {
+            const internal = new Request("https://owner.internal" + url.pathname + url.search, request);
+            return getOwner(env).fetch(internal);
+        }
         if (url.pathname === "/healthz")
             return jsonResponse({ status: "configured_candidate", delivery_enabled: env.DELIVERY_ENABLED === "true", oauth_configured: env.OAUTH_ENABLED === "true", pa_connectivity: "not_claimed", real_deployment_acceptance: "pending" });
         if (url.pathname === "/discord/interactions")
@@ -28180,6 +28189,17 @@ var OwnerTerminal = class extends DurableObject {
         return this.initialized;
     }
     async fetch(request) {
+        if (isDashboardRoute(new URL(request.url))) {
+            const bindings = loadBindings(this.env);
+            return dashboardResponse(request, {
+                env: this.env, bindings, storage: this.ctx.storage,
+                identity: {
+                    authorizationUrl: state => createDiscordIdentity(this.env, { bindings }).authorizationUrl(state),
+                    authenticate: code => createDiscordIdentity(this.env, { bindings }).authenticate(code)
+                },
+                readSnapshot: (source, query) => readTaskSnapshot(this.ctx.storage, bindings, source, query)
+            });
+        }
         if (new URL(request.url).pathname === "/v1/task/snapshot")
             return taskSnapshotOwnerRequest(request, this.env, this.ctx.storage);
         if (new URL(request.url).pathname === "/v1/muse/receipt")

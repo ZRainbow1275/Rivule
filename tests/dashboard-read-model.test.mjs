@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readDashboardWatchlist, dashboardViewState } from '../src/dashboard/read-model.mjs';
+import { readDashboardWatchlist, dashboardViewState } from '../src/owner/dashboard-read-model.mjs';
 const query = { project_id: 'project', task_id: 'task', run_id: 'run', branch_id: 'main' };
 const response = () => ({ schema_version: '1.0', source_id: 'zot-main', ...query,
   observed_at: '2026-10-22T10:00:00Z', found: true, sequence: { next_seq: 45 },

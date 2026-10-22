@@ -11,6 +11,6 @@ const wasm=require.resolve('@resvg/resvg-wasm/index_bg.wasm');
 verify(font,plan.output_sha256,'Noto font');
 verify(wasm,'22bf6e9f9a100d972da0411a69c5ba504367fc1fa87b3b64e3f35e53926d2d70','resvg WASM');
 for(const worker of ['owner','gateway'])mkdirSync(root+'dist/'+worker,{recursive:true});
-for(const file of ['owner/worker.js','owner/qq-integration.mjs','gateway/worker.mjs'])copyFileSync(root+'src/'+file,root+'dist/'+file);
+for(const file of ['owner/worker.js','owner/qq-integration.mjs','owner/dashboard.mjs','owner/dashboard-read-model.mjs','gateway/worker.mjs'])copyFileSync(root+'src/'+file,root+'dist/'+file);
 copyFileSync(font,root+'dist/owner/font.otf');copyFileSync(wasm,root+'dist/owner/renderer.wasm');
 console.log('Built owner and gateway modules in dist/.');
