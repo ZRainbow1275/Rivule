@@ -33,6 +33,8 @@ node scripts/install-font.mjs
 node scripts/build.mjs
 ```
 
+本地检查运行 `npm run check`；离线行为回归运行 `npm test`。当前回归直接加载现行源码，覆盖未知发送结果不自动重试、运行预算默认仅提醒，以及展示页来源筛选。测试不启动 Worker、不联网、不发送通知；不能代替生产实收或浏览器视觉验收。
+
 依赖与字体安装需要网络。构建在 `dist/owner` 和 `dist/gateway` 生成部署模块，不会发布服务或发送通知。接着按[部署指南](docs/OPERATIONS.md)配置自己的账户、来源与目标。
 
 - owner 源码：`src/owner/worker.js`、`src/owner/qq-integration.mjs`
