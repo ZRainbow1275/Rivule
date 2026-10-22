@@ -103,3 +103,16 @@ test('receipt selection resolves only after owner auth, labels test data, and co
  f.ctx.readTestReceipt=async()=>{throw Error('private payload must not escape');};const failure=await f.send('/dashboard/data','GET',session.cookie,{'sec-fetch-site':'same-origin'});assert.equal(failure.status,503);assert.equal(await failure.text(),JSON.stringify({error:'dashboard_receipt_unavailable'}));
  f.ctx.env.DASHBOARD_TEST_RECEIPT_JSON=JSON.stringify({...selector,revision:13});assert.equal((await f.send('/dashboard/data','GET',session.cookie,{'sec-fetch-site':'same-origin'})).status,401);
 });
+test('HTML preserves native same-origin form Origin without relaxing POST CSRF guards',async()=>{
+ const f=fixture(),page=await f.send('/dashboard');
+ assert.equal(page.headers.get('referrer-policy'),'same-origin');
+ assert.match(await page.text(),/method="post" action="\/dashboard\/login"/);
+ for(const origin of ['null','https://evil.test','https://rivule.example.test.evil.test','']) {
+   const response=await f.send('/dashboard/login','POST','',{origin});assert.equal(response.status,403);
+   assert.equal(response.headers.get('referrer-policy'),'no-referrer');
+ }
+ assert.equal(f.data.size,0);assert.equal(f.exchanges,0);
+ const login=await f.send('/dashboard/login','POST');assert.equal(login.status,303);
+ assert.equal(login.headers.get('referrer-policy'),'no-referrer');
+ assert.equal(new URL(login.headers.get('location')).origin,'https://discord.com');
+});

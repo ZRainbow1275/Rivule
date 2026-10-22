@@ -51,6 +51,9 @@ async function load(){refresh.disabled=true;items.replaceChildren();status.textC
 refresh.addEventListener('click',load);window.addEventListener('pageshow',load);
 </script></html>`;
   const h = headers('text/html; charset=utf-8');
+  // Native same-origin form POSTs need a non-null Origin; no-referrer suppresses it.
+  // External navigations still receive no Referer under same-origin policy.
+  h.set('referrer-policy', 'same-origin');
   h.set('content-security-policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://discord.com/oauth2/authorize`);
   return new Response(body, { headers: h });
 }
