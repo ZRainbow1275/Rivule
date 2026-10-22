@@ -49,7 +49,7 @@ function page() {
   return new Response(body, { headers: h });
 }
 /** Called only by the owner Durable Object's internal dashboard route. */
-export async function dashboardResponse(request, { env, bindings, storage, identity, readSnapshot, readTestReceipt, now = Date.now }) {
+export async function dashboardResponse(request, { env, bindings, storage, identity, readSnapshot, readTestReceipt, readConnection, now = Date.now }) {
   const url = new URL(request.url);
   if (url.origin !== 'https://owner.internal' || !isDashboardRoute(url)) return json('internal_route_required', 403);
   let config;
@@ -132,5 +132,9 @@ export async function dashboardResponse(request, { env, bindings, storage, ident
   }
   const model = await readDashboardWatchlist({ sourceId: 'zot-main', watchlist, readSnapshot: query => readSnapshot(config.source, query) });
   if (selectedTest) for (const item of model.items) if (fields.every(k => item[k] === selectedTest[k])) item.selection_kind = 'verified_test';
+  if (readConnection) {
+    try { model.connection = await readConnection(config.source); }
+    catch { model.connection = { source: { status: 'unknown', evidence_kind: null, last_verified_at: null, proof_max_age_ms: 86400000 }, qq: { status: 'unknown', reason: 'state_unavailable', scope: 'owner_producer_only' }, observed_at: new Date(now()).toISOString() }; }
+  }
   return new Response(JSON.stringify(model), { headers: headers() });
 }

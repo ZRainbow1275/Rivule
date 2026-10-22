@@ -624,6 +624,10 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
     migrateAdmissionReason() { if (!this.rows('PRAGMA table_info(qq_continuous_skips)').some(c => c.name === 'reason'))
         this.rows("ALTER TABLE qq_continuous_skips ADD COLUMN reason TEXT NOT NULL DEFAULT 'queue_capacity'"); }
     static skipReceipt(storage, sourceId, receiptId) { return qqSkipReceipt(storage, sourceId, receiptId); }
+    static producerSnapshot(storage, now = Date.now()) {
+        const rows = (q, ...a) => storage.sql.exec(q, ...a).toArray();
+        return rows("SELECT name FROM sqlite_master WHERE type='table' AND name='qq_continuous_meta'").length ? qqProducerView(rows, now) : { active: false, reason: 'not_activated', diagnostic: null };
+    }
     static statusSnapshot(storage, sources, now = Date.now()) {
         const rows = (q, ...a) => storage.sql.exec(q, ...a).toArray();
         const capacity = QQBridgeQueue.capacityStatus(storage, sources);

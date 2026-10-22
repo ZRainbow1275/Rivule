@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { ownerDashboardHtml, dashboardClient } from '../src/owner/presentation.mjs';
 
-function clientFixture(fetch) {
+function clientFixture(fetch, storage) {
   class Element {
     constructor() { this.textContent = ''; this.hidden = false; this.children = []; this.listeners = {}; this.attributes = {}; this.classList = { toggle() {} }; }
     addEventListener(type, fn) { this.listeners[type] = fn; }
@@ -15,7 +15,7 @@ function clientFixture(fetch) {
   const elements = new Map(), window = new Element(), document = new Element();
   document.getElementById = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   document.createElement = () => new Element(); document.body = new Element();
-  vm.runInNewContext('(' + dashboardClient.toString() + ')()', { document, window, fetch, Date });
+  vm.runInNewContext('(' + dashboardClient.toString() + ')()', { document, window, fetch, Date, localStorage: storage });
   return { get: document.getElementById, load: () => window.listeners.pageshow() };
 }
 
@@ -26,8 +26,8 @@ test('PA canvas has native auth forms, honest preview, accessible controls and r
   assert.match(html, /method="post" action="\/dashboard\/logout"/);
   assert.match(html, /prefers-reduced-motion:reduce/); assert.match(html, /@keyframes arrive/);
   assert.match(html, /aria-controls="settings"/); assert.match(html, /<dialog/);
-  assert.match(html, /暂无来源记录/); assert.match(html, /预览 · 未连接/);
-  assert.doesNotMatch(html, /innerHTML|localStorage|sessionStorage|https?:\/\//);
+  assert.match(html, /创建时间<\/dt><dd>未知/); assert.match(html, /预览 · 未连接/);
+  assert.doesNotMatch(html, /innerHTML|sessionStorage|https?:\/\//);
   assert.equal([...html.matchAll(/fetch\(/g)].length, 1);
 });
 
@@ -35,7 +35,7 @@ test('expired session removes prior data and offers owner verification', async (
   const c = clientFixture(async () => ({ status: 401 }));
   c.get('items').append('old-private-snapshot'); await c.load();
   assert.equal(c.get('login').hidden, false); assert.equal(c.get('controls').hidden, true);
-  assert.equal(c.get('connection').textContent, '需要本人验证');
+  assert.equal(c.get('connection').textContent, '等待本人验证');
   assert.equal(c.get('read-time').textContent, '尚未读取');
   assert.equal(c.get('items').children.length, 1);
   assert.match(c.get('items').children[0].textContent, /验证本人/);
@@ -49,7 +49,7 @@ test('successful snapshot uses text content, not markup, and marks verified test
   const nodes = c.get('items').children[0].children;
   assert.match(nodes[0].textContent, /测试任务/); assert.equal(nodes[1].textContent, '<img src=x onerror=alert(1)>');
   assert.equal(nodes[2].textContent, '<script>bad()</script>'); assert.match(nodes[3].textContent, /待决定：0/);
-  assert.match(c.get('status').textContent, /不是实时订阅/);
+  assert.match(c.get('status').textContent, /非实时/);
 });
 
 test('initial failure preserves retry and never displays stale snapshots', async () => {
@@ -74,6 +74,58 @@ test('empty and partial-error states do not fabricate tasks or connection health
     await c.load(); assert.equal(c.get('item-count').textContent, '00');
     assert.match(c.get('items').children[0].textContent, /还没有已选任务/);
     assert.match(c.get('status').textContent, state === 'error' ? /读取失败/ : /尚未配置/);
-    assert.equal(c.get('connection').textContent, state === 'error' ? '快照读取异常' : '本人会话已验证');
+    assert.equal(c.get('connection').textContent, state === 'error' ? '快照读取异常' : '未选择任务');
   }
+});
+
+test('viewport layout centers a single PA and separates immutable source from alias', () => {
+ const html=ownerDashboardHtml('nonce');
+ assert.match(html,/height:100dvh;overflow:hidden/);
+ assert.match(html,/\.pa:first-child\{margin-left:auto\}/);
+ assert.match(html,/\.pa:nth-last-child\(2\)\{margin-right:auto\}/);
+ assert.match(html,/\.card-body\{flex:1;min-height:0;overflow:auto/);
+ assert.doesNotMatch(html,/PA \/ 01|PERSONAL ASSISTANT SPACE|YOUR ASSISTANTS/);
+ assert.match(html,/class="provider">dot</); assert.match(html,/id="zot-name">zot</);
+ assert.match(html,/alt="dot 官方图标"/); assert.match(html,/class="rivule-logo"/);
+ assert.match(html,/warning-stripe 5s linear infinite/);
+});
+
+test('connection coloring requires a valid readable snapshot, not owner login', async () => {
+ const snapshot={source_id:'zot-main',state:'available',stale:false,source_status:'running',observed_at:'2026-10-22T15:00:00Z'};
+ for(const [items,state] of [[[],'unknown'],[[{...snapshot,source_id:'other'}],'unknown'],[[snapshot],'unknown'],[[{...snapshot,stale:true}],'warning'],[[{...snapshot,source_status:'needs_input'}],'warning']]) {
+  const c=clientFixture(async()=>({status:200,ok:true,json:async()=>({state:'connected',items})})); await c.load();
+  assert.equal(c.get('zot-card').attributes['data-state'],state);
+ }
+});
+
+test('appearance storage is bounded and never stores task data or changes source identity', () => {
+ const writes=[];const storage={getItem:()=>JSON.stringify({name:'小助理',icon:'★',token:'discard',items:['discard']}),setItem:(k,v)=>writes.push([k,JSON.parse(v)])};
+ const c=clientFixture(()=>{},storage);assert.equal(c.get('zot-name').textContent,'小助理');assert.equal(c.get('zot-emblem').textContent,'★');
+ c.get('name-dialog').close=()=>{};c.get('display-name').value='新名字';c.get('name-form').listeners.submit({preventDefault(){}});
+ assert.deepEqual(writes,[['rivule.appearance.zot-main.v1',{name:'新名字',icon:'★'}]]);
+ const broken=clientFixture(()=>{},{getItem(){throw Error('blocked')},setItem(){throw Error('blocked')}});
+ assert.equal(broken.get('zot-name').textContent,'');
+});
+
+test('only fresh bounded source evidence enables full color; channel is not a PA', async () => {
+ const connection={source:{status:'verified',evidence_kind:'read_probe',last_verified_at:'2026-10-22T15:00:00Z',proof_max_age_ms:86400000},qq:{status:'active',scope:'owner_producer_only'},observed_at:'2026-10-22T15:01:00Z'};
+ for(const [change,expected] of [[{},'active'],[{evidence_kind:'historical_task'},'unknown'],[{proof_max_age_ms:86400001},'unknown'],[{last_verified_at:'2026-10-20T00:00:00Z'},'unknown'],[{status:'stale'},'warning'],[{status:'revoked'},'warning']]) {
+  const c=clientFixture(async()=>({status:200,ok:true,json:async()=>({state:'connected',items:[],connection:{...connection,source:{...connection.source,...change}}})}));
+  await c.load(); assert.equal(c.get('zot-card').attributes['data-state'],expected); assert.equal(c.get('qq-channel').textContent,'生产端已启用');
+ }
+});
+
+test('malformed and oversized appearance state is ignored; HTML-like names remain plain text', () => {
+ for(const raw of ['{broken','[]','"name"','null','x'.repeat(513),JSON.stringify({name:'x'.repeat(33),icon:'x'.repeat(9)})]) {
+  const c=clientFixture(()=>{},{getItem:()=>raw,setItem(){}});assert.equal(c.get('zot-name').textContent,'');assert.equal(c.get('zot-emblem').textContent,'');
+ }
+ const writes=[];const c=clientFixture(()=>{},{getItem:()=>'{"__proto__":{"token":"bad"},"name":"<img src=x onerror=alert(1)>"}',setItem:(k,v)=>writes.push(JSON.parse(v))});
+ assert.equal(c.get('zot-name').textContent,'<img src=x onerror=alert(1)>');
+ c.get('name-dialog').close=()=>{};c.get('display-name').value='x'.repeat(60);c.get('name-form').listeners.submit({preventDefault(){}});
+ assert.equal(c.get('zot-name').textContent.length,32);assert.deepEqual(Object.keys(writes[0]),['name']);assert.equal({}.token,undefined);
+});
+
+test('connection freshness expires at the exact server boundary', async () => {
+ const c=clientFixture(async()=>({status:200,ok:true,json:async()=>({items:[],connection:{observed_at:'2026-10-22T15:00:00Z',source:{status:'verified',evidence_kind:'read_probe',last_verified_at:'2026-10-21T15:00:00Z',proof_max_age_ms:86400000}}})}));
+ await c.load();assert.equal(c.get('zot-card').attributes['data-state'],'unknown');
 });

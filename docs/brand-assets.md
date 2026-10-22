@@ -24,3 +24,7 @@ Checked 2026-10-22. Brand marks identify products, not verified connections or e
 
 ## Rendering constraints
 Images are exact-data allowlisted. Dashboard permits only embedded data images, not remote origins; all existing script/style nonce and authentication rules remain. Unknown brand names never inject images or markup. Selecting a brand in the add-column dialog affects only a nonpersistent, disconnected layout preview.
+
+## dot product mark and Rivule
+- Official product page: https://chatgpt.com/features/dots/ . Page-linked mark: https://images.ctfassets.net/8su2tbn87fck/PulStHeDuz5begF06sEwk/c2080ae53243122046ba61074a5f0bd2/dots-o-updated.svg . Downloaded unchanged2026-10-22,501bytes,SHA256 `1e351734a2db757f16f367140714cab4c999c5382ef428f914127efe65841ffc`. One inert path, no external resources. This is the official dot product ring, not the OpenAI corporate mark or user's personal avatar.
+- Rivule header restores the existing repository design at `docs/showcase/assets/rivule-mark.svg`, SHA256 `f964ad3c015fcbea9cf3662dfead3f7e0cf1682c86c52fa15f8b69d779458f6b`. Embedded unchanged.

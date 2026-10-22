@@ -1,3 +1,4 @@
+import { readDashboardSourceProof, dashboardProducerStatus } from "./dashboard-connection.mjs";
 import { sourceBrand, knownBrandImage } from "./brand-identity.mjs";
 import { isRoutineProgress, PROGRESS_WINDOW_MS } from "./notification-policy.mjs";
 // Rivule — AGPL-3.0. Third-party notices: ../../third-party-licenses/
@@ -28228,6 +28229,17 @@ var OwnerTerminal = class extends DurableObject {
                 identity: {
                     authorizationUrl: state => createDiscordIdentity(this.env, { bindings }).authorizationUrl(state),
                     authenticate: code => createDiscordIdentity(this.env, { bindings }).authenticate(code)
+                },
+                readConnection: async source => {
+                    readonlySource(bindings, source);
+                    readonlyIdentity(this.ctx.storage, bindings, readonlyTables(this.ctx.storage));
+                    const context = await __ownerUiOverlay.sourceBindingContexts({ ...bindings, sources: [source] }, this.env);
+                    const now = Date.now();
+                    let proof = { status: 'unknown', evidence_kind: null, last_verified_at: null, proof_max_age_ms: 86400000 };
+                    let qq = dashboardProducerStatus(null);
+                    try { proof = readDashboardSourceProof(this.ctx.storage, source, canonical([bindings.ownerId, bindings.publicOrigin, source, context[source.source_id] ?? null]), now); } catch {}
+                    try { qq = dashboardProducerStatus(QQBridgeQueue.producerSnapshot(this.ctx.storage, now)); } catch {}
+                    return { source: proof, qq, observed_at: new Date(now).toISOString() };
                 },
                 readTestReceipt: (source, selector) => readDashboardTestReceipt(this.ctx.storage, bindings, source, selector),
                 readSnapshot: (source, query) => readTaskSnapshot(this.ctx.storage, bindings, source, query)

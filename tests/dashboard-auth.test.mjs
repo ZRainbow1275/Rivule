@@ -116,3 +116,10 @@ test('HTML preserves native same-origin form Origin without relaxing POST CSRF g
  assert.equal(login.headers.get('referrer-policy'),'no-referrer');
  assert.equal(new URL(login.headers.get('location')).origin,'https://discord.com');
 });
+test('connection metadata is read only after owner session and read failures stay unknown',async()=>{
+ const f=fixture();let reads=0;f.ctx.readConnection=async source=>{reads++;assert.equal(source.source_id,'zot-main');return {source:{status:'verified'},qq:{status:'paused',scope:'owner_producer_only'}};};
+ assert.equal((await f.send('/dashboard/data','GET','',{'sec-fetch-site':'same-origin'})).status,401);assert.equal(reads,0);
+ const session=await f.complete();assert.equal(reads,0);
+ const response=await f.send('/dashboard/data','GET',session.cookie,{'sec-fetch-site':'same-origin'});assert.equal((await response.json()).connection.source.status,'verified');assert.equal(reads,1);
+ f.ctx.readConnection=async()=>{throw Error('private binding');};const failed=await f.send('/dashboard/data','GET',session.cookie,{'sec-fetch-site':'same-origin'});const model=await failed.json();assert.equal(model.connection.source.status,'unknown');assert.equal(model.connection.qq.status,'unknown');assert.equal(JSON.stringify(model).includes('private binding'),false);
+});
