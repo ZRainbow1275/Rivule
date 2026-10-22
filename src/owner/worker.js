@@ -1,3 +1,5 @@
+import { sourceBrand, knownBrandImage } from "./brand-identity.mjs";
+import { isRoutineProgress, PROGRESS_WINDOW_MS } from "./notification-policy.mjs";
 // Rivule — AGPL-3.0. Third-party notices: ../../third-party-licenses/
 import { readDashboardTestReceipt } from "./dashboard-receipt.mjs";
 import { dashboardResponse, isDashboardRoute } from "./dashboard.mjs";
@@ -26574,9 +26576,11 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,at REAL NO
             enqueue(receipt, view, intent, payload, revision) {
                 if (!this.projectAllowed(payload.project_id))
                     throw new Rejected("project_not_authorized", 403);
+                const pending = view === "overview" ? this.one("SELECT MIN(next_at) AS next_at FROM outbox WHERE view_key=? AND status IN ('queued','retry_wait')", view) : null;
+                const nextAt = view === "overview" && isRoutineProgress(payload) ? Math.min(pending?.next_at ?? Infinity, this.clock() + PROGRESS_WINDOW_MS) : this.clock();
                 if (view === "overview" || view.startsWith("request:"))
                     this.rows("UPDATE outbox SET status='coalesced' WHERE view_key=? AND status IN ('queued','retry_wait')", view);
-                this.rows("INSERT OR IGNORE INTO outbox(receipt,view_key,intent,payload,revision,status,next_at) VALUES(?,?,?,?,?,'queued',?)", receipt, view, intent, canonical(payload), revision, this.clock());
+                this.rows("INSERT OR IGNORE INTO outbox(receipt,view_key,intent,payload,revision,status,next_at) VALUES(?,?,?,?,?,'queued',?)", receipt, view, intent, canonical(payload), revision, nextAt);
             }
             async ingest(source, raw, requestedMode = "standard") {
                 const mode = notificationMode(requestedMode);
@@ -27566,7 +27570,7 @@ var __rivuleDisplay = (function (__displayBridge) {
                 else
                     progress = "已报告数量待核对";
             }
-            return { branch: b, state, actionable, warning, sourceName: source?.display_name ?? b.source_id, projectName: text(b.project_name) || b.project_id, taskName: text(b.task_name) || b.task_id, branchName: text(b.branch_name) || b.branch_id, summary: text(b.summary), blocker: text(b.blocker), question: actionable ? text(action.question) : "", impact: actionable && text(action.impact) !== "未提供" ? text(action.impact) : "", deadline: actionable && hasExpiry ? expiry : "", phase: text(b.phase_label), progress, updatedAt: b.last_confirmed_at ?? b.occurred_at, taskKey: taskKey(b), branchKey: branchKey(b) };
+            return { branch: b, state, actionable, warning, sourceName: source ? sourceBrand(source).name : b.source_id, projectName: text(b.project_name) || b.project_id, taskName: text(b.task_name) || b.task_id, branchName: text(b.branch_name) || b.branch_id, summary: text(b.summary), blocker: text(b.blocker), question: actionable ? text(action.question) : "", impact: actionable && text(action.impact) !== "未提供" ? text(action.impact) : "", deadline: actionable && hasExpiry ? expiry : "", phase: text(b.phase_label), progress, updatedAt: b.last_confirmed_at ?? b.occurred_at, taskKey: taskKey(b), branchKey: branchKey(b) };
         }
         function displayCounts(branches, context) {
             return { tasks: new Set(branches.map(taskKey)).size, branches: branches.length, actionableTasks: new Set(branches.filter((b) => displayBranch(b, context).actionable).map(taskKey)).size };
@@ -27579,16 +27583,13 @@ var __rivuleDisplay = (function (__displayBridge) {
             const s = statusVisual(branch, context);
             return { label: s.label, symbol: s.symbol, color: Number.parseInt(s.color.slice(1), 16) };
         }
-        var MUSE_ICON_DATA = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0OCIgaGVpZ2h0PSI0OCIgdmlld0JveD0iMCAwIDQ4IDQ4Ij48cmVjdCB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHJ4PSIxMSIgZmlsbD0iI0RCRUFGRSIvPjxwYXRoIGQ9Ik0xMCAzNVYxM0gxNkwyNCAyNUwzMiAxM0gzOFYzNUgzMlYyM0wyNCAzNUwxNiAyM1YzNVoiIGZpbGw9IiMyNTYzRUIiLz48L3N2Zz4=";
-        var SPARK_PATHS = '<rect width="66" height="66" rx="15" fill="#DBEAFE"/><path d="M48 18H26C17 18 14 23 14 29C14 36 20 39 28 39H38C42 39 43 41 43 43C43 46 41 48 37 48H16V56H38C48 56 53 51 53 43C53 35 47 31 39 31H28C24 31 23 29 23 27C23 25 25 24 28 24H48Z" fill="#2563EB"/>';
-        function sourceIcon(provider, x, y) {
-            if (provider === "muse")
-                return `<image x="${x}" y="${y}" width="24" height="24" href="${MUSE_ICON_DATA}"/>`;
-            if (provider === "spark")
-                return `<g transform="translate(${x} ${y}) scale(${24 / 66})">${SPARK_PATHS}</g>`;
-            if (provider !== "dot")
-                return `<circle cx="${x + 12}" cy="${y + 12}" r="10" fill="#DDE4EA"/>`;
-            return `<rect x="${x}" y="${y}" width="24" height="24" rx="7" fill="#F5E6DB"/><text x="${x + 6}" y="${y + 18}" fill="#9B582F" font-size="17" font-family="Noto Sans CJK SC">Z</text>`;
+        function sourceIcon(source, x, y) {
+            const brand = sourceBrand(source);
+            if (brand.iconData && knownBrandImage(brand.iconData))
+                return `<image x="${x}" y="${y}" width="24" height="24" href="${brand.iconData}"/>`;
+            const symbol = typeof brand.emoji === "string" && [...brand.emoji].every(c => glyphSupported(c.codePointAt(0))) ? brand.emoji : "";
+            if (!symbol) return "";
+            return `<rect x="${x}" y="${y}" width="24" height="24" rx="7" fill="#E8EDF5"/><text x="${x + 5}" y="${y + 18}" fill="#4B607A" font-size="17" font-family="Noto Sans CJK SC">${xmlEscape(symbol)}</text>`;
         }
         var initWasm = __displayBridge.initWasm;
         var Resvg = __displayBridge.Resvg;
@@ -27716,18 +27717,26 @@ var __rivuleDisplay = (function (__displayBridge) {
                 return n * 21;
             };
             const edge = (x1, y1, x2, y2) => edges.push(`<path d="M ${x1} ${y1} C ${x1} ${y2} ${x2 - 14} ${y2} ${x2} ${y2}" fill="none" stroke="#CDD8E0" stroke-width="2"/>`);
-            text2(16, 34, selection.branch_key ? "任务分支" : "任务脉络", 22, "#263740", "500", 15);
-            if (snapshot.test_only)
-                text2(312, 32, "演示", 14, "#71818A", "400", 5);
-            text2(16, 61, `${counts.tasks} 个任务 · ${counts.branches} 个分支${counts.actionableTasks ? " · " + counts.actionableTasks + " 个任务待处理" : ""}`, 14, "#61727C", "400", 25);
-            let y = 98, lastSource = "", lastProject = "", sourceY = 0, projectY = 0;
+            const attention = new Set(filtered.filter(b => { const v = displayBranch(b, context); return v.actionable || !!v.blocker || b.source_status === "failed"; }).map(taskKey)).size;
+            const running = new Set(filtered.filter(b => b.source_status === "running" && !b.blocker).map(taskKey)).size;
+            front.push(`<rect x="0" y="0" width="390" height="154" fill="#142544"/><circle cx="372" cy="12" r="74" fill="#203A62"/><circle cx="353" cy="12" r="42" fill="#2C4D77"/><rect x="18" y="19" width="34" height="34" rx="10" fill="#B9F2E1"/><path d="M28 43V29H36Q43 29 41 35Q40 38 35 38L42 44M28 36H35" stroke="#142544" stroke-width="3" fill="none"/>`);
+            text2(64, 39, selection.branch_key ? "任务分支" : "进展一览", 23, "#FFFFFF", "700", 12);
+            text2(65, 58, snapshot.test_only ? "RIVULE / 合成演示" : "RIVULE / TASKS", 10, "#9CB4D4", "500", 30);
+            const metrics = [["任务", counts.tasks, "#FFFFFF"], ["进行中", running, "#B9F2E1"], ["需关注", attention, attention ? "#FFD183" : "#B9F2E1"]];
+            metrics.forEach(([label, count, color], i) => {
+                const x = 20 + i * 124;
+                if (i) front.push(`<path d="M${x - 12} 85V134" stroke="#365071"/>`);
+                text2(x, 111, String(count), 34, color, "700", 7);
+                text2(x + 2, 134, label, 12, "#AFC2DB", "500", 8);
+            });
+            let y = 186, lastSource = "", lastProject = "", sourceY = 0, projectY = 0;
             for (const v of views) {
                 const b = v.branch, source = sourceMap.get(b.source_id), color = COLORS[source.provider ?? ""] ?? "#7180AE";
                 if (lastSource !== b.source_id) {
                     if (lastSource)
                         y += 12;
-                    front.push(sourceIcon(source.provider ?? "", 16, y - 19));
-                    text2(50, y, source.display_name ?? source.source_id, 16, "#465964", "500", 20);
+                    front.push(sourceIcon(source, 16, y - 19));
+                    text2(50, y, sourceBrand(source).name, 16, "#465964", "500", 20);
                     sourceY = y + 8;
                     y += 31;
                     lastSource = b.source_id;
@@ -27745,39 +27754,61 @@ var __rivuleDisplay = (function (__displayBridge) {
                 const start = y;
                 const frontStart = front.length;
                 edge(42, projectY, 52, y + 25);
-                text2(66, y + 25, v.taskName, 16, "#263740", "500", 18);
+                if (b.source_status === "completed" && !v.warning && !v.progress && !v.blocker && !v.actionable) {
+                    front.push(`<rect x="52" y="${start}" width="322" height="88" rx="14" fill="#DDF2E8"/><circle cx="346" cy="${start + 25}" r="15" fill="#246B51"/><path d="M339 ${start + 25}L344 ${start + 30}L353 ${start + 20}" stroke="#FFFFFF" stroke-width="2.5" fill="none"/>`);
+                    text2(68, start + 28, v.taskName, 17, "#193C30", "700", 15);
+                    text2(68, start + 51, v.summary || "已完成", 13, "#3D6655", "400", 21);
+                    text2(68, start + 74, "✓ 已完成 · " + (v.branchName !== "主路线" ? v.branchName + " · " : "") + compactTime(v.updatedAt, snapshot.utc_offset_minutes), 10, "#3D6655", "500", 40);
+                    for (const node of phases(b, selection.selected_node_id)) nodes.push({ ...node, branch_key: routeKey(b) });
+                    y = start + 102;
+                    continue;
+                }
+                const state = v.state, urgent = !!v.blocker || v.actionable || b.source_status === "failed";
+                const ink = urgent ? "#FFFFFF" : "#182C48", secondary = urgent ? "#FFE3E5" : "#66768B";
+                text2(68, y + 28, v.taskName, urgent ? 19 : 17, ink, "700", 15);
+                front.push(`<circle cx="346" cy="${y + 25}" r="15" fill="${urgent ? "#FFC27D" : state.color}"/>`);
+                if (urgent) front.push(`<path d="M346 ${y + 16}V${y + 26}M346 ${y + 30}V${y + 33}" stroke="#6F2739" stroke-width="3"/>`);
+                else if (b.source_status === "completed") front.push(`<path d="M339 ${y + 25}L344 ${y + 30}L353 ${y + 20}" stroke="#FFFFFF" stroke-width="2.5" fill="none"/>`);
+                else if (state.shape === "play") front.push(`<path d="M343 ${y + 19}L352 ${y + 25}L343 ${y + 31}Z" fill="#FFFFFF"/>`);
+                else if (state.shape === "pause") front.push(`<path d="M342 ${y + 19}V${y + 31}M350 ${y + 19}V${y + 31}" stroke="#FFFFFF" stroke-width="3"/>`);
+                else front.push(`<circle cx="346" cy="${y + 25}" r="6" fill="none" stroke="#FFFFFF" stroke-width="2"/>`);
                 y += 49;
-                const state = v.state;
                 front.push(`<g data-status-shape="${state.shape}"><rect x="66" y="${y - 16}" width="${Math.min(96, state.label.length * 14 + 24)}" height="24" rx="6" fill="${state.wash}"/></g>`);
                 text2(74, y + 1, `${state.symbol} ${state.label}`, 14, state.color, "500", 8);
-                text2(174, y + 1, v.branchName, 14, "#61727C", "400", 13);
+                if (v.branchName !== "主路线") text2(174, y + 1, v.branchName, 12, secondary, "400", 13);
                 y += 27;
-                const primary = v.actionable ? v.question : v.blocker ? "阻塞：" + v.blocker : v.summary || "来源尚未提供摘要";
-                y += lines(primary, 66, y, 21, 2, v.blocker ? state.color : "#465964");
+                const primary = v.actionable ? v.question : v.blocker ? v.blocker : v.summary || "暂无摘要";
+                y += lines(primary, 66, y, 21, 2, urgent ? "#FFFFFF" : "#465964");
                 if (v.progress) {
                     y += 3;
-                    y += lines(v.progress, 66, y, 21, 1);
+                    text2(66, y + 6, v.progress.replace("已报告 ", ""), 24, urgent ? "#FFFFFF" : "#285F9C", "700", 20);
+                    y += 34;
+                    const progress = b.progress;
+                    if (Number.isFinite(progress?.done) && Number.isFinite(progress?.total) && progress.total > 0 && progress.done >= 0 && progress.done <= progress.total) {
+                        front.push(`<rect x="66" y="${y - 7}" width="290" height="7" rx="3" fill="#DFE5EB"/><rect x="66" y="${y - 7}" width="${290 * progress.done / progress.total}" height="7" rx="3" fill="${state.color}"/>`);
+                        y += 12;
+                    }
                 }
                 if (v.warning) {
                     y += 3;
-                    y += lines(v.warning, 66, y, 21, 2, "#875914");
+                    y += lines(v.warning, 66, y, 21, 2, urgent ? "#FFE3E5" : "#875914");
                 }
                 y += 3;
-                text2(66, y, compactTime(v.updatedAt, snapshot.utc_offset_minutes), 14, "#61727C", "400", 25);
+                text2(66, y, compactTime(v.updatedAt, snapshot.utc_offset_minutes), 11, secondary, "400", 30);
                 y += 16;
-                front.splice(frontStart, 0, `<rect x="52" y="${start}" width="322" height="${y - start}" rx="12" fill="#FAFBFC" stroke="#E6EBEF"/>`);
+                front.splice(frontStart, 0, `<rect x="52" y="${start + 4}" width="322" height="${y - start}" rx="15" fill="#E5EAF2"/><rect x="52" y="${start}" width="322" height="${y - start}" rx="15" fill="${urgent ? "#A52E45" : b.source_status === "completed" ? "#E2F3EC" : "#FFFFFF"}" stroke="${urgent ? "#A52E45" : "#D6E0EC"}"/><rect x="52" y="${start + 18}" width="5" height="${y - start - 36}" rx="2" fill="${urgent ? "#FFC27D" : state.color}"/>`);
                 for (const node of phases(b, selection.selected_node_id))
                     nodes.push({ ...node, branch_key: routeKey(b) });
                 y += 14;
             }
             if (!rows.length) {
-                text2(16, 118, selection.branch_key ? "所选分支不可用" : "暂无任务", 18, "#263740", "500", 20);
-                text2(16, 146, selection.branch_key ? "所选分支不可用，请重新选择" : "收到来源更新后，这里会显示任务", 14, "#61727C", "400", 25);
-                y = 184;
+                text2(16, 206, selection.branch_key ? "所选分支不可用" : "暂无任务", 18, "#263740", "500", 20);
+                text2(16, 234, selection.branch_key ? "所选分支不可用，请重新选择" : "收到来源更新后，这里会显示任务", 14, "#61727C", "400", 25);
+                y = 272;
                 const empty = sources.filter((s) => s.visible !== false && (!selection.source_id || s.source_id === selection.source_id));
                 for (const s of empty.slice(0, 3)) {
-                    front.push(sourceIcon(s.provider ?? "", 16, y - 19));
-                    text2(50, y, s.display_name ?? s.source_id, 16, "#465964", "500", 20);
+                    front.push(sourceIcon(s, 16, y - 19));
+                    text2(50, y, sourceBrand(s).name, 16, "#465964", "500", 20);
                     text2(50, y + 24, sourceLabel(s) + (sourceLabel(s) === "已连接" ? selection.branch_key ? " · 当前视图无任务" : " · 暂无任务" : ""), 14, "#61727C", "400", 22);
                     y += 62;
                 }
@@ -27803,7 +27834,7 @@ var __rivuleDisplay = (function (__displayBridge) {
                 text2(16, y, "□ 为字体缺字，请查看消息或原任务", 14, "#875914", "400", 28);
                 y += 24;
             }
-            const height = Math.ceil(Math.max(180, y + 12)), svg = `<svg xmlns="http://www.w3.org/2000/svg" width="390" height="${height}" viewBox="0 0 390 ${height}" role="img" aria-label="PA、项目、任务与分支的归属关系"><rect width="390" height="${height}" fill="#FFFFFF"/>${edges.join("")}${front.join("")}</svg>`;
+            const height = Math.ceil(Math.max(180, y + 12)), svg = `<svg xmlns="http://www.w3.org/2000/svg" width="390" height="${height}" viewBox="0 0 390 ${height}" role="img" aria-label="PA、项目、任务与分支的归属关系"><rect width="390" height="${height}" fill="#F3F6FB"/>${edges.join("")}${front.join("")}</svg>`;
             if (height > 1100 || svg.length > 6e4)
                 throw new Error("render_output_limit");
             return { svg, width: 390, height, page, pages, rows, nodes, sources: [...sourceMap.values()], rendered_at, revision: snapshot.revision ?? 0, missingGlyphs, total: filtered.length, views, counts, context };
@@ -27820,7 +27851,7 @@ var __rivuleDisplay = (function (__displayBridge) {
                     throw new Error("render_scale_invalid");
                 if (graph.width !== 390 || graph.height > 1100 || graph.height < 1 || graph.svg.length > 6e4)
                     throw new Error("render_output_limit");
-                const inspectedSvg = graph.svg.replace(/<image x="\d+" y="\d+" width="24" height="24" href="([^"]+)"\/>/g, (tag, href) => href === MUSE_ICON_DATA ? "" : tag);
+                const inspectedSvg = graph.svg.replace(/<image x="\d+" y="\d+" width="24" height="24" href="([^"]+)"\/>/g, (tag, href) => knownBrandImage(href) ? "" : tag);
                 if (/<\s*(?:script|foreignObject|image|use|style)\b|\b(?:href|onload|onclick)\s*=|<!DOCTYPE|<!ENTITY|url\s*\(/i.test(inspectedSvg))
                     throw new Error("unsafe_svg");
                 wasmReady ??= initWasm(options.wasmModule);

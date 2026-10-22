@@ -1,3 +1,4 @@
+import { isRoutineProgress, sameNotificationBranch, routineDueAt, formatQQNotification } from "./notification-policy.mjs";
 // Rivule — AGPL-3.0. Third-party notices: ../../third-party-licenses/
 var Rejected = class extends Error {
     code;
@@ -191,7 +192,7 @@ async function jobFromAccepted({ receiptId, loadAccepted, ownerId, appId, source
     const event = projection(validateEvent(record.event, source, now));
     if (event.kind === "heartbeat" || !allowedProjectIds.includes(event.project_id))
         throw Error("project_or_event_not_authorized");
-    const content = [source.display_name + " \xB7 " + event.project_name, event.task_name + " \xB7 " + event.source_status, event.summary, event.action ? "\u9700\u8981\u4F60\u51B3\u5B9A\uFF1A" + event.action.question + "\n\u8BF7\u56DE\u539F\u5E73\u53F0\u5904\u7406\uFF1BQQ\u6D88\u606F\u4E0D\u4EE3\u8868\u6279\u51C6\u3002" : null, event.source_url].filter(Boolean).join("\n");
+    const content = formatQQNotification(event, source, now, { includeSourceUrl: true });
     return { ownerId, appId, sourceId: event.source_id, projectId: event.project_id, eventId: event.event_id, receiptId, content };
 }
 async function dispatchAcceptedQQ({ receiptId, loadAccepted, ownerId, appId, sources, allowedSourceIds, allowedProjectIds, bridgeKey, stub, now = Date.now() }) {
@@ -561,20 +562,28 @@ function qqProducerPanel(response, queue) {
     const d = queue?.delivery;
     const known = { connection_continuity_changed: 'QQ 连接会话已变化，原会话授权不再适用。', connection_unavailable: 'QQ 连接当前未就绪。', permission_changed: '当前 QQ 权限证据已变化。', policy_changed: '项目或通知策略与本轮授权不一致。', configuration_changed: '运行配置与本轮授权不一致。', runtime_budget_unavailable: '当前运行预算不允许继续发送。', grant_inactive: '本轮通知授权已暂停。', grant_expired: '本轮通知授权已失效。', producer_not_ready: '任务通知队列尚未完成开启。', source_unverified: '当前 PA 来源的验证证据不可用。', daily_quota_exhausted: '今日通知尝试额度已用完。', paced: '尚未达到最小发送间隔。' };
     const code = qqStoredDiagnostic(d?.diagnostic)?.code;
-    const detail = d?.active === true ? '本轮任务队列已开启；每条事件仍须通过入队与发送检查。' : d?.active === false ? (Object.hasOwn(known, code) ? known[code] : d.reason === 'not_activated' ? '任务通知队列尚未开启。' : ['bridge_outcome_unknown', 'provider_outcome_unknown'].includes(d.reason) ? '上一条任务通知的发送结果尚未确认，本轮任务队列已暂停。不会自动重发。' : d.reason === 'preflight_not_sent' ? '任务通知在发送前检查阶段暂停；尚无可确认的具体原因。' : '任务通知队列已暂停；具体原因尚未确认。') : '暂时无法核对任务通知队列状态，不能确认已开启。';
-    let content = response.data.content.replace('通知自动推送：配置已开启', '自动推送配置：已开启（不代表本轮任务队列已开启）').replaceAll('**本轮通知已开启**', d?.active === false ? '**任务通知已暂停**' : '**通知队列状态待确认**').replaceAll('本轮持续通知已开启。', '').replaceAll('✓ 本轮通知', '○ 任务队列').replaceAll('本轮只推送新的进展，可以随时暂停。', '');
+    const detail = d?.active === true ? '已开启' : d?.active === false ? (Object.hasOwn(known, code) ? known[code] : d.reason === 'not_activated' ? '任务通知队列尚未开启。' : ['bridge_outcome_unknown', 'provider_outcome_unknown'].includes(d.reason) ? '上一条任务通知的发送结果尚未确认，本轮任务队列已暂停。不会自动重发。' : d.reason === 'preflight_not_sent' ? '任务通知在发送前检查阶段暂停；尚无可确认的具体原因。' : '任务通知队列已暂停；具体原因尚未确认。') : '等待确认';
+    let content = response.data.content.replace('通知自动推送：配置已开启', '自动推送配置：已开启').replaceAll('**本轮通知已开启**', d?.active === false ? '**任务通知已暂停**' : '**通知队列状态待确认**').replaceAll('本轮持续通知已开启。', '').replaceAll('✓ 本轮通知', '○ 任务队列').replaceAll('本轮只推送新的进展，可以随时暂停。', '');
     if (d?.active === true)
-        content = response.data.content.replace('通知自动推送：配置已开启', '自动推送配置：已开启（不代表本轮任务队列已开启）');
-    const admission = queue?.latestAdmission;
-    const admissionText = !admission ? '尚无可核对的事件记录。' : admission.reason === 'admission_not_recorded' ? '最近一条事件没有 QQ 入队记录，历史原因未知。' : admission.state === 'queued' ? '最近一条事件已入队，尚未确认发送。' : admission.state === 'sent' && admission.reason === 'provider_accepted' ? '最近一条事件已提交 QQ；实收仍以 QQ 客户端为准。' : admission.reason === 'activation_inactive' ? '最近一条事件被跳过：本轮任务队列未开启或已暂停。' : admission.reason === 'activation_expired' ? '最近一条事件被跳过：本轮任务队列授权已过期。' : admission.state === 'suppressed' ? '最近一条事件被跳过，原因可在诊断回执中核对。' : '最近一条事件的发送结果尚未确认。';
-    const suffix = '\n\n本轮任务队列：' + detail + '\n事件入队：' + admissionText + '\n连接或绑定即使正常，也不代表本轮授权、任务入队或真实送达均成功。\n这次刷新不会重新授权或补发消息。';
-    if (content.length + suffix.length <= 2000)
-        content += suffix;
-    else {
-        const embeds = response.data.embeds ?? [], used = embeds.reduce((n, e) => n + (e.title?.length ?? 0) + (e.description?.length ?? 0) + (e.footer?.text?.length ?? 0) + (e.author?.name?.length ?? 0) + (e.fields ?? []).reduce((m, f) => m + (f.name?.length ?? 0) + (f.value?.length ?? 0), 0), 0);
-        if (embeds.length < 10 && used + suffix.length + 7 <= 6000)
-            response.data.embeds = [...embeds, { title: '任务队列状态', description: suffix.trim(), color: 0xB1772F }];
+        content = response.data.content.replace('通知自动推送：配置已开启', '自动推送配置：已开启');
+    const panel = response.data.embeds?.find(embed => embed.fields?.some(field => field.name === '本轮状态'));
+    if (panel) {
+        const state = panel.fields.find(field => field.name === '本轮状态');
+        state.value = d?.active === true ? '✓ 本轮队列已开启' : d?.active === false ? '○ 本轮队列未开启' : '◌ 等待确认';
+        if (panel.title === '本轮通知已开启' || panel.title === '验证已通过，等待队列就绪') {
+            panel.title = d?.active === true ? '本轮通知已开启' : d?.active === false ? '任务通知已暂停' : '通知队列状态待确认';
+            panel.color = d?.active === true ? 0x16866B : 0xB1772F;
+        }
     }
+    const quota = response.data.embeds?.find(embed => embed.fields?.some(field => field.name === '▶ 通知节奏'));
+    if (quota && d?.active !== true && /^\d+ 次可用$/.test(quota.title ?? '')) {
+        quota.title = '剩余 ' + quota.title.replace(' 次可用', ' 次额度');
+        quota.color = 0xB1772F;
+    }
+    const admission = queue?.latestAdmission;
+    const admissionText = !admission ? '暂无新事件' : admission.reason === 'admission_not_recorded' ? '最近一条事件没有 QQ 入队记录，历史原因未知。' : admission.state === 'coalesced' ? '已合并到最新进展' : admission.state === 'queued' ? '等待发送' : admission.state === 'sent' && admission.reason === 'provider_accepted' ? '已提交 QQ' : admission.reason === 'activation_inactive' ? '最近一条事件被跳过：本轮任务队列未开启或已暂停。' : admission.reason === 'activation_expired' ? '最近一条事件被跳过：本轮任务队列授权已过期。' : admission.state === 'suppressed' ? '最近一条事件被跳过，原因可在诊断回执中核对。' : '最近一条事件的发送结果尚未确认。';
+    const embeds = response.data.embeds ?? [];
+    if (embeds.length < 10) response.data.embeds = [...embeds, { title: '发送动态', color: d?.active === true ? 0x16866B : 0xB1772F, fields: [{ name: '本轮队列', value: detail, inline: true }, { name: '最近事件', value: admissionText, inline: true }] }];
     response.data.content = content;
 }
 const qqAdmissionCodes = new Set(['queue_capacity', 'delivery_disabled', 'activation_inactive', 'activation_expired', 'project_not_authorized', 'source_unverified', 'sensitivity_excluded', 'heartbeat_excluded', 'event_not_current', 'admission_history_excluded', 'projection_not_authorized', 'admission_unavailable']);
@@ -602,8 +611,8 @@ function qqAdmissionSnapshot(storage) {
                 result = row.status === 'sending' ? { state: 'uncertain', reason: 'dispatch_outcome_unknown' } : row.result ? JSON.parse(row.result) : { state: row.status };
         }
     result ??= qqSkipReceipt(storage, accepted.source_id, accepted.receipt);
-    const states = new Set(['queued', 'sent', 'suppressed', 'not_sent', 'uncertain', 'blocked']);
-    const reasons = new Set([...qqAdmissionCodes, ...qqDiagnosticCodes, 'provider_accepted', 'provider_outcome_unknown', 'bridge_outcome_unknown', 'preflight_not_sent', 'dispatch_outcome_unknown', 'restart_during_dispatch', 'new_activation_skips_backlog', 'receipt_history_unavailable']);
+    const states = new Set(['queued', 'sent', 'coalesced', 'suppressed', 'not_sent', 'uncertain', 'blocked']);
+    const reasons = new Set([...qqAdmissionCodes, ...qqDiagnosticCodes, 'provider_accepted', 'provider_outcome_unknown', 'bridge_outcome_unknown', 'preflight_not_sent', 'dispatch_outcome_unknown', 'restart_during_dispatch', 'new_activation_skips_backlog', 'newer_branch_update', 'receipt_history_unavailable']);
     return { revision: accepted.revision, state: result ? (states.has(result.state) ? result.state : 'uncertain') : 'uncertain', reason: result ? (result.reason === undefined ? (result.state === 'queued' ? 'awaiting_dispatch' : 'state_unavailable') : reasons.has(result.reason) ? result.reason : 'state_unavailable') : 'admission_not_recorded' };
 }
 const qqLocalSuppression = new Set(['source_or_event_changed', 'projection_changed', 'source_changed_during_projection', 'job_changed', 'source_unverified', 'event_not_current', 'projection_not_authorized', 'project_not_authorized']);
@@ -683,12 +692,12 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
         const cutoff = this.now() - 72 * 3600000;
         if (this.rows("SELECT name FROM sqlite_master WHERE type='table' AND name='qq_continuous_skips'").length)
             this.rows('DELETE FROM qq_continuous_skips WHERE recorded_at<?', cutoff);
-        const revision = this.rows("SELECT MAX(revision) AS revision FROM qq_continuous_outbox WHERE status IN ('sent','not_sent','suppressed') AND recorded_at<?", cutoff)[0]?.revision;
+        const revision = this.rows("SELECT MAX(revision) AS revision FROM qq_continuous_outbox WHERE status IN ('sent','not_sent','suppressed','coalesced') AND recorded_at<?", cutoff)[0]?.revision;
         if (revision === null || revision === undefined)
             return;
         const floor = Math.max(this.retentionFloor(), revision);
         this.rows("INSERT INTO qq_continuous_meta(k,v) VALUES('retention_floor',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", String(floor));
-        this.rows("DELETE FROM qq_continuous_outbox WHERE status IN ('sent','not_sent','suppressed') AND recorded_at<?", cutoff);
+        this.rows("DELETE FROM qq_continuous_outbox WHERE status IN ('sent','not_sent','suppressed','coalesced') AND recorded_at<?", cutoff);
     }
     hasContinuousSchema() { return this.rows("SELECT name FROM sqlite_master WHERE type='table' AND name='qq_continuous_meta'").length === 1; }
     activation() { if (!this.hasContinuousSchema())
@@ -747,11 +756,23 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
             const projected = projection(validateEvent(JSON.parse(row.payload), source, this.now()));
             if (JSON.stringify(projected) !== JSON.stringify(projection(validateEvent(event, source, this.now()))))
                 return skip('projection_not_authorized');
+            if (this.rows('SELECT receipt FROM qq_continuous_outbox WHERE receipt=?', receiptId).length)
+                return true;
             if (this.rows('SELECT COUNT(*) AS n FROM qq_continuous_outbox')[0].n >= 10000) {
                 this.recordCapacitySkip(source.source_id, receiptId, row.revision);
                 return false;
             }
-            this.rows("INSERT OR IGNORE INTO qq_continuous_outbox(receipt,source_id,source_generation,revision,payload,status,recorded_at) VALUES(?,?,?,?,?,'queued',?)", receiptId, source.source_id, proof.connection_generation, row.revision, JSON.stringify(projected), this.now());
+            let receivedAt = this.now();
+            // Merge only unsent ordinary progress from this exact source generation and branch.
+            // Keep the oldest window start; updates cannot postpone the notification indefinitely.
+            for (const prior of this.rows("SELECT * FROM qq_continuous_outbox WHERE status='queued' AND source_id=?", source.source_id)) {
+                const previous = JSON.parse(prior.payload);
+                if (prior.revision < row.revision && prior.receipt !== receiptId && prior.source_generation === proof.connection_generation && isRoutineProgress(previous) && sameNotificationBranch(previous, projected)) {
+                    if (isRoutineProgress(projected)) receivedAt = Math.min(receivedAt, prior.recorded_at);
+                    this.rows("UPDATE qq_continuous_outbox SET status='coalesced',result=? WHERE receipt=? AND status='queued'", JSON.stringify({ state: 'coalesced', reason: 'newer_branch_update' }), prior.receipt);
+                }
+            }
+            this.rows("INSERT OR IGNORE INTO qq_continuous_outbox(receipt,source_id,source_generation,revision,payload,status,recorded_at) VALUES(?,?,?,?,?,'queued',?)", receiptId, source.source_id, proof.connection_generation, row.revision, JSON.stringify(projected), receivedAt);
             return true;
         }
         catch {
@@ -759,7 +780,7 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
         }
     }
     nextAlarmAt() { const a = this.activation(); if (!this.config()?.enabled || !a?.active || a.expiresAt <= this.now())
-        return null; return this.rows("SELECT receipt FROM qq_continuous_outbox WHERE status='queued' LIMIT 1").length ? this.now() + 3100 : null; }
+        return null; const due = this.rows("SELECT payload,recorded_at FROM qq_continuous_outbox WHERE status='queued'").map(row => routineDueAt(JSON.parse(row.payload), row.recorded_at)); return due.length ? Math.max(this.now() + 3100, Math.min(...due)) : null; }
     receipt(source, receiptId) {
         const configured = this.sources.find(s => s.source_id === source.source_id && s.enabled);
         if (!configured || JSON.stringify(configured) !== JSON.stringify(source))
@@ -788,10 +809,7 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
         const event = projection(validateEvent(JSON.parse(accepted.payload), source, this.now()));
         if (JSON.stringify(event) !== row.payload || event.sensitivity !== 'normal' || event.kind === 'heartbeat' || !this.config().allowedProjects.includes(event.project_id))
             throw Error('projection_changed');
-        const statuses = { running: '进行中', needs_input: '等待输入', completed: '已完成', failed: '失败', cancelled: '已取消', proposed: '待开始' };
-        const pending = event.action && (!event.action.expires_at || Date.parse(event.action.expires_at) > this.now()) ? event.action : null;
-        const label = event.blocker && !['completed', 'cancelled', 'failed'].includes(event.source_status) ? '受阻' : pending ? '待你处理' : statuses[event.source_status] ?? '状态更新';
-        const content = [event.project_name + ' · ' + label, event.task_name !== event.project_name ? event.task_name + (event.branch_name && event.branch_name !== '主路线' ? ' · ' + event.branch_name : '') : null, event.summary, event.progress ? `进展：${event.progress.done}${event.progress.total === null ? '' : ' / ' + event.progress.total} ${event.progress.unit}` : null, event.blocker ? '受阻原因：' + event.blocker : null, pending?.question ? '需要你处理：' + pending.question : null, pending ? '到原助手查看并回复' : null, source.display_name].filter(Boolean).join('\n');
+        const content = formatQQNotification(event, source, this.now());
         const sourceBindingDigest = await hash(proof.binding), payloadHash = await hash(content);
         const current = this.readAuthority?.(row.source_id);
         if (current?.selectable !== true || current.connection_generation !== proof.connection_generation || current.binding !== proof.binding)
@@ -811,7 +829,7 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
             if (!this.config()?.enabled || !a?.active || a.expiresAt <= this.now())
                 return { state: 'idle', reason: 'inactive' };
             diagnosticStage = 'owner_select';
-            await this.storage.transaction(async () => { this.compactHistory(); row = this.rows("SELECT * FROM qq_continuous_outbox WHERE status='queued' ORDER BY revision LIMIT 1")[0]; if (row)
+            await this.storage.transaction(async () => { this.compactHistory(); row = this.rows("SELECT * FROM qq_continuous_outbox WHERE status='queued' ORDER BY revision").find(candidate => routineDueAt(JSON.parse(candidate.payload), candidate.recorded_at) <= this.now()); if (row)
                 this.rows("UPDATE qq_continuous_outbox SET status='sending' WHERE receipt=?", row.receipt); });
             if (!row)
                 return { state: 'idle', reason: 'nothing_due' };

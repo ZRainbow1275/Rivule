@@ -1,3 +1,4 @@
+import { ownerDashboardHtml } from './presentation.mjs';
 import { readDashboardWatchlist } from './dashboard-read-model.mjs';
 import { validateDashboardTestReceipt } from './dashboard-receipt.mjs';
 const LOGIN_TTL = 5 * 60_000, SESSION_TTL = 15 * 60_000;
@@ -39,22 +40,12 @@ export function isDashboardRoute(url) {
 }
 function page() {
   const nonce = random();
-  const body = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rivule · 只读任务面板</title>
-<style nonce="${nonce}">body{max-width:860px;margin:40px auto;padding:0 20px;font:16px/1.6 system-ui;background:#f7f5ef;color:#243c3d}button{padding:10px 16px;margin:6px 8px 6px 0}article{background:white;border:1px solid #dce0d5;border-radius:8px;padding:16px;margin:14px 0;overflow-wrap:anywhere}small{color:#637471}[hidden]{display:none!important}</style>
-<h1>只读任务面板</h1><p>仅限本人查看明确选定的 Zot 任务。这里不发送指令，也不批准任务操作。</p><p id="status" role="status">正在读取连接状态…</p>
-<form id="login" method="post" action="/dashboard/login" hidden><button>用 Discord 验证本人</button></form>
-<div id="controls" hidden><button id="refresh" type="button">重新读取快照</button><form method="post" action="/dashboard/logout"><button>退出登录</button></form></div><div id="items"></div>
-<script nonce="${nonce}">
-const status=document.getElementById('status'),items=document.getElementById('items'),login=document.getElementById('login'),controls=document.getElementById('controls'),refresh=document.getElementById('refresh');
-const labels={available:'已读取',not_found:'未找到所选任务',withheld:'敏感内容未展示',unavailable:'读取失败'};
-async function load(){refresh.disabled=true;items.replaceChildren();status.textContent='正在读取所选任务快照…';try{const response=await fetch('/dashboard/data',{credentials:'same-origin',cache:'no-store',redirect:'error'});if(response.status===401){login.hidden=false;controls.hidden=true;status.textContent='尚未登录或会话已过期。请验证本人身份。';return;}if(!response.ok)throw Error();const data=await response.json();login.hidden=true;controls.hidden=false;status.textContent=data.state==='error'?'部分或全部任务读取失败；不能视为没有任务。':data.items.length?'已读取所选任务快照，不是实时订阅。':'尚未配置要展示的任务，没有加载演示数据。';for(const item of data.items){const card=document.createElement('article'),title=document.createElement('h2'),summary=document.createElement('p'),detail=document.createElement('small');title.textContent=(item.selection_kind==='verified_test'?'测试任务 · ':'')+(item.task_name||labels[item.state]||'任务状态未知');summary.textContent=item.summary||labels[item.state]||'';detail.textContent=[item.project_name,item.source_status,item.stale?'状态可能已过期':'',item.archived?'已归档':'',item.last_confirmed_at?'来源最后确认：'+item.last_confirmed_at:'',item.observed_at?'读取时间：'+item.observed_at:'',Number.isInteger(item.pending_action_count)?'待决定：'+item.pending_action_count:''].filter(Boolean).join(' · ');card.append(title,summary,detail);items.append(card);}}catch{status.textContent='读取失败，无法确认当前任务状态。请稍后重试。';}finally{refresh.disabled=false;}}
-refresh.addEventListener('click',load);window.addEventListener('pageshow',load);
-</script></html>`;
+  const body = ownerDashboardHtml(nonce);
   const h = headers('text/html; charset=utf-8');
   // Native same-origin form POSTs need a non-null Origin; no-referrer suppresses it.
   // External navigations still receive no Referer under same-origin policy.
   h.set('referrer-policy', 'same-origin');
-  h.set('content-security-policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://discord.com/oauth2/authorize`);
+  h.set('content-security-policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; img-src data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self' https://discord.com/oauth2/authorize`);
   return new Response(body, { headers: h });
 }
 /** Called only by the owner Durable Object's internal dashboard route. */

@@ -906,6 +906,7 @@ async function ownerSetup(actor, p) {
         return Array.from({ length: Math.ceil(buttons.length / 5) }, (_, row) => ({ type: 1, components: buttons.slice(row * 5, row * 5 + 5) }));
     });
     const response = reply(text2, components);
+    if (continuous?.embed) response.data.embeds = [continuous.embed, continuous.metrics].filter(Boolean);
     if (action.action === 'continuous_enable') {
         const approved = await (await continuousController(actor)).status();
         if (approved.gatewayReady === true && approved.approvalInteractionId === p.id)
@@ -2591,17 +2592,34 @@ async function continuousPanel(actor) {
     const { active, awaitingProducer, heading, reason, canOfferEnable } = view;
     const stage = active ? '✓ 本轮通知' : awaitingProducer ? '◌ 通知队列' : '○ 本轮通知';
     const daily = (await actor.status()).runtimeBudget;
-    const text = ['**Rivule · 持续通知**', `-# ${status.bound ? '✓ 已绑定' : '○ 待绑定'} · ${active || awaitingProducer ? '✓' : '○'} 主动验证 · ${stage}`, '', `**${heading}**`, reason,
-        status.bound ? '\n发送到：已确认的本人 QQ' : '\n接收账户：尚未确认', '来源：已授权项目的全部已验证 PA', '通知：普通内容的进展 / 受阻 / 待办 / 完成',
-        '\n每天最多 100 次尝试 · 每次至少间隔 3 秒', `-# 今日（UTC）还可尝试 ${view.quotaKnown ? status.remainingDaily + ' 次' : '待核对'}`,
-        `-# 今日连接已用 ${setupMinutes(daily.usedMs)} · ${daily.mode === 'stop' ? '到点暂停' : '仅提醒，不暂停'} · 阈值 ${setupMinutes(daily.limitMs)}`,
-        active ? '本轮通知仅在当前连接会话有效，连接变化后需重新开启；可以随时暂停。' : awaitingProducer ? null : '只发送开启后的新动态。',
-        canOfferEnable ? '先发一条「Rivule 持续通知验证：通道已就绪。」；提交成功后开启本轮通知。' : null].filter(Boolean).join('\n');
+    const used = view.quotaKnown && Number.isSafeInteger(status.remainingDaily) && status.remainingDaily >= 0 && status.remainingDaily <= 100 ? Math.max(0, Math.min(100, 100 - status.remainingDaily)) : null;
+    const meter = used === null ? '额度待核对' : '■'.repeat(Math.floor(used / 10)) + '□'.repeat(10 - Math.floor(used / 10)) + `  ${used} / 100`;
+    const text = '**Rivule · 持续通知**';
+    const embed = {
+        title: heading,
+        color: review.count || eligibility.reason || view.quotaEmpty ? 0xC77620 : active ? 0x16866B : 0x5865F2,
+        description: [reason, canOfferEnable ? '开启时发送一条通道验证消息。范围：已授权项目 · 已验证 PA · 普通内容。' : null].filter(Boolean).join('\n') || undefined,
+        fields: [
+            { name: '🐧 QQ 接收账户', value: status.bound ? '本人 QQ · 已确认' : '待确认', inline: true },
+            { name: '本轮状态', value: stage, inline: true }
+        ]
+    };
+    const metrics = {
+        title: used === null ? '额度待核对' : used === 100 ? '今日额度已用完' : active && !eligibility.reason && !review.count && !(daily.mode === 'stop' && Number.isFinite(daily.limitMs) && daily.usedMs >= daily.limitMs) ? `${status.remainingDaily} 次可用` : `剩余 ${status.remainingDaily} 次额度`,
+        color: view.quotaEmpty ? 0xC77620 : 0x4268DB,
+        description: meter + '\n今日发送尝试 · UTC',
+        fields: [
+            { name: '● 已连接', value: `**${setupMinutes(daily.usedMs)}**`, inline: true },
+            { name: '◇ 时长设置', value: `${setupMinutes(daily.limitMs)} · ${daily.mode === 'stop' ? '到点暂停' : '仅提醒'}`, inline: true },
+            { name: '▶ 通知节奏', value: '**进展**  60 秒合并\n**受阻 · 待办 · 完成**  即时', inline: false }
+        ],
+        footer: { text: '当前会话 · 仅新动态' }
+    };
     const reviewSpecs = review.reviewable ? [['continuous_review', '我已查看 QQ'], ['continuous_settings', '刷新状态'], ['status', '返回设置']] : [['continuous_settings', '刷新状态'], ['status', '返回设置']];
     if (review.count && active)
         reviewSpecs.splice(reviewSpecs.length - 1, 0, ['continuous_pause', '暂停持续通知']);
     const specs = review.count ? reviewSpecs : awaitingProducer ? [['continuous_settings', '刷新状态'], ['continuous_pause', '取消本轮开启'], ['status', '返回设置']] : active ? [['continuous_pause', '暂停持续通知'], ['status', '返回设置']] : canOfferEnable ? [['continuous_enable', '验证并开启本轮通知'], ['continuous_settings', '刷新状态'], ['status', '返回设置']] : [['continuous_settings', '刷新状态'], ['status', '返回设置']];
-    return { text, specs, control: eligibility.control, reviewControl: review.control };
+    return { text, embed, metrics, specs, control: eligibility.control, reviewControl: review.control };
 }
 async function enableContinuousFromControl(actor, action, interactionId) {
     if (actor.env.QQ_DELIVERY_ENABLED !== 'true' || typeof action.enrollmentId !== 'string' || !/^[a-f0-9-]{36}$/.test(action.enrollmentId))
