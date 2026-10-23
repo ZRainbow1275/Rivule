@@ -212,3 +212,14 @@ test('session failure clears counts, recent confirmations and ability status, no
  assert.doesNotMatch(html,/\.compact \.task p\{display:none\}/);
  assert.match(html,/#61716b/);
  });
+
+ test('public and failed sessions open capabilities, recovered tasks take focus once', async () => {
+ let mode='401';const c=clientFixture(async()=>{if(mode==='fail')throw Error('offline');return mode==='401'?{status:401}:{status:200,ok:true,json:async()=>({state:'ready',items:[{state:'available',task_name:'Selected task'}]})};});
+ assert.equal(c.get('capabilities-view').hidden,false);
+ await c.load();assert.equal(c.get('capabilities-view').hidden,false);
+ mode='ok';await c.load();assert.equal(c.get('tasks-view').hidden,false);
+ c.get('view-activity').listeners.click();await c.load();assert.equal(c.get('activity-view').hidden,false);
+ mode='fail';await c.load();assert.equal(c.get('capabilities-view').hidden,false);
+ mode='ok';await c.load();assert.equal(c.get('tasks-view').hidden,false);
+ mode='401';await c.load();assert.equal(c.get('capabilities-view').hidden,false);assert.equal(c.get('items').children.length,1);
+ });
