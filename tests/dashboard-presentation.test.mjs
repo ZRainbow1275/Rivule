@@ -20,7 +20,7 @@ function clientFixture(fetch, storage, timers = {}) {
   document.getElementById = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   document.createElement = () => new Element(); document.createElementNS = () => new Element(); document.body = new Element();
   vm.runInNewContext('(' + dashboardClient.toString() + ')()', { selectedWorkbench, document, window, fetch, Date, localStorage: storage, AbortController, setTimeout, clearTimeout, ...timers });
-  return { get: document.getElementById, load: () => window.listeners.pageshow(), hide: () => window.listeners.pagehide(), visible: value=>{document.hidden=!value;document.listeners.visibilitychange();} };
+  return { get: document.getElementById, load: () => window.listeners.pageshow(), pageshow: event=>window.listeners.pageshow(event), hide: () => window.listeners.pagehide(), visible: value=>{document.hidden=!value;document.listeners.visibilitychange();} };
 }
 
 test('PA canvas has native auth forms, honest preview, accessible controls and reduced motion', () => {
@@ -153,7 +153,7 @@ test('read deadline bounds headers and body, allows retry and ignores late respo
   }, undefined, {setTimeout(fn, ms) { assert.ok([15000,30000,60000].includes(ms)); timers.set(++timerId,fn); return timerId; },clearTimeout(id) { timers.delete(id); }});
   const old = c.load(); await Promise.resolve(); await Promise.resolve();
   const oldSignal = signal; [...timers.values()][0](); await old;
-  assert.equal(oldSignal.aborted,true); assert.equal(timers.size,0);
+  assert.equal(oldSignal.aborted,true); assert.equal(timers.size,1);
   assert.equal(c.get('refresh').disabled,false); assert.match(c.get('status').textContent,/可重试/);
   const next = c.load(); assert.equal(calls,2); assert.equal(c.get('refresh').disabled,true);
   resolveOld(phase === 'headers' ? {status:401} : {items:[{task_name:'obsolete private data'}]});
@@ -329,4 +329,24 @@ test('additional PA errors affect overall status and all private cards clear on 
 });
 test('hiding an authenticated page clears primary task and log content',async()=>{
  const c=clientFixture(async()=>({status:200,ok:true,json:async()=>({state:'connected',items:[{state:'available',task_name:'Private selected task'}]})}));await c.load();assert.equal(c.get('items').children.length,1);c.visible(false);assert.equal(c.get('items').children.length,0);assert.equal(c.get('detail-content').children.length,0);
+});
+
+test('initial network failure automatically retries with bounded backoff, recovers, then stops on 401',async()=>{
+ const timers=new Map();let timerId=0,calls=0,mode='failure';
+ const c=clientFixture(async()=>{calls++;if(mode==='failure')throw Error('offline');return mode==='401'?{status:401}:{status:200,ok:true,json:async()=>({state:'connected',items:[]})};},undefined,{setTimeout(fn,ms){timers.set(++timerId,{fn,ms});return timerId;},clearTimeout(id){timers.delete(id);}});
+ const tick=async expected=>{const timer=[...timers.values()].find(t=>t.ms===expected);assert.ok(timer,'expected retry timer '+expected);timer.fn();for(let i=0;i<30;i++)await Promise.resolve();};
+ await c.load();assert.equal(calls,1);await tick(60000);await tick(120000);await tick(240000);await tick(300000);await tick(300000);
+ mode='ok';await tick(300000);assert.match(c.get('status').textContent,/30 秒自动刷新/);
+ mode='401';await tick(30000);assert.equal(timers.size,0);assert.equal(c.get('connection').textContent,'等待本人验证');
+});
+test('manual refresh clicks and pageshow events close task details instead of becoming background flags',async()=>{
+ const c=clientFixture(async()=>({status:200,ok:true,json:async()=>({state:'connected',items:[{state:'available',task_name:'Task',summary:'Detail'}]})}));
+ await c.load();for(const invoke of [()=>c.get('refresh').listeners.click({type:'click'}),()=>c.pageshow({type:'pageshow',persisted:true})]){
+ const button=c.get('items').children[0].children.find(n=>n.className==='detail-launch');button.listeners.click();assert.equal(c.get('detail-dialog').open,true);await invoke();assert.equal(c.get('detail-dialog').open,false);assert.equal(c.get('detail-content').children.length,0);
+ }
+});
+test('global update failure marks every retained PA card possibly stale and successful recovery clears it',async()=>{
+ let fail=false;const c=clientFixture(async()=>{if(fail)throw Error('offline');return {status:200,ok:true,json:async()=>({state:'connected',items:[],sources:[{source_id:'muse-main',display_name:'Muse',state:'connected',items:[{state:'available',task_name:'Retained Muse task'}]}]})};});
+ await c.load();const first=c.get('canvas').children.at(-1);fail=true;await c.load();assert.equal(first.attributes['data-state'],'warning');const notice=first.children.find(n=>n.className==='snapshot-warning');assert.ok(notice);assert.equal(notice.hidden,false);assert.match(notice.textContent,/上次快照.*可能已过期/);assert.equal(first.removed,undefined);
+ fail=false;await c.load();assert.equal(first.removed,true);const replacement=c.get('canvas').children.at(-1);assert.equal(replacement.children.find(n=>n.className==='snapshot-warning').hidden,true);
 });
