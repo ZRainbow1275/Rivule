@@ -60,3 +60,25 @@ test('legacy read-only session offers explicit reauthentication and never grants
 test('project scope comparison cannot collide through display separators',async()=>{
  const c=setup(async call=>{if(call.url.endsWith('/prepare')){const p=prepared('pause');p.confirmation.policy={...policy,project_ids:['a','b']};return p;}const r=ready();r.settings.policy={...policy,project_ids:['a、b']};return r;});await c.open();await c.click('business-pause');assert.equal(c.calls.filter(x=>x.url.endsWith('/commit')).length,0);assert.match(c.get('business-feedback').textContent,/重新核对/);
 });
+
+test('budget warning and exhaustion are explicit, read-only, and cleared on close',async()=>{
+ for(const [flag,label] of [['warning_reached','提醒阈值'],['exhausted','已用尽']]){
+  const data=ready();data.settings.budget[flag]=true;
+  const c=setup(async()=>data);await c.open();
+  assert.equal(c.get('business-warning').hidden,false);assert.match(c.get('business-warning').textContent,new RegExp(label));
+  assert.deepEqual(c.calls.map(x=>x.options.method),['GET']);
+  c.get('settings').listeners.close();assert.equal(c.get('business-warning').hidden,true);assert.equal(c.get('business-warning').textContent,'');
+ }
+ const c=setup(async()=>ready());await c.open();assert.equal(c.get('business-warning').hidden,true);
+});
+
+test('long server labels and large budget values stay literal without extra requests',async()=>{
+ const data=ready();data.settings.recipient_label='<img onerror=alert(1)>'.repeat(20);
+ data.settings.budget.remaining_ms=600000000;data.settings.budget.used_ms=600000001;
+ const c=setup(async()=>data);await c.open();
+ assert.equal(c.get('business-recipient').textContent,data.settings.recipient_label);
+ assert.equal(c.get('business-recipient').children.length,0);
+ assert.equal(c.get('business-remaining').textContent,'10000 分钟');
+ assert.equal(c.get('business-used').textContent,'已用 10000 分 0 秒');
+ assert.equal(c.calls.length,1);assert.equal(c.calls[0].options.method,'GET');
+});

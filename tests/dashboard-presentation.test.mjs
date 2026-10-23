@@ -284,3 +284,19 @@ test('session failure clears counts, recent confirmations and ability status, no
  assert.match(html,/body\[data-motion="reduced"\] \.add-column:hover \.add-emblem,body\[data-motion="off"\] \.add-column:hover \.add-emblem\{transform:rotate\(6deg\)\}/);
  assert.match(html,/@media\(prefers-reduced-motion:reduce\)\{\.capability-detail:focus-within\{transform:none\}\.add-column:hover \.add-emblem\{transform:rotate\(6deg\)\}/);
  });
+
+test('business controls have shrinkable grids, wrapped actions and narrow-screen stacking',()=>{
+ const html=ownerDashboardHtml('test');
+ assert.match(html,/\.business-metrics,\.budget-fields\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+ assert.match(html,/\.business-actions,#enable-dialog \.buttons\{flex-wrap:wrap\}/);
+ assert.match(html,/@media\(max-width:420px\)\{\.business-metrics,\.budget-fields\{grid-template-columns:minmax\(0,1fr\)\}/);
+ assert.match(html,/<p id="business-warning" role="status" hidden>/);
+ assert.match(html,/<form id="business-budget"><h4>运行预算<\/h4>/);
+});
+
+test('budget input exposes the server minute bounds and notification label is user-facing',()=>{
+ const html=ownerDashboardHtml('test');
+ assert.match(html,/id="budget-minutes" type="number" min="1" max="1440" step="1"/);
+ assert.match(html,/<dt>通知状态<\/dt><dd id="business-producer">/);
+ assert.doesNotMatch(html,/<dt>生产端<\/dt>/);
+});
