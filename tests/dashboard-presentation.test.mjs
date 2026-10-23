@@ -10,7 +10,9 @@ function clientFixture(fetch, storage, timers = {}) {
     replaceChildren(...children) { this.children = children; }
     append(...children) { this.children.push(...children); }
     setAttribute(key, value) { this.attributes[key] = value; }
-    focus() {}
+    focus() { this.focused=true; }
+    showModal() { this.open=true; }
+    close() { this.open=false; }
   }
   const elements = new Map(), window = new Element(), document = new Element();
   document.getElementById = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
@@ -237,4 +239,48 @@ test('session failure clears counts, recent confirmations and ability status, no
  c.get('choose-qq').listeners.click();assert.equal(c.get('pa-brand').value,'qq');assert.equal(c.get('choose-qq').attributes['aria-pressed'],'true');assert.equal(c.get('choose-muse').attributes['aria-pressed'],'false');
  c.get('choose-muse').listeners.click();assert.equal(c.get('pa-brand').value,'muse');assert.equal(c.get('choose-qq').attributes['aria-pressed'],'false');
  c.get('choose-custom').listeners.click();assert.equal(c.get('pa-brand').value,'');assert.equal(reads,0);
+ });
+
+ test('workbench preferences persist only versioned bounded appearance enums', () => {
+ const writes=[];const storage={getItem:k=>k.includes('settings')?JSON.stringify({version:1,density:'compact',width:'wide',icon:'large',contrast:'strong',motion:'off',view:'activity',source:'open',token:'secret',tasks:['private']}):null,setItem:(k,v)=>writes.push([k,JSON.parse(v)])};
+ const c=clientFixture(()=>{},storage);assert.equal(c.get('pref-width').value,'wide');assert.equal(c.get('source-details').open,true);
+ c.get('pref-density').listeners.change({target:{value:'comfortable'}});
+ assert.equal(writes.length,1);assert.equal(writes[0][0],'rivule.workbench.settings.v1');assert.deepEqual(Object.keys(writes[0][1]).sort(),['contrast','density','icon','motion','source','version','view','width']);assert.equal(writes[0][1].density,'comfortable');
+ c.get('pref-width').listeners.change({target:{value:'<script>bad</script>'}});assert.equal(writes.length,1);
+ });
+ test('invalid, oversized and unavailable preference storage uses safe defaults', () => {
+ for(const value of ['{','[]','null','x'.repeat(513),'{"version":2,"width":"wide"}','{"version":1,"width":"<img>","__proto__":{"motion":"off"}}']){
+ const c=clientFixture(()=>{},{getItem:()=>value,setItem(){throw Error('blocked')}});assert.equal(c.get('pref-width').value,'standard');assert.equal(c.get('pref-motion').value,'full');
+ c.get('pref-width').listeners.change({target:{value:'wide'}});assert.equal(c.get('pref-width').value,'wide');assert.match(c.get('settings-feedback').textContent,/无法保存/);
+ c.get('settings-reset').listeners.click();assert.equal(c.get('pref-width').value,'standard');assert.match(c.get('settings-feedback').textContent,/无法保存/);
+ }
+ });
+ test('settings native dialog closes on escape with focus returned and reset applies', () => {
+ const c=clientFixture(()=>{});c.get('settings-toggle').listeners.click();assert.equal(c.get('settings').open,true);assert.equal(c.get('settings-close').focused,true);
+ let prevented=false;c.get('settings').listeners.cancel({preventDefault(){prevented=true;}});assert.equal(prevented,true);assert.equal(c.get('settings').open,false);assert.equal(c.get('settings-toggle').focused,true);assert.equal(c.get('settings-toggle').attributes['aria-expanded'],'false');
+ c.get('pref-source').listeners.change({target:{value:'open'}});assert.equal(c.get('source-details').open,true);c.get('settings-reset').listeners.click();assert.equal(c.get('source-details').open,false);
+ });
+ test('capability cards open complete text in a native detail dialog without reads', () => {
+ let reads=0;const c=clientFixture(()=>{reads++;});const opener=c.get('capability-list').children[0].children[0];opener.listeners.click({preventDefault(){}});
+ assert.equal(c.get('detail-dialog').open,true);assert.equal(c.get('detail-title').textContent,'来源验证');assert.equal(c.get('detail-content').children[1].textContent,'尚无验证时间');
+ c.get('detail-close').listeners.click();assert.equal(c.get('detail-dialog').open,false);assert.equal(c.get('detail-content').children.length,0);assert.equal(opener.focused,true);assert.equal(reads,0);
+ });
+ test('session invalidation clears open task detail text as well as hidden views', async () => {
+ let authorized=true;const c=clientFixture(async()=>authorized?{status:200,ok:true,json:async()=>({state:'ready',items:[{state:'available',task_name:'Private task',summary:'Full private summary'}]})}:{status:401});
+ await c.load();const button=c.get('items').children[0].children.find(n=>n.className==='detail-launch');button.listeners.click();assert.equal(c.get('detail-content').children[0].textContent,'Full private summary');
+ authorized=false;await c.load();assert.equal(c.get('detail-dialog').open,false);assert.equal(c.get('detail-content').children.length,0);assert.equal(c.get('detail-title').textContent,'');
+ });
+ test('saved default view applies after authorized read but not anonymous data', async () => {
+ const storage={getItem:k=>k.includes('settings')?' {"version":1,"view":"activity"}':null};let authorized=false;const c=clientFixture(async()=>authorized?{status:200,ok:true,json:async()=>({state:'ready',items:[{state:'available',task_name:'Selected'}]})}:{status:401},storage);
+ await c.load();assert.equal(c.get('capabilities-view').hidden,false);authorized=true;await c.load();assert.equal(c.get('activity-view').hidden,false);
+ });
+ test('visual controls preserve colorful shell and expose real native dialog settings', () => {
+ const html=ownerDashboardHtml('test');assert.match(html,/<dialog id="settings"/);assert.match(html,/class="setting-grid"/);assert.match(html,/@keyframes modal-in/);assert.match(html,/body\[data-width="wide"\]/);assert.match(html,/body\[data-contrast="strong"\]/);assert.match(html,/body\[data-motion="reduced"\]/);assert.match(html,/prefers-reduced-motion:reduce/);assert.match(html,/<aside id="add-column"/);
+ });
+
+ test('manual and system reduced motion suppress focus and add-rail movement', () => {
+ const html=ownerDashboardHtml('test');
+ assert.match(html,/body\[data-motion="reduced"\] \.capability-detail:focus-within,body\[data-motion="off"\] \.capability-detail:focus-within\{transform:none\}/);
+ assert.match(html,/body\[data-motion="reduced"\] \.add-column:hover \.add-emblem,body\[data-motion="off"\] \.add-column:hover \.add-emblem\{transform:rotate\(6deg\)\}/);
+ assert.match(html,/@media\(prefers-reduced-motion:reduce\)\{\.capability-detail:focus-within\{transform:none\}\.add-column:hover \.add-emblem\{transform:rotate\(6deg\)\}/);
  });
