@@ -1,3 +1,4 @@
+import { readDashboardActivity } from './dashboard-activity.mjs';
 import { readDashboardSourceProof, dashboardProducerStatus } from "./dashboard-connection.mjs";
 import { sourceBrand, knownBrandImage } from "./brand-identity.mjs";
 import { isRoutineProgress, PROGRESS_WINDOW_MS } from "./notification-policy.mjs";
@@ -28242,12 +28243,13 @@ var OwnerTerminal = class extends DurableObject {
                     const now = Date.now();
                     let proof = { status: 'unknown', evidence_kind: null, last_verified_at: null, proof_max_age_ms: 86400000 };
                     let qq = dashboardProducerStatus(null);
-                    try { proof = readDashboardSourceProof(this.ctx.storage, source, canonical([bindings.ownerId, bindings.publicOrigin, source, context[source.source_id] ?? null]), now); } catch {}
+                    try { proof = readDashboardSourceProof(this.ctx.storage, source, canonical([bindings.ownerId, bindings.publicOrigin, source, context[source.source_id] ?? null]), now, [source.source_id]); } catch {}
                     try { qq = dashboardProducerStatus(QQBridgeQueue.producerSnapshot(this.ctx.storage, now)); } catch {}
                     return { source: proof, qq, observed_at: new Date(now).toISOString() };
                 },
                 manageQQ: (operation, payload) => qqWebSettingsBridge(this.env, this.ctx.storage, bindings, operation, payload),
                 readTestReceipt: (source, selector) => readDashboardTestReceipt(this.ctx.storage, bindings, source, selector),
+                readActivity: (source, query) => readDashboardActivity(this.ctx.storage, bindings, source, query),
                 readSnapshot: (source, query) => readTaskSnapshot(this.ctx.storage, bindings, source, query)
             });
         }

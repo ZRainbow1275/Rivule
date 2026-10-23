@@ -144,3 +144,18 @@ test('QQ capabilities and 32 prepared operations cannot be mistaken for login se
  await f.complete();assert.equal([...f.data.keys()].filter(k=>k.startsWith('dashboard:session:')).length,2);
  assert.equal((await f.send('/dashboard/data','GET',session.cookie,h)).status,200);assert.equal([...f.data.keys()].filter(k=>k.startsWith('dashboard:qq-operation:')).length,32);
 });
+
+test('additional PA selectors use their exact existing source and are bound to the owner session',async()=>{
+ const f=fixture(),source={source_id:'muse-main',enabled:true,provider:'muse',name:'Muse'};
+ f.ctx.bindings.sources.push(source);f.ctx.env.DASHBOARD_SOURCE_WATCHLISTS_JSON=JSON.stringify({'muse-main':[query]});
+ const calls=[];f.ctx.readSnapshot=async(s,q)=>{calls.push([s.source_id,q]);return {schema_version:'1.0',source_id:s.source_id,...q,observed_at:new Date().toISOString(),found:false,snapshot:null};};
+ const {cookie}=await f.complete();const result=await (await f.send('/dashboard/data','GET',cookie,{'sec-fetch-site':'same-origin'})).json();
+ assert.deepEqual(calls,[['zot-main',query],['muse-main',query]]);assert.equal(result.sources[0].source_id,'muse-main');assert.equal(result.sources[0].provider,'muse');
+ f.ctx.env.DASHBOARD_SOURCE_WATCHLISTS_JSON='{}';assert.equal((await f.send('/dashboard/data','GET',cookie,{'sec-fetch-site':'same-origin'})).status,401);
+});
+test('additional PA config rejects foreign, disabled, duplicate and oversized selectors',async()=>{
+ for(const additional of [{'foreign':[query]},{'muse-main':[query,query]},{'muse-main':[{...query,source_id:'zot-main'}]},{'muse-main':[{...query,project_id:'foreign'}]}]){
+ const f=fixture();f.ctx.bindings.sources.push({source_id:'muse-main',enabled:true});f.ctx.env.DASHBOARD_SOURCE_WATCHLISTS_JSON=JSON.stringify(additional);assert.equal((await f.send('/dashboard')).status,503);assert.equal(f.reads,0);
+ }
+ const f=fixture();f.ctx.bindings.sources.push({source_id:'muse-main',enabled:true});const {cookie}=await f.complete();const result=await (await f.send('/dashboard/data','GET',cookie,{'sec-fetch-site':'same-origin'})).json();assert.deepEqual(result.sources[0].items,[]);
+});

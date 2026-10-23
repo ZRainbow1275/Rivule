@@ -1,15 +1,16 @@
+import { dashboardText, dashboardProgress } from './dashboard-activity.mjs';
 // Server-side adapter only. Do not bundle authenticated readers or credentials into a browser.
 const fields = ['project_id', 'task_id', 'run_id', 'branch_id'];
 const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(value);
 const statuses = new Set(['proposed', 'running', 'needs_input', 'completed', 'failed', 'cancelled']);
-const text = (value, limit) => typeof value === 'string' ? value.slice(0, limit) : '';
+const text = dashboardText;
 
 /** Read a caller-selected watchlist through one already-authenticated source.
  * This does not authenticate a web visitor or authorize sharing the returned data.
  * The host must enforce owner-only access and Cache-Control: no-store.
  */
-export async function readDashboardWatchlist({ sourceId, watchlist, readSnapshot }) {
-  if (sourceId !== 'zot-main' || typeof readSnapshot !== 'function' || !Array.isArray(watchlist) || watchlist.length > 20)
+export async function readDashboardWatchlist({ sourceId, watchlist, readSnapshot, readActivity, authorizedSourceIds = ['zot-main'] }) {
+  if (!authorizedSourceIds.includes(sourceId) || typeof readSnapshot !== 'function' || !Array.isArray(watchlist) || watchlist.length > 20)
     throw new Error('invalid_dashboard_watchlist');
   const queries = watchlist.map(query => {
     if (!query || typeof query !== 'object' || Array.isArray(query) || Object.keys(query).length !== fields.length ||
@@ -43,12 +44,16 @@ export async function readDashboardWatchlist({ sourceId, watchlist, readSnapshot
       items.push({ ...base, state: 'available', observed_at: response.observed_at,
         source_status: snapshot.source_status, project_name: text(snapshot.project_name, 120),
         task_name: text(snapshot.task_name, 120), branch_name: text(snapshot.branch_name, 80),
-        summary: text(snapshot.summary, 1200), stale: snapshot.stale, archived: snapshot.archived,
+        summary: text(snapshot.summary, 1200), phase_label: text(snapshot.phase_label,100), progress: dashboardProgress(snapshot.progress), blocker: text(snapshot.blocker,400), stale: snapshot.stale, archived: snapshot.archived,
         last_confirmed_at: snapshot.last_confirmed_at, pending_action_count: snapshot.pending_actions.stored_pending_count });
     } catch {
       // Never serialize raw transport errors, tokens, action payloads or sequence advice.
       items.push({ ...base, state: 'unavailable' });
     }
+  }
+  for (const item of items) if (item.state === 'available') {
+    try { item.activity = readActivity ? await readActivity(Object.fromEntries(fields.map(k=>[k,item[k]]))) : {state:'unavailable',items:[]}; }
+    catch { item.activity = {state:'unavailable',items:[]}; }
   }
   return { schema_version: '1.0', source_id: sourceId, state: items.some(item => item.state === 'unavailable') ? 'error' : 'connected', mode: 'read_only_watchlist',
     discovery_supported: false, live_subscription: false, items };

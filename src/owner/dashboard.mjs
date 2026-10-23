@@ -1,5 +1,7 @@
+import { sourceBrand } from './brand-identity.mjs';
 import { dashboardQQSettings, isQQSettingsPath } from './dashboard-settings.mjs';
 import { ownerDashboardHtml } from './presentation.mjs';
+import { dashboardText } from './dashboard-activity.mjs';
 import { readDashboardWatchlist } from './dashboard-read-model.mjs';
 import { validateDashboardTestReceipt } from './dashboard-receipt.mjs';
 const LOGIN_TTL = 5 * 60_000, SESSION_TTL = 15 * 60_000;
@@ -33,7 +35,16 @@ function configuration(env, bindings) {
     throw Error('dashboard_configuration_unavailable');
   const testReceipt = validateDashboardTestReceipt(JSON.parse(env.DASHBOARD_TEST_RECEIPT_JSON || 'null'));
   if (testReceipt && watchlist.length >= 20) throw Error('dashboard_configuration_unavailable');
-  return { source: selected, watchlist, testReceipt };
+  const additional = JSON.parse(env.DASHBOARD_SOURCE_WATCHLISTS_JSON || '{}');
+  if (!additional || Array.isArray(additional) || typeof additional !== 'object') throw Error('dashboard_configuration_unavailable');
+  const sources = bindings.sources.filter(s=>s.enabled && s.source_id !== 'zot-main');
+  let count = watchlist.length + (testReceipt ? 1 : 0);
+  for (const [sourceId,list] of Object.entries(additional)) {
+    if (!sources.some(s=>s.source_id===sourceId) || !Array.isArray(list) || list.some(q=>!q || Array.isArray(q) || Object.keys(q).length!==4 || fields.some(k=>!validId(q[k])) || !bindings.allowedProjectIds.includes(q.project_id)) || new Set(list.map(q=>JSON.stringify(fields.map(k=>q[k])))).size!==list.length) throw Error('dashboard_configuration_unavailable');
+    count += list.length;
+  }
+  if(count>20) throw Error('dashboard_configuration_unavailable');
+  return { source: selected, watchlist, testReceipt, sources, additional };
 }
 export function isDashboardRoute(url) {
   return url.pathname === '/dashboard' || url.pathname.startsWith('/dashboard/') ||
@@ -50,7 +61,7 @@ function page() {
   return new Response(body, { headers: h });
 }
 /** Called only by the owner Durable Object's internal dashboard route. */
-export async function dashboardResponse(request, { env, bindings, storage, identity, readSnapshot, readTestReceipt, readConnection, manageQQ, now = Date.now }) {
+export async function dashboardResponse(request, { env, bindings, storage, identity, readSnapshot, readActivity, readTestReceipt, readConnection, manageQQ, now = Date.now }) {
   const url = new URL(request.url);
   if (url.origin !== 'https://owner.internal' || !isDashboardRoute(url)) return json('internal_route_required', 403);
   let config;
@@ -59,7 +70,7 @@ export async function dashboardResponse(request, { env, bindings, storage, ident
   if (url.hash || url.pathname !== '/callback' && url.search) return json('invalid_dashboard_request', 400);
   const sameOrigin = request.headers.get('origin') === bindings.publicOrigin;
   if (request.method === 'POST' && !sameOrigin) return json('origin_not_accepted', 403);
-  const binding = await digest(JSON.stringify([bindings.ownerId, bindings.appId, bindings.userId, bindings.publicOrigin, config.source, config.watchlist, config.testReceipt]));
+  const binding = await digest(JSON.stringify([bindings.ownerId, bindings.appId, bindings.userId, bindings.publicOrigin, config.source, config.watchlist, config.testReceipt, config.sources, config.additional]));
   if (url.pathname === '/dashboard' && request.method === 'GET') return page();
   if (url.pathname === '/dashboard/login' && request.method === 'POST') {
     const state = 'rd_' + random(), browser = random(), key = 'dashboard:login:' + await digest(state);
@@ -132,11 +143,21 @@ export async function dashboardResponse(request, { env, bindings, storage, ident
     if (!selectedTest || fields.some(k => !validId(selectedTest[k])) || !bindings.allowedProjectIds.includes(selectedTest.project_id)) return json('dashboard_receipt_unavailable', 503);
     if (!watchlist.some(q => fields.every(k => q[k] === selectedTest[k]))) watchlist.push(selectedTest);
   }
-  const model = await readDashboardWatchlist({ sourceId: 'zot-main', watchlist, readSnapshot: query => readSnapshot(config.source, query) });
+  const model = await readDashboardWatchlist({ sourceId: 'zot-main', watchlist, readSnapshot: query => readSnapshot(config.source, query), readActivity: readActivity ? query => readActivity(config.source, query) : undefined });
   if (selectedTest) for (const item of model.items) if (fields.every(k => item[k] === selectedTest[k])) item.selection_kind = 'verified_test';
   if (readConnection) {
     try { model.connection = await readConnection(config.source); }
     catch { model.connection = { source: { status: 'unknown', evidence_kind: null, last_verified_at: null, proof_max_age_ms: 86400000 }, qq: { status: 'unknown', reason: 'state_unavailable', scope: 'owner_producer_only' }, observed_at: new Date(now()).toISOString() }; }
+  }
+  model.sources = [];
+  for (const source of config.sources) {
+    const projection = await readDashboardWatchlist({sourceId:source.source_id, authorizedSourceIds:[source.source_id], watchlist:config.additional[source.source_id] || [], readSnapshot:query=>readSnapshot(source,query),readActivity:readActivity ? query=>readActivity(source,query) : undefined});
+    const brand=sourceBrand(source);
+    projection.display_name = dashboardText(brand.name,120);
+    projection.provider = ['dot','qq','muse'].includes(source.provider) ? source.provider : null;
+    projection.connection = {source:{status:'unknown'},observed_at:new Date(now()).toISOString()};
+    if(readConnection) try { projection.connection = await readConnection(source); } catch {}
+    model.sources.push(projection);
   }
   return new Response(JSON.stringify(model), { headers: headers() });
 }

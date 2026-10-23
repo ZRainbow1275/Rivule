@@ -9,6 +9,8 @@ function clientFixture(fetch, storage, timers = {}) {
     addEventListener(type, fn) { this.listeners[type] = fn; }
     replaceChildren(...children) { this.children = children; }
     append(...children) { this.children.push(...children); }
+    insertBefore(child) { this.children.push(child); }
+    remove() { this.removed=true; }
     setAttribute(key, value) { this.attributes[key] = value; }
     focus() { this.focused=true; }
     showModal() { this.open=true; }
@@ -18,7 +20,7 @@ function clientFixture(fetch, storage, timers = {}) {
   document.getElementById = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   document.createElement = () => new Element(); document.createElementNS = () => new Element(); document.body = new Element();
   vm.runInNewContext('(' + dashboardClient.toString() + ')()', { selectedWorkbench, document, window, fetch, Date, localStorage: storage, AbortController, setTimeout, clearTimeout, ...timers });
-  return { get: document.getElementById, load: () => window.listeners.pageshow(), hide: () => window.listeners.pagehide() };
+  return { get: document.getElementById, load: () => window.listeners.pageshow(), hide: () => window.listeners.pagehide(), visible: value=>{document.hidden=!value;document.listeners.visibilitychange();} };
 }
 
 test('PA canvas has native auth forms, honest preview, accessible controls and reduced motion', () => {
@@ -51,7 +53,7 @@ test('successful snapshot uses text content, not markup, and marks verified test
   const nodes = c.get('items').children[0].children;
   assert.match(nodes[0].textContent, /测试任务/); assert.equal(nodes[1].textContent, '<img src=x onerror=alert(1)>');
   assert.equal(nodes[2].textContent, '<script>bad()</script>'); assert.equal(nodes[3].textContent, '');
-  assert.equal(c.get('status').textContent, '快照已更新');
+  assert.equal(c.get('status').textContent, '工作信息已更新 · 30 秒自动刷新');
 });
 
 test('initial failure preserves retry and never displays stale snapshots', async () => {
@@ -77,7 +79,7 @@ test('empty and partial-error states do not fabricate tasks or connection health
     await c.load(); assert.equal(c.get('item-count').textContent, '00');
     assert.match(c.get('items').children[0].textContent, /还没有已选任务/);
     assert.match(c.get('status').textContent, state === 'error' ? /读取失败/ : /尚未配置/);
-    assert.equal(c.get('connection').textContent, state === 'error' ? '快照读取异常' : '未选择任务');
+    assert.equal(c.get('connection').textContent, '来源待验证');
   }
 });
 
@@ -148,7 +150,7 @@ test('read deadline bounds headers and body, allows retry and ignores late respo
    calls++; signal = options.signal;
    if (calls === 1) return phase === 'headers' ? stalled : Promise.resolve({status:200,ok:true,json:()=>stalled});
    return new Promise(resolve => { resolveNew = resolve; });
-  }, undefined, {setTimeout(fn, ms) { assert.equal(ms,15000); timers.set(++timerId,fn); return timerId; },clearTimeout(id) { timers.delete(id); }});
+  }, undefined, {setTimeout(fn, ms) { assert.ok([15000,30000,60000].includes(ms)); timers.set(++timerId,fn); return timerId; },clearTimeout(id) { timers.delete(id); }});
   const old = c.load(); await Promise.resolve(); await Promise.resolve();
   const oldSignal = signal; [...timers.values()][0](); await old;
   assert.equal(oldSignal.aborted,true); assert.equal(timers.size,0);
@@ -159,7 +161,7 @@ test('read deadline bounds headers and body, allows retry and ignores late respo
   assert.equal(c.get('refresh').disabled,true); assert.match(c.get('status').textContent,/正在读取/);
   resolveNew({status:200,ok:true,json:async()=>({state:'ready',items:[{task_name:'current'}]})}); await next;
   assert.equal(c.get('items').children[0].children[1].textContent,'current');
-  assert.equal(timers.size,0);
+  assert.equal(timers.size,1);
  }
 });
 
@@ -221,8 +223,8 @@ test('session failure clears counts, recent confirmations and ability status, no
  await c.load();assert.equal(c.get('capabilities-view').hidden,false);
  mode='ok';await c.load();assert.equal(c.get('tasks-view').hidden,false);
  c.get('view-activity').listeners.click();await c.load();assert.equal(c.get('activity-view').hidden,false);
- mode='fail';await c.load();assert.equal(c.get('capabilities-view').hidden,false);
- mode='ok';await c.load();assert.equal(c.get('tasks-view').hidden,false);
+ mode='fail';await c.load();assert.equal(c.get('activity-view').hidden,false);assert.match(c.get('status').textContent,/保留上次快照/);
+ mode='ok';await c.load();assert.equal(c.get('activity-view').hidden,false);
  mode='401';await c.load();assert.equal(c.get('capabilities-view').hidden,false);assert.equal(c.get('items').children.length,1);
  });
 
@@ -306,4 +308,25 @@ test('management inputs and confirmation expose feedback and consequences to ass
  assert.match(html,/id="budget-minutes" aria-describedby="business-feedback business-warning"/);
  assert.match(html,/id="enable-dialog" aria-labelledby="enable-title" aria-describedby="enable-consequence"/);
  assert.match(html,/<p id="enable-consequence" class="enable-consequence">确认后发送一条验证消息/);
+});
+
+test('visible polling is bounded, single flight, backs off and stops on owner expiry',async()=>{
+ const timers=new Map();let id=0,calls=0,mode='ok';
+ const c=clientFixture(async()=>{calls++;if(mode==='failure')throw Error('offline');return mode==='401'?{status:401}:{status:200,ok:true,json:async()=>({state:'connected',items:[{state:'available',task_name:'Retained task'}]})};},undefined,{setTimeout(fn,ms){timers.set(++id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);}});
+ const flush=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
+ await c.load();assert.ok([...timers.values()].some(t=>t.ms===30000));
+ mode='failure';[...timers.values()].find(t=>t.ms===30000).fn();await flush();assert.equal(calls,2);assert.match(c.get('status').textContent,/保留上次快照/);assert.equal(c.get('items').children[0].children[1].textContent,'Retained task');assert.ok([...timers.values()].some(t=>t.ms===60000));
+ c.visible(false);assert.equal(timers.size,0);c.visible(true);await flush();assert.equal(calls,3);
+ mode='401';await c.load();assert.equal(timers.size,0);assert.equal(c.get('items').children[0].textContent,'验证本人后显示任务');
+});
+test('an interrupted initial read resumes on tab visibility without duplicate requests',async()=>{
+ let calls=0,resolve;const c=clientFixture(async()=>{calls++;if(calls===1)return new Promise(r=>resolve=r);return {status:401};});
+ const first=c.load();c.visible(false);await first;c.visible(true);for(let i=0;i<15;i++)await Promise.resolve();assert.equal(calls,2);resolve({status:200,ok:true,json:async()=>({items:[{task_name:'stale private data'}]})});for(let i=0;i<15;i++)await Promise.resolve();assert.equal(c.get('items').children[0].textContent,'验证本人后显示任务');
+});
+test('additional PA errors affect overall status and all private cards clear on expiry',async()=>{
+ let authorized=true;const c=clientFixture(async()=>authorized?{status:200,ok:true,json:async()=>({state:'connected',items:[],sources:[{source_id:'muse-main',display_name:'Muse',state:'error',items:[{state:'unavailable'}]}]})}:{status:401});
+ await c.load();assert.match(c.get('status').textContent,/部分工作信息读取失败/);const card=c.get('canvas').children[0];assert.equal(card.className,'pa source-card');authorized=false;await c.load();assert.equal(card.removed,true);
+});
+test('hiding an authenticated page clears primary task and log content',async()=>{
+ const c=clientFixture(async()=>({status:200,ok:true,json:async()=>({state:'connected',items:[{state:'available',task_name:'Private selected task'}]})}));await c.load();assert.equal(c.get('items').children.length,1);c.visible(false);assert.equal(c.get('items').children.length,0);assert.equal(c.get('detail-content').children.length,0);
 });
