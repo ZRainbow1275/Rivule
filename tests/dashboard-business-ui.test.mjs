@@ -6,8 +6,8 @@ const policy={daily_limit:100,minimum_interval_ms:3000,progress_window_ms:60000,
 const ready=()=>({state:'ready',csrf:'csrf-test',access_expires_at:new Date(Date.now()+120000).toISOString(),settings:{recipient_label:'本人 QQ · 已绑定',bound:true,budget:{mode:'warn',minutes:30,revision:4,remaining_ms:600000},notification:{state:'paused',remaining_daily:95},gateway:{connected:true,running:true,healthy:true},policy,can_enable:true}});
 const prepared=(operation='enable')=>({state:'prepared',operation_ref:'opaque-ref',expires_at:new Date(Date.now()+30000).toISOString(),confirmation:{operation,recipient_label:'本人 QQ · 已绑定',policy,budget:{mode:'stop',minutes:45,revision:4},sends_verification:operation==='enable'}});
 function setup(handler){
- class Element {constructor(){this.children=[];this.textContent='';this.value='';this.listeners={};this.open=false;this.hidden=false;}addEventListener(k,v){this.listeners[k]=v;}replaceChildren(...nodes){this.children=nodes;}showModal(){this.open=true;}close(){this.open=false;}focus(){this.focused=true;}}
- const elements=new Map(),get=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};const document=new Element(),window=new Element();document.getElementById=get;document.createElement=()=>new Element();
+ class Element {constructor(){this.children=[];this.textContent='';this.value='';this.listeners={};this.open=false;this.hidden=false;}addEventListener(k,v){this.listeners[k]=v;}replaceChildren(...nodes){this.children=nodes;}showModal(){this.open=true;}close(){this.open=false;}focus(){this.focused=true;document.activeElement=this;}}
+ const elements=new Map(),get=id=>{if(!elements.has(id))elements.set(id,Object.assign(new Element(),{id}));return elements.get(id);};const document=new Element(),window=new Element();document.getElementById=get;document.createElement=()=>new Element();
  const calls=[],timers=new Map();let timerId=0;
  vm.runInNewContext('('+qqSettingsClient.toString()+')()', {document,window,Date,AbortController,setTimeout:(fn,ms)=>{timers.set(++timerId,{fn,ms});return timerId;},clearTimeout:id=>timers.delete(id),fetch:async(url,options)=>{const call={url,body:options.body?JSON.parse(options.body):null,options};calls.push(call);const result=await handler(call,calls);if(result?.status)return {ok:false,status:result.status,json:async()=>({error:'test'})};return {ok:true,status:200,json:async()=>result};}});
  return {get,calls,document,window,timers,click:async id=>{await get(id).listeners.click?.();await flush();},open:async()=>{await get('settings-toggle').listeners.click();await flush();}};
@@ -81,4 +81,24 @@ test('long server labels and large budget values stay literal without extra requ
  assert.equal(c.get('business-remaining').textContent,'10000 分钟');
  assert.equal(c.get('business-used').textContent,'已用 10000 分 0 秒');
  assert.equal(c.calls.length,1);assert.equal(c.calls[0].options.method,'GET');
+});
+
+test('management expiry rescues focus from hidden controls without stealing appearance focus',async()=>{
+ const c=setup(async()=>ready());c.get('settings').open=true;await c.open();c.get('budget-minutes').focus();
+ const expiry=[...c.timers.values()].find(x=>x.ms>60000);expiry.fn();await flush();
+ assert.equal(c.document.activeElement.id,'settings-close');
+ c.get('pref-density').focus();c.get('settings').listeners.close();
+ assert.equal(c.document.activeElement.id,'pref-density');
+});
+test('expiring confirmation returns focus to a visible safe control without committing',async()=>{
+ const c=setup(async call=>call.url.endsWith('/prepare')?prepared():ready());c.get('settings').open=true;await c.open();await c.click('business-preview');
+ assert.equal(c.document.activeElement.id,'enable-cancel');
+ [...c.timers.values()].find(x=>x.ms<40000).fn();await flush();
+ assert.equal(c.document.activeElement.id,'settings-close');assert.equal(c.get('enable-dialog').open,false);
+ assert.equal(c.calls.some(x=>x.url.endsWith('/commit')),false);
+});
+test('invalid budget focuses its associated input without a request',async()=>{
+ const c=setup(async()=>ready());await c.open();c.get('budget-minutes').value='2.5';
+ c.get('business-budget').listeners.submit({preventDefault(){}});await flush();
+ assert.equal(c.document.activeElement.id,'budget-minutes');assert.equal(c.calls.length,1);
 });

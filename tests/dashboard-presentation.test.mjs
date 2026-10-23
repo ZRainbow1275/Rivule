@@ -296,7 +296,14 @@ test('business controls have shrinkable grids, wrapped actions and narrow-screen
 
 test('budget input exposes the server minute bounds and notification label is user-facing',()=>{
  const html=ownerDashboardHtml('test');
- assert.match(html,/id="budget-minutes" type="number" min="1" max="1440" step="1"/);
+ assert.match(html,/id="budget-minutes" aria-describedby="business-feedback business-warning" type="number" min="1" max="1440" step="1"/);
  assert.match(html,/<dt>通知状态<\/dt><dd id="business-producer">/);
  assert.doesNotMatch(html,/<dt>生产端<\/dt>/);
+});
+
+test('management inputs and confirmation expose feedback and consequences to assistive technology',()=>{
+ const html=ownerDashboardHtml('test');
+ assert.match(html,/id="budget-minutes" aria-describedby="business-feedback business-warning"/);
+ assert.match(html,/id="enable-dialog" aria-labelledby="enable-title" aria-describedby="enable-consequence"/);
+ assert.match(html,/<p id="enable-consequence" class="enable-consequence">确认后发送一条验证消息/);
 });
