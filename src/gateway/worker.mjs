@@ -554,7 +554,7 @@ async function fixedActiveProbe(actor, approved, interactionId) {
                 s.qqActiveProbes ??= {};
                 if (Object.keys(s.qqActiveProbes).length >= 64)
                     return { receipt: blocked("active_probe_history_capacity") };
-                const probe = { ...permission, kind: "one_shot_active_test", interactionId, reservedAt: actor.now(), userOpenId: s.binding.userOpenId, receipt: { state: "uncertain", reason: "reserved_before_send" } };
+                const probe = { ...permission, kind: "one_shot_active_test", interactionId, reservedAt: actor.now(), userOpenId: s.binding.userOpenId, receipt: { state: "uncertain", reason: "reserved_before_send" }, ...(approved.webOperationId ? { webOperationId: approved.webOperationId, webPhase: 'reserved' } : {}) };
                 s.qqActiveProbes[permission.bindingFingerprint] = { [ACTIVE_PROBE_ID]: probe };
                 return { probe: structuredClone(probe) };
             });
@@ -578,7 +578,10 @@ async function fixedActiveProbe(actor, approved, interactionId) {
             const gate = await actor.store.transaction(async (s) => {
                 const permission = await activeProbeEligibility(actor, s, probe);
                 const record = s.qqActiveProbes?.[probe.bindingFingerprint]?.[ACTIVE_PROBE_ID];
-                return permission.reason ? permission : !record || record.interactionId !== probe.interactionId || record.receipt.reason !== "reserved_before_send" ? { reason: "active_probe_reservation_changed" } : {};
+                if(permission.reason)return permission;
+                if(!record||record.interactionId!==probe.interactionId||record.receipt.reason!=="reserved_before_send")return {reason:"active_probe_reservation_changed"};
+                if(approved.webOperationId){record.webPhase='dispatching';record.networkStartedAt=actor.now();}
+                return {};
             });
             if (gate.reason)
                 return gate;
@@ -1905,7 +1908,7 @@ var RivuleContinuous = (() => {
         const d = state.qqContinuous, g = d?.grant;
         if (!g || g.state !== 'active')
             fail('grant_inactive');
-        if (requireProducer && g.producerReady !== true)
+        if (requireProducer && (g.producerReady !== true || g.approvalId?.startsWith('web-') && g.webSettingsReady !== true))
             fail('producer_not_ready');
         if (g.policyFingerprint !== JSON.stringify(POLICY) || g.policyRevision !== POLICY.revision || g.sourceMode !== POLICY.sourceMode || g.projectScope !== JSON.stringify([...context.projectIds].sort()))
             fail('policy_changed');
@@ -2033,7 +2036,7 @@ var RivuleContinuous = (() => {
         g.producerAcknowledgedAt = now;
         return { state: 'ready', grantId: g.id };
     }
-    function pause(state, reason, now) { const d = state.qqContinuous; if (!d?.grant)
+    function pause(state, reason, now) { state.qqSettingsRevision=(state.qqSettingsRevision??0)+1; const d = state.qqContinuous; if (!d?.grant)
         return; d.grant.state = 'paused'; d.grant.pauseReason = reason; d.grant.pausedAt = now; for (const a of Object.values(d.attempts))
         if (a.state === 'prepared') {
             a.state = 'suppressed';
@@ -2251,7 +2254,7 @@ var RivuleContinuous = (() => {
             }
         }
     }
-    return { ContinuousDeliveryController, POLICY, pause, maintainHistory, reserveEnrollmentAttempt, unresolvedAttempts, acknowledgeUnknown, safeReason };
+    return { ContinuousDeliveryController, POLICY, status, enroll, pause, maintainHistory, reserveEnrollmentAttempt, unresolvedAttempts, acknowledgeUnknown, safeReason };
 })();
 function continuousPermissionProof(state) {
     if (state.qqRevoked === true)
@@ -2426,6 +2429,10 @@ async function continuousEnrollmentProbe(actor, approved, interactionId) {
             }
             return actor.store.transaction(async (s) => {
                 const permission = await continuousEnrollmentEligibility(actor, s, approved);
+                if(approved.webOperationId) {
+                    const snap=await webSettingsSnapshot(actor,s,await continuousController(actor));
+                    if(actor.now()>=approved.webExpiresAt||actor.env.DASHBOARD_QQ_SETTINGS_ENABLED!=='true'||snap.guard!==approved.webGuard||snap.scope!==approved.webScope||s.qqWebPending!==approved.webOperationId)return {receipt:blocked('settings_changed')};
+                }
                 if (permission.reason)
                     return { receipt: blocked(permission.reason) };
                 const old = s.qqEnrollmentProbes?.[permission.bindingFingerprint]?.[approved.enrollmentId];
@@ -2436,7 +2443,7 @@ async function continuousEnrollmentProbe(actor, approved, interactionId) {
                 if (Object.values(s.qqEnrollmentProbes).reduce((n, records) => n + Object.keys(records).length, 0) >= 1000)
                     return { receipt: blocked("active_probe_history_capacity") };
                 RivuleContinuous.reserveEnrollmentAttempt(s, approved.enrollmentId, actor.now());
-                const probe = { ...permission, kind: "one_shot_active_test", interactionId, reservedAt: actor.now(), userOpenId: s.binding.userOpenId, receipt: { state: "uncertain", reason: "reserved_before_send" } };
+                const probe = { ...permission, kind: "one_shot_active_test", interactionId, reservedAt: actor.now(), userOpenId: s.binding.userOpenId, receipt: { state: "uncertain", reason: "reserved_before_send" }, ...(approved.webOperationId ? { webOperationId: approved.webOperationId, webPhase: 'reserved' } : {}) };
                 s.qqEnrollmentProbes[permission.bindingFingerprint] ??= {};
                 s.qqEnrollmentProbes[permission.bindingFingerprint][approved.enrollmentId] = probe;
                 return { probe: structuredClone(probe) };
@@ -2460,8 +2467,15 @@ async function continuousEnrollmentProbe(actor, approved, interactionId) {
             }
             const gate = await actor.store.transaction(async (s) => {
                 const permission = await continuousEnrollmentEligibility(actor, s, probe);
+                if(approved.webOperationId) {
+                    const snap=await webSettingsSnapshot(actor,s,await continuousController(actor));
+                    if(actor.now()>=approved.webExpiresAt||actor.env.DASHBOARD_QQ_SETTINGS_ENABLED!=='true'||snap.guard!==approved.webGuard||snap.scope!==approved.webScope||s.qqWebPending!==approved.webOperationId)return {reason:'settings_changed'};
+                }
                 const record = s.qqEnrollmentProbes?.[probe.bindingFingerprint]?.[approved.enrollmentId];
-                return permission.reason ? permission : !record || record.interactionId !== probe.interactionId || record.receipt.reason !== "reserved_before_send" ? { reason: "active_probe_reservation_changed" } : {};
+                if(permission.reason)return permission;
+                if(!record||record.interactionId!==probe.interactionId||record.receipt.reason!=="reserved_before_send")return {reason:"active_probe_reservation_changed"};
+                if(approved.webOperationId){record.webPhase='dispatching';record.networkStartedAt=actor.now();}
+                return {};
             });
             if (gate.reason)
                 return gate;
@@ -2504,6 +2518,7 @@ async function continuousEnrollmentProbe(actor, approved, interactionId) {
                 throw Error("active_probe_receipt_conflict");
             record.receipt = result;
             record.completedAt = actor.now();
+            if(record.webOperationId){record.webPhase='settled';record.networkSettledAt=actor.now();}
             const current = await continuousEnrollmentEligibility(actor, s, probe);
             if (result.reason === "provider_accepted" && !current.reason) {
                 s.qqEnrollmentObservedCapability = { schemaVersion: 1, kind: "continuous_enrollment_observation", bindingFingerprint: probe.bindingFingerprint, confirmedAt: probe.confirmedAt, appId: s.binding.appId, ownerId: s.binding.ownerId, recipientFingerprint: await qqHash(s.binding.userOpenId), checkedAt: actor.now(), validUntil: actor.now() + ACTIVE_PROBE_FRESH_MS, probeId: approved.enrollmentId, interactionId: probe.interactionId, sessionFingerprint: probe.sessionFingerprint, runtimeEpoch: probe.runtimeEpoch, permissionRevision: probe.permissionRevision, renewalEventKey: probe.renewalEventKey, receipt: structuredClone(result) };
@@ -2577,7 +2592,7 @@ function continuousDisplayView({ status, eligibility, review, deliveryEnabled })
 }
 async function continuousPanel(actor) {
     const ctl = await continuousController(actor), status = await ctl.status();
-    const review = await actor.store.transaction(async (s) => { const fingerprint = await activeBindingFingerprint(s.binding), pending = RivuleContinuous.unresolvedAttempts(s, fingerprint, actor.now()); return { count: pending.keys.length, reviewable: pending.reviewable, control: { bindingFingerprint: fingerprint, confirmedAt: s.binding?.confirmedAt, reviewDigest: await qqHash(JSON.stringify(pending.keys)) } }; });
+    const review = await actor.store.transaction(async (s) => { const fingerprint = await activeBindingFingerprint(s.binding), pending = RivuleContinuous.unresolvedAttempts(s, fingerprint, actor.now()); return { count: pending.keys.length, reviewable: pending.reviewable && !pending.records.some(r=>r.webOperationId&&actor.webProbeFlights?.has(r.webOperationId)), control: { bindingFingerprint: fingerprint, confirmedAt: s.binding?.confirmedAt, reviewDigest: await qqHash(JSON.stringify(pending.keys)) } }; });
     const eligibility = await actor.store.transaction(async (s) => {
         const p = await continuousEnrollmentEligibility(actor, s), renewal = s.qqActivePermission?.renewal;
         if (p.reason)
@@ -2640,12 +2655,168 @@ async function enableContinuousFromControl(actor, action, interactionId) {
 async function reviewContinuousOutcome(actor, action, interactionId) {
     const result = await actor.command(() => actor.store.transaction(async (s) => {
         const fingerprint = await activeBindingFingerprint(s.binding), pending = RivuleContinuous.unresolvedAttempts(s, fingerprint, actor.now());
-        if (action.bindingFingerprint !== fingerprint || action.confirmedAt !== s.binding?.confirmedAt || action.reviewDigest !== await qqHash(JSON.stringify(pending.keys)))
+        if (pending.records.some(r=>r.webOperationId&&actor.webProbeFlights?.has(r.webOperationId)) || action.bindingFingerprint !== fingerprint || action.confirmedAt !== s.binding?.confirmedAt || action.reviewDigest !== await qqHash(JSON.stringify(pending.keys)))
             throw Error('review_changed');
-        return RivuleContinuous.acknowledgeUnknown(s, fingerprint, pending.keys, interactionId, actor.now());
+        const result=RivuleContinuous.acknowledgeUnknown(s, fingerprint, pending.keys, interactionId, actor.now());
+        // Compatibility only: this already-authenticated Discord review must include the
+        // exact web operation's actual probe; unrelated reviews never release its lock.
+        const operationId=s.qqWebPending, op=operationId&&s.qqWebOperations?.[operationId];
+        if(op?.bindingFingerprint===fingerprint) {
+            const matching=Object.entries(s.qqEnrollmentProbes?.[fingerprint]??{}).filter(([id,r])=>r.interactionId==='web-'+operationId&&r.webOperationId===operationId);
+            if(matching.length===1&&pending.keys.includes('enrollment:'+matching[0][0])&&!actor.webProbeFlights?.has(operationId)&&matching[0][1].reviewInteractionId===interactionId&&!(s.qqContinuous?.grant?.approvalId==='web-'+operationId&&s.qqContinuous.grant.state==='active')) {
+                op.reviewedAt=actor.now();op.reviewInteractionId=interactionId;delete s.qqWebPending;
+            }
+        }
+        return result;
     }));
     return `已保留 ${result.reviewed} 条核对记录。`;
 }
+// Separate owner-web management protocol. Never accepts or forges Discord interactions.
+const webSettingsExact = (v, keys) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).sort().join(',') === keys.sort().join(',');
+async function webSettingsSnapshot(actor, s, ctl) {
+    const c=actor.config(), now=actor.now(), policy=runtimeBudgetPolicy(s,c.budget), budget=s.activeBudget!==undefined||s.control?.running===true?runtimeBudgetView(s,c.budget,now):{...policy,usedMs:0,remainingMs:policy.limitMs,warningReached:false,exhausted:false};
+    const fingerprint=await activeBindingFingerprint(s.binding);
+    const scope=await qqHash(JSON.stringify([c.ownerId,c.appId,fingerprint,c.allowedProjects,c.allowedSources,RivuleContinuous.POLICY,actor.env.QQ_DELIVERY_ENABLED]));
+    const status=RivuleContinuous.status(s,ctl.context(s),now);
+    const eligibility=await continuousEnrollmentEligibility(actor,s);
+    const unresolved=RivuleContinuous.unresolvedAttempts(s,fingerprint,now);
+    const pending=s.qqWebPending ? s.qqWebOperations?.[s.qqWebPending] : null;
+    const guard=await qqHash(JSON.stringify([scope,budget.revision,s.qqContinuous?.grant??null,s.qqActivePermission?.revision??0,actor.continuousSessionFingerprint??null,continuousRuntimeEpoch(actor),s.control?.running===true,s.qqSettingsRevision??0]));
+    const blocker=pending ? 'settings_outcome_unknown' : unresolved.keys.length ? 'unknown_outcome_requires_review' : eligibility.reason??(status.enabled?'already_active':null);
+    return {scope,guard,control:eligibility,settings:{
+        recipient_label:status.bound?'本人 QQ · 已确认绑定（账号已隐藏）':'未绑定',bound:status.bound,
+        gateway:{connected:actor.runtime?.client.ready===true&&!actor.runtime?.client.stopped,running:s.control?.running===true,healthy:s.qqIngestionHealth?.healthy===true&&!actor.store.qqIngestionFault},
+        budget:{mode:budget.mode,minutes:budget.limitMs/60000,revision:budget.revision,used_ms:budget.usedMs,remaining_ms:budget.remainingMs,warning_reached:budget.warningReached,exhausted:budget.exhausted},
+        notification:{state:pending?'unknown':status.enabled?'active':status.grantState==='paused'||!status.grantState?'paused':'unknown',reason:status.reason,remaining_daily:status.remainingDaily},
+        policy:{daily_limit:RivuleContinuous.POLICY.dailyLimit,minimum_interval_ms:RivuleContinuous.POLICY.minimumIntervalMs,progress_window_ms:60000,source_mode:RivuleContinuous.POLICY.sourceMode,project_ids:[...c.allowedProjects],new_only:true},
+        can_enable:!blocker,enable_blocker:blocker
+    }};
+}
+function settlePausedWebOperation(s, now, producerPaused) {
+    const operationId=s.qqWebPending, op=operationId&&s.qqWebOperations?.[operationId];
+    if(!producerPaused||!op)return false;
+    const grant=s.qqContinuous?.grant;
+    if(grant?.approvalId==='web-'+operationId&&grant.state==='active')return false;
+    if((s.qqSettingsRevision??0)<=(op.settingsRevision??0))return false;
+    const records=Object.values(s.qqEnrollmentProbes?.[op.bindingFingerprint]??{}).filter(r=>r.interactionId==='web-'+operationId&&r.webOperationId===operationId);
+    for(const r of records) {
+        if(r.webPhase==='reserved'&&r.networkStartedAt===undefined) {
+            // The newer pause epoch makes the old dispatch guard permanently invalid.
+            r.webPhase='cancelled_before_dispatch';r.receipt={state:'not_sent',reason:'owner_cancelled_before_dispatch'};r.completedAt=now;
+        }
+        if(r.webPhase==='dispatching'||!['settled','cancelled_before_dispatch'].includes(r.webPhase)||r.receipt?.state==='uncertain'&&!Number.isSafeInteger(r.reviewedAt))return false;
+    }
+    op.cancelledAt=now;delete s.qqWebPending;return true;
+}
+async function webSettingsRequest(actor, packet) {
+    if(actor.env.DASHBOARD_QQ_SETTINGS_ENABLED!=='true')throw Error('qq_settings_disabled');
+    const secret=actor.env.QQ_BRIDGE_SECRET, e=await check(secret,'rivule-qq-web-request-v1',packet),c=actor.config();
+    if(!webSettingsExact(e,['version','timestamp','requestId','ownerId','appId','operation','payload'])||e.version!==1||e.ownerId!==c.ownerId||e.appId!==c.appId||!/^([a-f0-9]{64})$/.test(e.requestId)||!Number.isSafeInteger(e.timestamp)||Math.abs(actor.now()-e.timestamp)>30000||!['inspect','commit','abort','complete','settle_pause'].includes(e.operation))throw Error('settings_envelope_invalid');
+    const ctl=await continuousController(actor);
+    let result;
+    if(e.operation==='inspect') {
+        if(e.payload!==null)throw Error('settings_schema_invalid');
+        result=await actor.store.transaction(s=>webSettingsSnapshot(actor,s,ctl));
+        delete result.control;
+    } else if(e.operation==='complete') {
+        if(!webSettingsExact(e.payload,['operationId','grantId'])||!/^[a-f0-9]{64}$/.test(e.payload.operationId)||!/^grant-[1-9][0-9]*$/.test(e.payload.grantId))throw Error('settings_schema_invalid');
+        result=await actor.command(()=>actor.store.transaction(s=>{
+            const op=s.qqWebOperations?.[e.payload.operationId],g=s.qqContinuous?.grant;
+            const live=RivuleContinuous.status(s,ctl.context(s),actor.now());
+            if(!op||g?.id!==e.payload.grantId||g?.approvalId!=='web-'+e.payload.operationId||!live.gatewayReady||g.producerReady!==true)throw Error('settings_activation_changed');
+            g.webSettingsReady=true;
+            op.result={state:'active'};if(s.qqWebPending===e.payload.operationId)delete s.qqWebPending;
+            return {state:'active'};
+        }));
+    } else if(e.operation==='settle_pause') {
+        if(!webSettingsExact(e.payload,['operationId','producerPaused'])||!/^[a-f0-9]{64}$/.test(e.payload.operationId)||e.payload.producerPaused!==true)throw Error('settings_schema_invalid');
+        result=await actor.command(()=>actor.store.transaction(s=>{
+            const op=s.qqWebOperations?.[e.payload.operationId];
+            if(!op||!['budget','pause'].includes(op.operation)||!['saved','paused'].includes(op.result?.state))throw Error('settings_pause_unconfirmed');
+            settlePausedWebOperation(s,actor.now(),true);
+            return {state:op.result.state};
+        }));
+    } else if(e.operation==='abort') {
+        if(!webSettingsExact(e.payload,['operationId','producerPaused'])||!/^[a-f0-9]{64}$/.test(e.payload.operationId)||e.payload.producerPaused!==true)throw Error('settings_schema_invalid');
+        result=await actor.command(()=>actor.store.transaction(s=>{
+            const op=s.qqWebOperations?.[e.payload.operationId];
+            if(op&&op.operation!=='enable')throw Error('settings_operation_conflict');
+            // Compensate only this operation's grant; never pause a newer owner's grant.
+            if(op&&s.qqContinuous?.grant?.approvalId==='web-'+e.payload.operationId)RivuleContinuous.pause(s,'web_activation_not_confirmed',actor.now());
+            if(op){
+                op.result={state:'uncertain',reason:'producer_ack_unknown'};
+                if((!s.qqWebPending&&!op.cancelledAt&&!op.reviewedAt)||s.qqWebPending===e.payload.operationId){
+                    s.qqWebPending=e.payload.operationId;
+                    if((s.qqSettingsRevision??0)<=(op.settingsRevision??0))s.qqSettingsRevision=(op.settingsRevision??0)+1;
+                    settlePausedWebOperation(s,actor.now(),true);
+                }
+            }
+            return {state:'uncertain',reason:'producer_ack_unknown'};
+        }));
+    } else {
+        const p=e.payload, operation=p?.operation;
+        const keys=['operation','guard','scope','operationId','expiresAt',...(operation==='budget'?['mode','minutes','revision']:[])];
+        if(!webSettingsExact(p,keys)||!['budget','pause','enable'].includes(operation)||!['guard','scope','operationId'].every(k=>typeof p[k]==='string'&&/^[a-f0-9]{64}$/.test(p[k])))throw Error('settings_schema_invalid');
+        if(!Number.isSafeInteger(p.expiresAt))throw Error('settings_confirmation_expired');
+        if(operation==='budget'&&(!['warn','stop'].includes(p.mode)||!Number.isSafeInteger(p.minutes)||p.minutes<1||p.minutes>1440||!Number.isSafeInteger(p.revision)||p.revision<0))throw Error('settings_budget_invalid');
+        const claimed=await actor.command(()=>actor.store.transaction(async s=>{
+            const digest=await qqHash(JSON.stringify(p)),old=s.qqWebOperations?.[p.operationId];
+            if(old){if(old.digest!==digest)throw Error('settings_operation_conflict');return {result:old.result};}
+            if(p.expiresAt<=actor.now()||p.expiresAt>actor.now()+300000)throw Error('settings_confirmation_expired');
+            const snap=await webSettingsSnapshot(actor,s,ctl);
+            if(snap.scope!==p.scope||snap.guard!==p.guard||operation==='budget'&&snap.settings.budget.revision!==p.revision)return {result:{state:'blocked',reason:'settings_changed'}};
+            if(operation==='enable'&&!snap.settings.can_enable)return {result:{state:'blocked',reason:'enable_not_available'}};
+            s.qqWebOperations??={};
+            // Do not expire unknown operation reservations: a replay must never send again.
+            if(Object.keys(s.qqWebOperations).length>=1000)return {result:{state:'blocked',reason:'settings_history_capacity'}};
+            s.qqWebOperations[p.operationId]={digest,operation,settingsRevision:s.qqSettingsRevision??0,bindingFingerprint:snap.control.bindingFingerprint??null,at:actor.now(),result:{state:'uncertain',reason:'operation_in_progress_or_unknown'}};
+            if(operation==='enable')s.qqWebPending=p.operationId;
+            return {control:snap.control};
+        }));
+        if(claimed.result)result=claimed.result;
+        else {
+            try {
+                if(operation==='budget') {
+                    await actor.updateRuntimeBudget({action:'budget_web',budgetRevision:p.revision,webMode:p.mode,webMinutes:p.minutes,webScope:p.scope,webGuard:p.guard});
+                    result={state:'saved'};
+                } else if(operation==='pause') {
+                    await actor.command(()=>actor.store.transaction(async s=>{
+                        const snap=await webSettingsSnapshot(actor,s,ctl);
+                        if(snap.scope!==p.scope||snap.guard!==p.guard)throw Error('settings_changed');
+                        RivuleContinuous.pause(s,'owner_paused',actor.now());
+                    }));
+                    result={state:'paused'};
+                } else {
+                    const control={...claimed.control,webGuard:p.guard,webScope:p.scope,webOperationId:p.operationId,webExpiresAt:p.expiresAt,enrollmentId:crypto.randomUUID(),policyFingerprint:JSON.stringify(RivuleContinuous.POLICY)};
+                    const interactionId='web-'+p.operationId;
+                    // The existing probe reserves once and rechecks connection, binding and budget before dispatch.
+                    actor.webProbeFlights??=new Set();actor.webProbeFlights.add(p.operationId);
+                    let probe;
+                    try{probe=await continuousEnrollmentProbe(actor,control,interactionId);}finally{actor.webProbeFlights.delete(p.operationId);}
+                    if(probe.state!=='sent')result={state:probe.state==='uncertain'?'uncertain':probe.state==='not_sent'?'not_sent':'blocked',reason:probe.state==='uncertain'?'verification_outcome_unknown':'verification_not_sent'};
+                    else {
+                        // A concurrent pause, changed scope/budget/session, or another grant invalidates this confirmation.
+                        const grant=await actor.command(()=>actor.store.transaction(async s=>{
+                            const snap=await webSettingsSnapshot(actor,s,ctl);
+                            if(actor.now()>=p.expiresAt||actor.env.DASHBOARD_QQ_SETTINGS_ENABLED!=='true'||snap.scope!==p.scope||snap.guard!==p.guard||s.qqWebPending!==p.operationId)throw Error('settings_changed');
+                            if(s.qqEnrollmentObservedCapability?.interactionId!==interactionId||s.qqEnrollmentObservedCapability?.probeId!==control.enrollmentId||s.qqEnrollmentObservedCapability?.receipt?.messageId!==probe.messageId)throw Error('enrollment_observation_changed');
+                            return RivuleContinuous.enroll(s,ctl.context(s),{ownerAuthenticated:true,interactionId,policyFingerprint:control.policyFingerprint,policyRevision:RivuleContinuous.POLICY.revision,budgetRevision:control.budgetRevision,backlog:'new_only',startAfterRevision:0,expiresAt:actor.now()+300000},actor.now());
+                        }));
+                        result={state:'gateway_ready',approval_id:interactionId,grant_id:grant.id};
+                    }
+                }
+            } catch { result={state:'uncertain',reason:'settings_outcome_unknown'}; }
+            await actor.command(()=>actor.store.transaction(s=>{
+                s.qqWebOperations[p.operationId].result=result;
+                if(!['uncertain','gateway_ready'].includes(result.state)&&s.qqWebPending===p.operationId)delete s.qqWebPending;
+                if(result.state==='uncertain'&&s.qqContinuous?.grant?.approvalId==='web-'+p.operationId)RivuleContinuous.pause(s,'web_settings_outcome_unknown',actor.now());
+            }));
+        }
+    }
+    const body=JSON.stringify({version:1,requestId:e.requestId,requestHash:await hash(packet.body),ownerId:c.ownerId,operation:e.operation,result});
+    return {body,signature:await hmac(secret,'rivule-qq-web-response-v1',body)};
+}
+
 var GatewayActor = class {
     constructor(ctx, env, { fetch: network = globalThis.fetch, WebSocket: Socket = cloudflareSocket(network), now = Date.now } = {}) {
         Object.assign(this, { ctx, env, network, Socket, now });
@@ -2981,12 +3152,16 @@ var GatewayActor = class {
     async updateRuntimeBudget(action) {
         return this.command(async () => {
             await this.accountBudget();
-            const result = await this.store.transaction(state => {
+            const result = await this.store.transaction(async state => {
+                if(action.action==='budget_web') {
+                    const ctl=await continuousController(this), snap=await webSettingsSnapshot(this,state,ctl);
+                    if(snap.scope!==action.webScope||snap.guard!==action.webGuard)throw Error('settings_changed');
+                }
                 const old = runtimeBudgetPolicy(state, this.config().budget);
                 if (action.budgetRevision !== old.revision)
                     throw Error("runtime_budget_policy_changed");
-                const mode = action.action === "budget_warn" ? "warn" : action.action === "budget_stop" ? "stop" : old.mode;
-                const limitMs = action.action === "budget_less" ? Math.max(60000, old.limitMs - 1800000) : action.action === "budget_more" ? Math.min(86400000, old.limitMs + 1800000) : action.action === "budget_reset" ? 7200000 : old.limitMs;
+                const mode = action.action === "budget_web" ? action.webMode : action.action === "budget_warn" ? "warn" : action.action === "budget_stop" ? "stop" : old.mode;
+                const limitMs = action.action === "budget_web" ? action.webMinutes*60000 : action.action === "budget_less" ? Math.max(60000, old.limitMs - 1800000) : action.action === "budget_more" ? Math.min(86400000, old.limitMs + 1800000) : action.action === "budget_reset" ? 7200000 : old.limitMs;
                 if (old.revision >= Number.MAX_SAFE_INTEGER)
                     throw Error("runtime_budget_policy_invalid");
                 state.qqRuntimeBudgetPolicy = { version: 1, mode, limitMs, revision: old.revision + 1 };
@@ -3091,6 +3266,7 @@ var QQGatewayObject = class extends DurableObject {
     continuousRequest(packet) {
         return continuousRequest(this.actor, packet);
     }
+    webSettingsRequest(packet) { return webSettingsRequest(this.actor, packet); }
     ownerSetup(p) {
         return ownerSetup(this.actor, p);
     }

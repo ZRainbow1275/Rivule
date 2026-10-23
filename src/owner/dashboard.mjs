@@ -1,3 +1,4 @@
+import { dashboardQQSettings, isQQSettingsPath } from './dashboard-settings.mjs';
 import { ownerDashboardHtml } from './presentation.mjs';
 import { readDashboardWatchlist } from './dashboard-read-model.mjs';
 import { validateDashboardTestReceipt } from './dashboard-receipt.mjs';
@@ -49,7 +50,7 @@ function page() {
   return new Response(body, { headers: h });
 }
 /** Called only by the owner Durable Object's internal dashboard route. */
-export async function dashboardResponse(request, { env, bindings, storage, identity, readSnapshot, readTestReceipt, readConnection, now = Date.now }) {
+export async function dashboardResponse(request, { env, bindings, storage, identity, readSnapshot, readTestReceipt, readConnection, manageQQ, now = Date.now }) {
   const url = new URL(request.url);
   if (url.origin !== 'https://owner.internal' || !isDashboardRoute(url)) return json('internal_route_required', 403);
   let config;
@@ -108,17 +109,18 @@ export async function dashboardResponse(request, { env, bindings, storage, ident
       const active = [...sessions].filter(([, value]) => value.expires > now()).sort((a, b) => a[1].expires - b[1].expires);
       for (const [key, value] of sessions) if (value.expires <= now()) await tx.delete(key);
       for (const [key] of active.slice(0, Math.max(0, active.length - 15))) await tx.delete(key);
-      await tx.put(sessionKey, { binding, expires: now() + SESSION_TTL });
+      await tx.put(sessionKey, { binding, csrf: random(), expires: now() + SESSION_TTL });
     });
     h.set('location', '/dashboard');h.append('set-cookie', cookie(SESSION_COOKIE, token, SESSION_TTL / 1000, 'Strict'));
     return new Response(null, { status: 303, headers: h });
   }
-  if (!['/dashboard/data', '/dashboard/logout'].includes(url.pathname)) return json('not_found', 404);
+  if (!['/dashboard/data', '/dashboard/logout'].includes(url.pathname) && !isQQSettingsPath(url.pathname)) return json('not_found', 404);
   if (url.pathname === '/dashboard/data' && request.method !== 'GET' || url.pathname === '/dashboard/logout' && request.method !== 'POST') return json('method_not_allowed', 405);
-  if (url.pathname === '/dashboard/data' && (request.headers.get('sec-fetch-site') !== 'same-origin' || request.headers.has('origin') && !sameOrigin)) return json('origin_not_accepted', 403);
+  if ((url.pathname === '/dashboard/data' || isQQSettingsPath(url.pathname)) && (request.headers.get('sec-fetch-site') !== 'same-origin' || request.headers.has('origin') && !sameOrigin)) return json('origin_not_accepted', 403);
   const token = readCookie(request, SESSION_COOKIE), sessionKey = token ? 'dashboard:session:' + await digest(token) : null;
   const session = sessionKey && await storage.get(sessionKey);
   if (!session || session.expires <= now() || session.binding !== binding) return json('dashboard_login_required', 401);
+  if (isQQSettingsPath(url.pathname)) return dashboardQQSettings(request, {env,storage,session,sessionKey,binding,now,manageQQ,headers});
   if (url.pathname === '/dashboard/logout') {
     await storage.delete(sessionKey);const h = headers();h.set('location', '/dashboard');h.append('set-cookie', cookie(SESSION_COOKIE, '', 0, 'Strict'));
     return new Response(null, { status: 303, headers: h });

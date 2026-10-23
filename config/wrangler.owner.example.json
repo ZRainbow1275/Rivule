@@ -29,7 +29,8 @@
     "QQ_ENABLED": "false",
     "QQ_OWNER_ID": "REPLACE_QQ_OWNER_ID",
     "QQ_SETUP_ENABLED": "false",
-    "SOURCES_JSON": "[]"
+    "SOURCES_JSON": "[]",
+    "DASHBOARD_QQ_SETTINGS_ENABLED": "false"
   },
   "durable_objects": {
     "bindings": [

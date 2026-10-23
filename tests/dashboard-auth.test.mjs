@@ -123,3 +123,24 @@ test('connection metadata is read only after owner session and read failures sta
  const response=await f.send('/dashboard/data','GET',session.cookie,{'sec-fetch-site':'same-origin'});assert.equal((await response.json()).connection.source.status,'verified');assert.equal(reads,1);
  f.ctx.readConnection=async()=>{throw Error('private binding');};const failed=await f.send('/dashboard/data','GET',session.cookie,{'sec-fetch-site':'same-origin'});const model=await failed.json();assert.equal(model.connection.source.status,'unknown');assert.equal(model.connection.qq.status,'unknown');assert.equal(JSON.stringify(model).includes('private binding'),false);
 });
+test('QQ settings share owner/same-origin checks without upgrading old read-only sessions',async()=>{
+ const f=fixture();f.ctx.env.DASHBOARD_QQ_SETTINGS_ENABLED='true';let gateway=0;f.ctx.manageQQ=async()=>{gateway++;throw Error('unexpected gateway access');};
+ const h={'sec-fetch-site':'same-origin'};
+ assert.equal((await f.send('/dashboard/qq-settings','GET','',h)).status,401);
+ const session=await f.complete();assert.equal((await f.send('/dashboard/qq-settings','GET',session.cookie,{'sec-fetch-site':'cross-site'})).status,403);
+ assert.equal((await f.send('/dashboard/qq-settings/access','POST',session.cookie,{...h,origin:'https://evil.test'})).status,403);
+ assert.equal((await (await f.send('/dashboard/qq-settings','GET',session.cookie,h)).json()).state,'access_required');assert.equal(gateway,0);
+ for(const [key,value] of f.data)if(key.startsWith('dashboard:session:')){delete value.csrf;f.data.set(key,value);}
+ assert.equal((await f.send('/dashboard/qq-settings','GET',session.cookie,h)).status,401);
+ assert.equal((await f.send('/dashboard/data','GET',session.cookie,h)).status,200);assert.equal(gateway,0);
+});
+test('QQ capabilities and 32 prepared operations cannot be mistaken for login sessions',async()=>{
+ const f=fixture();f.ctx.env.DASHBOARD_QQ_SETTINGS_ENABLED='true';f.ctx.manageQQ=async()=>({scope:'a'.repeat(64),guard:'b'.repeat(64),settings:{bound:true,recipient_label:'本人 QQ',budget:{mode:'warn',minutes:120,revision:0},policy:{source_mode:'all_currently_verified',project_ids:['project']},can_enable:true}});
+ const session=await f.complete(),h={'sec-fetch-site':'same-origin'},access=await (await f.send('/dashboard/qq-settings','GET',session.cookie,h)).json();
+ const send=body=>dashboardResponse(new Request('https://owner.internal/dashboard/qq-settings/'+(body.operation?'prepare':'access'),{method:'POST',headers:{origin,cookie:session.cookie,'sec-fetch-site':'same-origin','content-type':'application/json'},body:JSON.stringify(body)}),f.ctx);
+ assert.equal((await send({csrf:access.csrf,confirm:true})).status,200);for(let i=0;i<32;i++)assert.equal((await send({csrf:access.csrf,operation:'pause'})).status,200);
+ assert.equal([...f.data.keys()].filter(k=>k.startsWith('dashboard:session:')).length,1);
+ assert.equal([...f.data.keys()].filter(k=>k.startsWith('dashboard:qq-operation:')).length,32);
+ await f.complete();assert.equal([...f.data.keys()].filter(k=>k.startsWith('dashboard:session:')).length,2);
+ assert.equal((await f.send('/dashboard/data','GET',session.cookie,h)).status,200);assert.equal([...f.data.keys()].filter(k=>k.startsWith('dashboard:qq-operation:')).length,32);
+});

@@ -198,3 +198,51 @@ v0.4.2 的网关状态解码在读取 v2 通知状态时恢复拆分存储中缺
 将已批准的 Wrangler CLI 配置保存在仓库之外的私有目录，并通过 `XDG_CONFIG_HOME` 指向该目录。同一次操作中的身份检查、构建与部署应使用同一配置环境。目录中可能含授权信息，不得提交 Git、打印令牌内容或复制到文档。缺失授权时走官方支持的授权恢复流程；新增授权仍须确认，不改用浏览器上传绕过指定部署方式。
 
 恢复后先用 Wrangler 身份检查确认账户可用，再读取既有 Worker 配置。保留全部现有绑定、秘密、兼容设置和部署目标，只修改本次明确批准的配置。运行项目检查、测试及完整构建，然后通过 Wrangler 部署已核验提交。部署后分别确认版本/流量、未登录拒绝数据访问、所有者登录以及选定任务读取。只有这些检查的实际结果才能写入验收记录，不用新通知或历史事件重放测试面板。
+
+### 本人网页 QQ 业务管理（显式开关）
+
+Owner 和 QQ Gateway 必须同时设置 `DASHBOARD_QQ_SETTINGS_ENABLED="true"`；默认关闭。
+不需要新 secret、OAuth scope 或外部凭据，继续使用既有 `QQ_GATEWAY` service binding 和
+`QQ_BRIDGE_SECRET`，但使用独立的 `rivule-qq-web-request-v1` / `rivule-qq-web-response-v1` 签名域。
+先发布 Gateway，再发布 Owner。关闭任一端开关即拒绝新的管理操作。
+
+原 `/dashboard/data` 仍只读取原选定 Zot 快照与连接元数据，不调用 Gateway 或初始化通知队列。
+旧登录会话继续只读；管理需要重新登录获得独立 CSRF，并由本人明确申请最多 5 分钟的
+`qq_settings` 能力（不超过 15 分钟登录会话）。能力仅用于既有本人 QQ 绑定。
+所有请求均需现有本人会话；写请求限定同源 JSON POST，严格字段与大小检查。
+
+管理接口：
+- `GET /dashboard/qq-settings`：无能力时返回 `access_required`；有能力时返回安全预算、额度、
+  网关状态、既有项目范围与固定通知规则。不会发送验证、创建控制、启动连接或设置 alarm。
+- `POST /dashboard/qq-settings/access`：`csrf, confirm:true`，替换本会话原能力。
+- `POST /dashboard/qq-settings/prepare`：`csrf, operation`；budget 另需 `mode, minutes, revision`。
+  返回短期一次性 `operation_ref` 和确认摘要。prepare 不写 Gateway 状态、发送或启动连接。
+- `POST /dashboard/qq-settings/commit`：只接收 `csrf, operation_ref, confirm:true`，不接受替换参数。
+  Owner 和 Gateway 均在 RPC/发送前持久化未知占位；重复操作不会重新发送。
+
+预算限整数 1–1440 分钟，模式 warn/stop，以 revision CAS 保存；不做静默取整或截断。
+原始环境阈值仍来自 `QQ_DAILY_ACTIVE_BUDGET_MS`，示例 120 分钟，不是实测值。
+保存预算会暂停 Gateway grant 和 Owner producer，不会自动重新开启，也不改变 Cloudflare 账单。
+
+启用必须先显示确认摘要，并由本人再次确认：向既有已确认本人 QQ 发送一条验证消息，
+随后仅转发既有授权项目内当前已验证 PA 的新普通动态，不回补历史，不增加项目、来源、收件人。
+此通知范围不等同网页只读 Zot watchlist。日额度固定为 100 次尝试（包含验证），最小 3 秒间隔，
+普通进展 60 秒合并，受阻/待办/终态不等待该合并窗口。
+
+启用完成顺序为 probe → Gateway enrollment → Owner cursor/producer ACK → Gateway complete。
+失联、不明结果、过期或绑定/策略/预算变化保持暂停，不自动重发。本人网页不提供未知结果核对、
+重绑或连接启动入口。已消费操作不会因 TTL 清理而在 Gateway 变得可重放；Gateway 操作记录
+达到 1000 后拒绝新操作，需受控维护。未知 web 操作保留 owner-wide 阻断，不因重新登录、
+重新授权或新操作引用清除。恢复只走以下已有授权流程，不提供网页“清锁”或自动重发：
+- 验证消息结果未知：到原 Discord QQ 持续通知面板核对，至少 30 秒后本人点击“我已查看 QQ”。
+  必须核对同一绑定、同一 reviewDigest 和本次 web operation 的实际 enrollment 记录；
+  旧 operation 仍保存 unknown 终态，不可重放，不会因核对而声称消息已送达。
+- 当前 actor 仍有实际 probe flight 时，暂停不会解除在途锁，核对也拒绝；连接换代不会清除
+  flight 集合。进程重启或网络已结束但结果持久化失败时，仍需上述本人显式核对遗留 unknown。
+- 验证已知成功、但 producer ACK/回复未知：Owner 先确认 producer 暂停，再签名通知 Gateway
+  暂停同一 grant，确认没有未核对/在途 probe 后解除阻断。不会重发旧验证。
+- 确定尚未发出的挂起操作：本人点击“暂停”，取消代际令旧发送 guard 永久失效，
+  明确 reserved 且未开始 network 的记录转为 not_sent；然后才允许新的确认。
+
+网页 grant 在最终 complete 前还有 webSettingsReady 门：producer ACK 本身不会解锁投递。
+恢复后如仍希望开启，必须重新查看范围和接收人摘要并明确确认；不因恢复自动开启。

@@ -885,3 +885,58 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
     }
 };
 export { QQBridgeQueue, qqInteractionResponse };
+
+// Dedicated signed owner-web bridge; no browser-supplied recipient or method name.
+export async function qqWebSettingsBridge(env, storage, bindings, operation, payload, now=Date.now) {
+    if(env.DASHBOARD_QQ_SETTINGS_ENABLED!=='true'||!['inspect','commit'].includes(operation))throw Error('qq_settings_disabled');
+    const ownerId=bindings.ownerId;
+    if(env.QQ_OWNER_ID!==ownerId||!/^\d{1,32}$/.test(env.QQ_APP_ID??''))throw Error('qq_owner_mismatch');
+    const call=async(op,data)=>{
+        const requestId=Array.from(crypto.getRandomValues(new Uint8Array(32)),x=>x.toString(16).padStart(2,'0')).join('');
+        const body=JSON.stringify({version:1,timestamp:now(),requestId,ownerId,appId:env.QQ_APP_ID,operation:op,payload:data});
+        const secret=env.QQ_BRIDGE_SECRET, packet={body,signature:await hmac(secret,'rivule-qq-web-request-v1',body)};
+        const stub=env.QQ_GATEWAY.get(env.QQ_GATEWAY.idFromName('qq:'+ownerId));
+        const response=await check(secret,'rivule-qq-web-response-v1',await stub.webSettingsRequest(packet));
+        if(response.version!==1||response.requestId!==requestId||response.requestHash!==await hash(body)||response.ownerId!==ownerId||response.operation!==op||!response.result)throw Error('settings_response_mismatch');
+        return response.result;
+    };
+    const pauseLocal=async()=>storage.transaction(async()=>{
+        const rows=(q,...args)=>storage.sql.exec(q,...args).toArray();
+        if(!rows("SELECT name FROM sqlite_master WHERE type='table' AND name='qq_continuous_meta'").length)return;
+        const row=rows("SELECT v FROM qq_continuous_meta WHERE k='activation'")[0];
+        if(row){const activation=JSON.parse(row.v);rows("UPDATE qq_continuous_meta SET v=? WHERE k='activation'",JSON.stringify({...activation,active:false,pauseReason:'grant_inactive'}));}
+    });
+    if(operation==='inspect') {
+        const result=await call('inspect',null);
+        const producer=QQBridgeQueue.producerSnapshot(storage,now());
+        if(result.settings?.notification?.state==='active'&&producer.active!==true)result.settings.notification={...result.settings.notification,state:producer.active===false?'paused':'unknown',reason:'producer_not_ready'};
+        return result;
+    }
+    let result;
+    try{result=await call('commit',payload);}catch{
+        // A lost reply may mean the gateway changed state. Never retry this operation.
+        if(payload.operation==='enable'){await pauseLocal();try{await call('abort',{operationId:payload.operationId,producerPaused:true});}catch{}}
+        else {try{await pauseLocal();}catch{}}
+        return {state:'uncertain',reason:'settings_outcome_unknown'};
+    }
+    if(['saved','paused'].includes(result.state)){try{await pauseLocal();const settled=await call('settle_pause',{operationId:payload.operationId,producerPaused:true});if(settled.state!==result.state)throw Error('settings_pause_unconfirmed');}catch{return {state:'uncertain',reason:'producer_pause_unknown'};}return result;}
+    if(result.state!=='gateway_ready') {
+        if(result.state==='uncertain') {
+            try{await pauseLocal();if(payload.operation==='enable')await call('abort',{operationId:payload.operationId,producerPaused:true});}catch{}
+        }
+        return result;
+    }
+    if(payload.operation!=='enable'||result.approval_id!=='web-'+payload.operationId||!/^grant-[1-9][0-9]*$/.test(result.grant_id??''))throw Error('settings_activation_invalid');
+    try {
+        // Only this explicitly confirmed enable path may initialize QQ queue schema.
+        const queue=new QQBridgeQueue(storage,env,ownerId,bindings.sources,fetch,now);
+        const activated=await queue.activateForInteraction(result.approval_id);
+        if(!['active','already_active'].includes(activated.state))throw Error('producer_ack_unknown');
+        const complete=await call('complete',{operationId:payload.operationId,grantId:result.grant_id});
+        if(complete.state!=='active')throw Error('producer_ack_unknown');
+        return {state:'active'};
+    } catch {
+        try{await pauseLocal();await call('abort',{operationId:payload.operationId,producerPaused:true});}catch{}
+        return {state:'uncertain',reason:'producer_ack_unknown'};
+    }
+}

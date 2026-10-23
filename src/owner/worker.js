@@ -4,7 +4,7 @@ import { isRoutineProgress, PROGRESS_WINDOW_MS } from "./notification-policy.mjs
 // Rivule — AGPL-3.0. Third-party notices: ../../third-party-licenses/
 import { readDashboardTestReceipt } from "./dashboard-receipt.mjs";
 import { dashboardResponse, isDashboardRoute } from "./dashboard.mjs";
-import { QQBridgeQueue, qqInteractionResponse } from "./qq-integration.mjs";
+import { QQBridgeQueue, qqInteractionResponse, qqWebSettingsBridge } from "./qq-integration.mjs";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -28246,6 +28246,7 @@ var OwnerTerminal = class extends DurableObject {
                     try { qq = dashboardProducerStatus(QQBridgeQueue.producerSnapshot(this.ctx.storage, now)); } catch {}
                     return { source: proof, qq, observed_at: new Date(now).toISOString() };
                 },
+                manageQQ: (operation, payload) => qqWebSettingsBridge(this.env, this.ctx.storage, bindings, operation, payload),
                 readTestReceipt: (source, selector) => readDashboardTestReceipt(this.ctx.storage, bindings, source, selector),
                 readSnapshot: (source, query) => readTaskSnapshot(this.ctx.storage, bindings, source, query)
             });
