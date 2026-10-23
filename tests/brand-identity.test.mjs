@@ -27,5 +27,5 @@ test('frontend offers explicit official local-preview icons without remote image
  assert.match(html, /<option value="muse">Muse · 官方图标<\/option>/);
  assert.doesNotMatch(html, /<\/option\s+[^>]/);
  assert.match(html, /QQ · 官方企鹅/); assert.match(html, /Muse · 官方图标/);
- assert.match(html, /预览 · 未连接/); assert.doesNotMatch(html, /https?:\/\//);
+ assert.match(html, /预览 · 未连接/); assert.doesNotMatch(html.replaceAll('http://www.w3.org/2000/svg', ''), /https?:\/\//);
 });

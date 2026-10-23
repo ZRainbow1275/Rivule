@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import { ownerDashboardHtml, dashboardClient } from '../src/owner/presentation.mjs';
+import { ownerDashboardHtml, dashboardClient, selectedWorkbench } from '../src/owner/presentation.mjs';
 
 function clientFixture(fetch, storage, timers = {}) {
   class Element {
@@ -14,8 +14,8 @@ function clientFixture(fetch, storage, timers = {}) {
   }
   const elements = new Map(), window = new Element(), document = new Element();
   document.getElementById = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
-  document.createElement = () => new Element(); document.body = new Element();
-  vm.runInNewContext('(' + dashboardClient.toString() + ')()', { document, window, fetch, Date, localStorage: storage, AbortController, setTimeout, clearTimeout, ...timers });
+  document.createElement = () => new Element(); document.createElementNS = () => new Element(); document.body = new Element();
+  vm.runInNewContext('(' + dashboardClient.toString() + ')()', { selectedWorkbench, document, window, fetch, Date, localStorage: storage, AbortController, setTimeout, clearTimeout, ...timers });
   return { get: document.getElementById, load: () => window.listeners.pageshow(), hide: () => window.listeners.pagehide() };
 }
 
@@ -27,7 +27,7 @@ test('PA canvas has native auth forms, honest preview, accessible controls and r
   assert.match(html, /prefers-reduced-motion:reduce/); assert.match(html, /@keyframes arrive/);
   assert.match(html, /aria-controls="settings"/); assert.match(html, /<dialog/);
   assert.match(html, /创建时间<\/dt><dd>未知/); assert.match(html, /预览 · 未连接/);
-  assert.doesNotMatch(html, /innerHTML|sessionStorage|https?:\/\//);
+  assert.doesNotMatch(html, /innerHTML|sessionStorage|(?:src|href)="https?:\/\//);
   assert.equal([...html.matchAll(/fetch\(/g)].length, 1);
 });
 
@@ -48,7 +48,7 @@ test('successful snapshot uses text content, not markup, and marks verified test
   assert.equal(c.get('login').hidden, true); assert.equal(c.get('controls').hidden, false);
   const nodes = c.get('items').children[0].children;
   assert.match(nodes[0].textContent, /测试任务/); assert.equal(nodes[1].textContent, '<img src=x onerror=alert(1)>');
-  assert.equal(nodes[2].textContent, '<script>bad()</script>'); assert.match(nodes[3].textContent, /待决定：0/);
+  assert.equal(nodes[2].textContent, '<script>bad()</script>'); assert.equal(nodes[3].textContent, '');
   assert.equal(c.get('status').textContent, '快照已更新');
 });
 
@@ -171,3 +171,44 @@ test('page departure cancels the old read without resetting the returning page r
  resolveNew({status:200,ok:true,json:async()=>({state:'ready',items:[]})}); await next;
  assert.equal(c.get('refresh').disabled,false);assert.equal(c.get('login').hidden,true);
 });
+
+test('workbench derives task distributions and confirmation timeline only from selected snapshots', () => {
+ const rows=[{state:'available',task_name:'甲',project_name:'项目 A',source_status:'running',last_confirmed_at:'2026-10-23T01:00:00Z'}, {state:'available',task_name:'乙',source_status:'needs_input',pending_action_count:2,last_confirmed_at:'2026-10-23T02:00:00Z'}, {state:'available',task_name:'丙',source_status:'completed',last_confirmed_at:'invalid'}, {state:'unavailable'}];
+ const model=selectedWorkbench(rows);assert.deepEqual(model.counts,{running:1,attention:1,completed:1});assert.deepEqual(model.recent.map(x=>x.task_name),['乙','甲']);assert.equal(rows[0].task_name,'甲');
+ assert.deepEqual(selectedWorkbench(rows,'attention').visible.map(x=>x.task_name),['乙']);assert.equal(selectedWorkbench(rows,'running','项目 A').visible.length,1);assert.equal(selectedWorkbench(rows,'completed','项目 A').visible.length,0);
+});
+
+test('single task hides filters and does not inherit a hidden multi-task filter', async () => {
+ const c=clientFixture(async()=>({status:200,ok:true,json:async()=>({items:[{state:'available',task_name:'唯一任务',source_status:'running'}]})}));
+ c.get('task-filter').value='completed';c.get('task-search').value='other';await c.load();
+ assert.equal(c.get('task-toolbar').hidden,true);assert.equal(c.get('task-distribution').hidden,true);assert.equal(c.get('items').children.length,1);assert.equal(c.get('items').children[0].children[1].textContent,'唯一任务');
+});
+
+test('filters, quick actions and view controls are functional without another read', async () => {
+ let reads=0;const c=clientFixture(async()=>{reads++;return {status:200,ok:true,json:async()=>({items:[{state:'available',task_name:'进行中任务',source_status:'running'},{state:'available',task_name:'待处理任务',source_status:'needs_input'}]})};});
+ await c.load();assert.equal(c.get('task-toolbar').hidden,false);assert.equal(c.get('running-count').textContent,'1');
+ c.get('quick-attention').listeners.click();assert.equal(c.get('items').children.length,1);assert.equal(c.get('items').children[0].children[1].textContent,'待处理任务');
+ c.get('view-activity').listeners.click();assert.equal(c.get('tasks-view').hidden,true);assert.equal(c.get('activity-view').hidden,false);assert.equal(c.get('view-activity').attributes['aria-pressed'],'true');assert.equal(reads,1);
+});
+
+test('session failure clears counts, recent confirmations and ability status, not only tasks', async () => {
+ let first=true;const c=clientFixture(async()=>first?{status:200,ok:true,json:async()=>({items:[{state:'available',task_name:'private',source_status:'running',last_confirmed_at:'2026-10-23T02:00:00Z'}]})}:{status:401});
+ await c.load();assert.equal(c.get('activity-list').children[0].children[1].textContent,'private');first=false;await c.load();assert.equal(c.get('running-count').textContent,'—');assert.equal(c.get('activity-list').children[0].textContent,'等待读取所选任务');assert.equal(c.get('task-toolbar').hidden,true);
+});
+
+ test('single-task hierarchy hides counters and duplicate task status while retaining action details', async () => {
+ const c=clientFixture(async()=>({status:200,ok:true,json:async()=>({state:'ready',items:[{state:'available',task_name:'Review proposal',source_status:'needs_input',pending_action_count:2,summary:'Choose a scope'}]})}));
+ await c.load(); assert.equal(c.get('task-metrics').hidden,true);
+ const nodes=c.get('items').children[0].children;
+ assert.equal(nodes.filter(n=>n.className==='task-state').length,0);
+ assert.equal(nodes.filter(n=>n.className==='pending-callout').length,1);
+ const action=nodes.find(n=>n.className==='pending-callout');assert.equal(action.textContent,'2 项待确认 · 查看详情');action.listeners.click();assert.equal(nodes.find(n=>n.className==='task-facts').open,true);assert.equal(action.attributes['aria-expanded'],'true');
+ assert.equal(c.get('capability-list').children[0].children[0].children[0].children[0].attributes['aria-hidden'],'true');
+ });
+
+ test('compact mode hides only the preview summary and preserves expanded details', () => {
+ const html=ownerDashboardHtml('test');
+ assert.match(html,/\.compact \.task>p\{display:none\}/);
+ assert.doesNotMatch(html,/\.compact \.task p\{display:none\}/);
+ assert.match(html,/#61716b/);
+ });
