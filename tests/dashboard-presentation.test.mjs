@@ -223,3 +223,18 @@ test('session failure clears counts, recent confirmations and ability status, no
  mode='ok';await c.load();assert.equal(c.get('tasks-view').hidden,false);
  mode='401';await c.load();assert.equal(c.get('capabilities-view').hidden,false);assert.equal(c.get('items').children.length,1);
  });
+
+ test('accepted colorful skeleton preserves large official emblem and independent add rail', () => {
+ const html=ownerDashboardHtml('test');
+ assert.match(html,/<aside id="add-column" class="add-column"/);
+ assert.doesNotMatch(html,/<div id="add-column" hidden/);
+ assert.match(html,/--pa-color:#7053e8/);assert.match(html,/--pa-color:#178d99/);assert.match(html,/--pa-color:#d36d8c/);
+ assert.match(html,/transform:rotate\(-8deg\)/);assert.match(html,/background:#ffdac4/);
+ assert.match(html,/alt="dot 官方图标"/);assert.match(html,/role="group" aria-label="预览来源"/);
+ });
+ test('visual provider buttons select only local appearance and make no extra read', () => {
+ let reads=0;const c=clientFixture(()=>{reads++;throw Error('not called');});
+ c.get('choose-qq').listeners.click();assert.equal(c.get('pa-brand').value,'qq');assert.equal(c.get('choose-qq').attributes['aria-pressed'],'true');assert.equal(c.get('choose-muse').attributes['aria-pressed'],'false');
+ c.get('choose-muse').listeners.click();assert.equal(c.get('pa-brand').value,'muse');assert.equal(c.get('choose-qq').attributes['aria-pressed'],'false');
+ c.get('choose-custom').listeners.click();assert.equal(c.get('pa-brand').value,'');assert.equal(reads,0);
+ });
