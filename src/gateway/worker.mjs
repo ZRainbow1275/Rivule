@@ -1945,15 +1945,64 @@ var RivuleContinuous = (() => {
         }
         return { reviewed: pending.keys.length };
     }
+    const reviewResult = extra => ({ ...extra, delivery_resumed: false, next_step: 'existing_owner_qq_enable' });
+    const reviewKey = scope => JSON.stringify([scope.sourceId, scope.sourceGeneration, scope.sourceGrantRevision, scope.sourceBindingDigest, scope.consentRevision]);
+    function reviewScope(job) {
+        return Object.fromEntries(['sourceId','sourceGeneration','sourceGrantRevision','sourceBindingDigest','consentRevision','sequence','receiptId','grantId','bindingFingerprint'].map(k => [k, job[k]]));
+    }
+    function checkReviewTarget(input) {
+        if (!input || Object.keys(input).sort().join(',') !== 'intentId,receiptId' || !safeKey(input.intentId) || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(input.receiptId ?? '')) fail('conversation_review_invalid');
+    }
+    async function conversationReviewStatus(state, context, input, now) {
+        checkReviewTarget(input);
+        const a = state.qqContinuous?.attempts?.[input.intentId], g = state.qqContinuous?.grant;
+        if (!a || !conversationJob(a.job) || a.job.receiptId !== input.receiptId || a.state !== 'uncertain') return reviewResult({ state: 'unavailable' });
+        if (a.conversationReview) return reviewResult({ state: 'reviewed', scope: structuredClone(a.conversationReview.scope), snapshotDigest: a.conversationReview.snapshotDigest, reviewId: a.conversationReview.reviewId, sequenceFloor: a.conversationReview.sequenceFloor, validUntil: now + 300000 });
+        const saved = a.conversationReviewScope ?? (a.job.content ? reviewScope(a.job) : null);
+        if (!saved || !g || a.grantRevision !== g.revision || saved.grantId !== g.id || a.runtimeEpoch !== context.runtimeEpoch || g.runtimeEpoch !== context.runtimeEpoch ||
+            g.bindingKey !== bindingKey(context.binding) || g.bindingFingerprint !== context.bindingFingerprint || saved.bindingFingerprint !== context.bindingFingerprint ||
+            context.ownerId !== context.binding.ownerId || context.appId !== context.binding.appId || a.reason !== 'provider_outcome_unknown' ||
+            !integer(a.finishedAt) || a.finishedAt > now || now - a.finishedAt < 30000 || !text(a.jobFingerprint))
+            return reviewResult({ state: 'unavailable' });
+        const scope = { intentId: input.intentId, receiptId: saved.receiptId, jobFingerprint: a.jobFingerprint,
+            sourceId: saved.sourceId, sourceGeneration: saved.sourceGeneration, sourceGrantRevision: saved.sourceGrantRevision,
+            sourceBindingDigest: saved.sourceBindingDigest, consentRevision: saved.consentRevision, sequence: saved.sequence,
+            grantId: saved.grantId, grantRevision: a.grantRevision, runtimeEpoch: a.runtimeEpoch,
+            bindingFingerprint: saved.bindingFingerprint, ownerId: context.ownerId, appId: context.appId, userOpenId: context.binding.userOpenId };
+        const snapshotDigest = await hash(JSON.stringify([scope, a.reason, a.finishedAt, g.state, g.pauseReason ?? null, g.pausedAt ?? null, state.qqSettingsRevision ?? 0]));
+        return reviewResult({ state: 'reviewable', scope, snapshotDigest, reviewId: null, validUntil: now + 300000 });
+    }
+    function conversationReviewFence(state, job) {
+        if (!conversationJob(job)) return;
+        const floor = state.qqContinuous?.conversationSequenceFloors?.[reviewKey(job)];
+        if (integer(floor) && job.sequence <= floor) fail('conversation_review_backlog');
+    }
+    function nextConversationExpiry(state) {
+        let next = Infinity;
+        for (const a of Object.values(state.qqContinuous?.attempts ?? {}))
+            if (conversationJob(a.job) && typeof a.job.content === 'string' && integer(a.job.expiresAt)) next = Math.min(next, a.job.expiresAt);
+        return next;
+    }
     function maintainHistory(state, now) {
         if (!integer(now))
             fail('history_clock_invalid');
         const d = state.qqContinuous;
         if (!d)
             return;
+        // Content retention is independent of grant state and uncertain receipt review.
+        // Keep durable receipt/fingerprint tombstones, never revive an expired send.
+        for (const a of Object.values(d.attempts ?? {})) {
+            if (conversationJob(a.job) && typeof a.job.content === 'string' && integer(a.job.expiresAt) && a.job.expiresAt <= now) {
+                a.job = { kind: 'conversation', version: 2, receiptId: a.job.receiptId,
+                    bindingFingerprint: a.job.bindingFingerprint, expiresAt: a.job.expiresAt };
+                delete a.challenge;
+                a.contentErasedAt = now;
+                if (a.state === 'prepared') { a.state = 'suppressed'; a.reason = 'conversation_expired'; }
+            }
+        }
         const cutoff = now - 72 * 3600000;
         for (const [id, a] of Object.entries(d.attempts ?? {})) {
-            if (a.grantRevision === d.grant?.revision || a.state === 'uncertain' && !integer(a.reviewedAt))
+            if (a.grantRevision === d.grant?.revision || a.state === 'uncertain' && (!integer(a.reviewedAt) || a.conversationReview))
                 continue;
             const at = a.finishedAt ?? a.createdAt;
             if (integer(at) && at < cutoff) {
@@ -2045,6 +2094,7 @@ var RivuleContinuous = (() => {
     function sourceGate(job, source, grant, now, authority) {
         if (!source || source.selectable !== true || source.enabled !== true || source.revoked === true || source.sourceId !== job.sourceId || source.generation !== job.sourceGeneration || source.bindingDigest !== job.sourceBindingDigest || !fresh(source.verifiedAt, now, POLICY.sourceProofMaxAgeMs))
             fail('source_unverified');
+        if (conversationJob(job)) return conversationSourceGate(job, source, grant, now, authority);
         if (job.contentKind === 'bridge_response') {
             if (!authority || authority.authorized !== true || authority.validUntil <= now || authority.checkedAt > now ||
                 authority.runtimeEpoch !== grant.runtimeEpoch || authority.grantRevision !== grant.revision || authority.job !== JSON.stringify(job))
@@ -2061,7 +2111,36 @@ var RivuleContinuous = (() => {
         if (source.projectAllowed !== true || source.projectId !== job.projectId || source.sensitivity !== 'normal' || source.kind === 'heartbeat' || source.payloadHash !== job.payloadHash)
             fail('projection_not_authorized');
     }
+    function conversationJob(job) { return job?.kind === 'conversation' && job?.version === 2; }
+    function protocolKind(job) { return conversationJob(job) ? 'conversation' : job?.contentKind === 'bridge_response' ? true : false; }
+    function validateConversationJob(job) {
+        const keys = ['kind','version','intentId','sourceId','sourceGeneration','sourceGrantRevision','sourceBindingDigest','receiptId','contextRef','contextDigest','sequence','consentRevision','acceptedAt','expiresAt','payloadHash','content','grantId','bindingFingerprint'];
+        const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
+        const digest = value => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+        if (!conversationJob(job) || Object.keys(job).length !== keys.length || Object.keys(job).some(k => !keys.includes(k)) ||
+            !['sourceGeneration','sourceGrantRevision','sequence','consentRevision'].every(k => integer(job[k]) && job[k] > 0) ||
+            !integer(job.acceptedAt) || !integer(job.expiresAt) || job.expiresAt <= job.acceptedAt || job.expiresAt - job.acceptedAt > 86400000 ||
+            !uuid(job.receiptId) || !uuid(job.contextRef) || !['sourceBindingDigest','contextDigest','payloadHash'].every(k => digest(job[k])) ||
+            !['intentId','sourceId','grantId','bindingFingerprint'].every(k => safeKey(job[k])) ||
+            !text(job.content, 4000) || !job.content.trim() || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(job.content))
+            fail('conversation_job_invalid');
+        if (/(?:-----BEGIN[\s\S]*PRIVATE KEY|\bBearer\s+\S+|\b(?:sk-|gh[pousr]_|github_pat_)[A-Za-z0-9_-]{8,}|(?:password|api[_-]?key|authorization|secret|token)["']?\s*[:=])/i.test(job.content))
+            fail('response_sensitive_content');
+    }
+    function conversationSourceGate(job, source, grant, now, authority) {
+        const keys = ['selectable','enabled','revoked','sourceId','generation','bindingDigest','verifiedAt','kind','version','sourceGrantRevision','receiptId','contextRef','contextDigest','sequence','consentRevision','payloadHash','sensitivity'];
+        if (Object.keys(source).length !== keys.length || Object.keys(source).some(k => !keys.includes(k)) || source.kind !== 'conversation' || source.version !== 2 || source.sensitivity !== 'normal' || source.revoked !== false ||
+            !['sourceGrantRevision','receiptId','contextRef','contextDigest','sequence','consentRevision','payloadHash'].every(k => source[k] === job[k]))
+            fail('conversation_source_invalid');
+        if (!authority || authority.authorized !== true || authority.validUntil <= now || authority.checkedAt > now ||
+            authority.runtimeEpoch !== grant.runtimeEpoch || authority.grantRevision !== grant.revision || authority.job !== JSON.stringify(job))
+            fail('conversation_consent_required');
+        // Conversation sequence is its own ledger cursor, never a task revision.
+        if (job.acceptedAt < grant.issuedAt || job.acceptedAt > now || job.expiresAt <= now)
+            fail('conversation_not_current');
+    }
     function validateJob(job) {
+        if (conversationJob(job)) return validateConversationJob(job);
         const response = job?.contentKind === 'bridge_response';
         const keys = ['intentId', 'sourceId', 'sourceGeneration', 'sourceBindingDigest', 'projectId', 'receiptId', 'eventId', response ? 'responseRevision' : 'acceptedRevision', 'payloadHash', 'content', 'grantId', 'bindingFingerprint'];
         if (job?.contentKind !== undefined) keys.push('contentKind','contextRef','consentRevision');
@@ -2114,7 +2193,8 @@ var RivuleContinuous = (() => {
         if (job.grantId !== g.id || job.bindingFingerprint !== g.bindingFingerprint)
             fail('grant_changed');
         sourceGate(job, source, g, now, authority);
-        if (!context.projectIds.includes(job.projectId))
+        conversationReviewFence(state, job);
+        if (!conversationJob(job) && !context.projectIds.includes(job.projectId))
             fail('project_not_authorized');
         maintainHistory(state, now);
         const d = state.qqContinuous, old = d.attempts[job.intentId];
@@ -2123,13 +2203,13 @@ var RivuleContinuous = (() => {
                 fail('intent_conflict');
             return { state: 'reserved', attemptState: old.state, reason: 'already_reserved' };
         }
-        const eventKey = JSON.stringify([job.contentKind === 'bridge_response' ? 'response' : 'task', job.sourceId, job.eventId]);
-        if (d.events[eventKey] || d.events[JSON.stringify([job.sourceId, job.eventId])])
+        const eventKey = conversationJob(job) ? JSON.stringify(['conversation', job.sourceId, job.receiptId]) : JSON.stringify([job.contentKind === 'bridge_response' ? 'response' : 'task', job.sourceId, job.eventId]);
+        if (d.events[eventKey] || !conversationJob(job) && d.events[JSON.stringify([job.sourceId, job.eventId])])
             fail('event_already_reserved');
         if (Object.keys(d.attempts).length >= POLICY.maxAttempts)
             fail('attempt_capacity');
         d.events[eventKey] = job.intentId;
-        d.attempts[job.intentId] = { job: structuredClone(job), state: 'prepared', challenge, createdAt: now, expiresAt: Math.min(now + POLICY.permitTtlMs, g.hardUntil), grantRevision: g.revision, runtimeEpoch: g.runtimeEpoch };
+        d.attempts[job.intentId] = { job: structuredClone(job), ...conversationJob(job) ? { jobFingerprint: authority.jobFingerprint, conversationReviewScope: reviewScope(job) } : {}, state: 'prepared', challenge, createdAt: now, expiresAt: Math.min(now + POLICY.permitTtlMs, g.hardUntil), grantRevision: g.revision, runtimeEpoch: g.runtimeEpoch };
         return { state: 'prepared', challenge, expiresAt: d.attempts[job.intentId].expiresAt, grantId: g.id, grantRevision: g.revision };
     }
     function commit(state, context, intentId, permit, source, now, authority) {
@@ -2141,7 +2221,8 @@ var RivuleContinuous = (() => {
         if (a.expiresAt <= now || a.createdAt > now || a.grantRevision !== g.revision || a.runtimeEpoch !== context.runtimeEpoch)
             fail('permit_expired');
         sourceGate(a.job, source, g, now, authority);
-        if (!context.projectIds.includes(a.job.projectId))
+        conversationReviewFence(state, a.job);
+        if (!conversationJob(a.job) && !context.projectIds.includes(a.job.projectId))
             fail('project_not_authorized');
         const day = reserveQuota(state, now);
         a.state = 'uncertain';
@@ -2195,30 +2276,65 @@ var RivuleContinuous = (() => {
         return { policyFingerprint: JSON.stringify(POLICY), enabled: reason === null, bound, gatewayReady, producerReady: g?.producerReady === true, grantState: g?.state ?? null, expiryMode: g?.expiryMode ?? null, remainingGrantMs: g?.expiryMode === 'current_runtime' ? null : g ? Math.max(0, g.hardUntil - now) : 0, reason, grantId: g?.id ?? null, bindingFingerprint: g?.bindingFingerprint ?? null, approvalInteractionId: g?.approvalId ?? null, expiresAt: g?.hardUntil ?? null, remainingDaily: Math.max(0, POLICY.dailyLimit - (q?.count ?? 0) - legacyActiveCount(state, Math.floor(now / 86400000))), remainingRuntimeMs: integer(context.remainingMs) ? context.remainingMs : 0 };
     }
     const state = { enroll, pause, status, prepare, commit, currentGate, sourceGate, recordResult, acknowledgeProducer };
-    const reasons = new Set(['response_consent_required', 'response_not_current', 'response_sensitive_content', 'protocol_kind_mismatch', 'delivery_disabled', 'connection_unavailable', 'configuration_changed', 'runtime_budget_unavailable', 'grant_inactive', 'producer_not_ready', 'policy_changed', 'binding_changed', 'connection_continuity_changed', 'permission_changed', 'grant_expired', 'source_unverified', 'event_not_current', 'projection_not_authorized', 'project_not_authorized', 'grant_changed', 'intent_conflict', 'event_already_reserved', 'attempt_capacity', 'attempt_consumed', 'permit_mismatch', 'permit_expired', 'quota_corrupt', 'daily_quota_exhausted', 'paced', 'preparation_expired']);
+    const reasons = new Set(['conversation_review_invalid', 'conversation_review_changed', 'conversation_review_denied', 'conversation_review_backlog', 'conversation_job_invalid', 'conversation_source_invalid', 'conversation_consent_required', 'conversation_not_current', 'response_consent_required', 'response_not_current', 'response_sensitive_content', 'protocol_kind_mismatch', 'delivery_disabled', 'connection_unavailable', 'configuration_changed', 'runtime_budget_unavailable', 'grant_inactive', 'producer_not_ready', 'policy_changed', 'binding_changed', 'connection_continuity_changed', 'permission_changed', 'grant_expired', 'source_unverified', 'event_not_current', 'projection_not_authorized', 'project_not_authorized', 'grant_changed', 'intent_conflict', 'event_already_reserved', 'attempt_capacity', 'attempt_consumed', 'permit_mismatch', 'permit_expired', 'quota_corrupt', 'daily_quota_exhausted', 'paced', 'preparation_expired']);
     const safeReason = e => reasons.has(e?.message) ? e.message : 'preflight_unavailable';
     class ContinuousDeliveryController {
-        constructor({ store, command, context, acquireToken, post, random, verifyResponse, now = Date.now }) { Object.assign(this, { store, command, context, acquireToken, post, random, verifyResponse, now }); this.tokens = new Map(); }
+        constructor({ store, command, context, acquireToken, post, random, verifyResponse, verifyConversation, verifyConversationReview, now = Date.now }) { Object.assign(this, { store, command, context, acquireToken, post, random, verifyResponse, verifyConversation, verifyConversationReview, now }); this.tokens = new Map(); }
         async responseAuthority(job) {
-            if (job?.contentKind !== 'bridge_response') return null;
+            const conversation = conversationJob(job);
+            if (!conversation && job?.contentKind !== 'bridge_response') return null;
             validateJob(job);
-            if (typeof this.verifyResponse !== 'function') fail('response_consent_required');
+            const verifier = conversation ? this.verifyConversation : this.verifyResponse;
+            const denied = conversation ? 'conversation_consent_required' : 'response_consent_required';
+            if (typeof verifier !== 'function') fail(denied);
             const snapshot = await this.store.transaction(s => {
                 const context = this.context(s), grant = state.currentGate(s, context, this.now());
                 return { context: structuredClone(context), grant: structuredClone(grant) };
             });
-            const result = await this.verifyResponse(structuredClone(job), snapshot.context, snapshot.grant);
+            const result = await verifier(structuredClone(job), snapshot.context, snapshot.grant);
             if (result?.authorized !== true || !integer(result.validUntil) || result.validUntil <= this.now() || result.validUntil > this.now() + 30000)
-                fail('response_consent_required');
+                fail(denied);
             return { authorized: true, checkedAt: this.now(), validUntil: result.validUntil, job: JSON.stringify(job),
+                ...conversation ? { jobFingerprint: await hash(JSON.stringify(job)) } : {},
                 runtimeEpoch: snapshot.grant.runtimeEpoch, grantRevision: snapshot.grant.revision };
+        }
+        async conversationReviewStatus(target) { return this.store.transaction(s => conversationReviewStatus(s, this.context(s), target, this.now())); }
+        async conversationReview(review) {
+            if (!review || Object.keys(review).sort().join(',') !== 'intentId,receiptId,reviewId,sequenceFloor,snapshotDigest' ||
+                !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(review.reviewId ?? '') || !/^[a-f0-9]{64}$/.test(review.snapshotDigest ?? '') || !integer(review.sequenceFloor)) fail('conversation_review_invalid');
+            const target = { intentId: review.intentId, receiptId: review.receiptId }, snapshot = await this.conversationReviewStatus(target);
+            if (snapshot.state === 'reviewed') {
+                if (snapshot.reviewId !== review.reviewId || snapshot.snapshotDigest !== review.snapshotDigest || snapshot.sequenceFloor !== review.sequenceFloor) fail('conversation_review_changed');
+                return snapshot;
+            }
+            if (snapshot.state !== 'reviewable' || snapshot.snapshotDigest !== review.snapshotDigest || review.sequenceFloor < snapshot.scope.sequence || typeof this.verifyConversationReview !== 'function') fail('conversation_review_changed');
+            // No gateway command/storage lock is held while owner independently reads its committed review.
+            const proof = await this.verifyConversationReview(snapshot.scope, structuredClone(review));
+            if (proof?.authorized !== true || !integer(proof.validUntil) || proof.validUntil <= this.now() || proof.validUntil > this.now() + 30000) fail('conversation_review_denied');
+            return this.command(() => this.store.transaction(async s => {
+                const fresh = await conversationReviewStatus(s, this.context(s), target, this.now());
+                if (fresh.state === 'reviewed') {
+                    if (fresh.reviewId === review.reviewId && fresh.snapshotDigest === review.snapshotDigest && fresh.sequenceFloor === review.sequenceFloor) return fresh;
+                    fail('conversation_review_changed');
+                }
+                if (fresh.state !== 'reviewable' || fresh.snapshotDigest !== review.snapshotDigest || JSON.stringify(fresh.scope) !== JSON.stringify(snapshot.scope) || proof.validUntil <= this.now()) fail('conversation_review_changed');
+                const d = s.qqContinuous, a = d.attempts[review.intentId];
+                if (Object.values(d.attempts).some(other => other !== a && other.conversationReview?.reviewId === review.reviewId)) fail('conversation_review_changed');
+                const floors = d.conversationSequenceFloors ??= {}, k = reviewKey(snapshot.scope);
+                if (!(k in floors) && Object.keys(floors).length >= 1000) fail('conversation_review_changed');
+                floors[k] = Math.max(floors[k] ?? 0, review.sequenceFloor);
+                a.reviewedAt = this.now(); a.reviewInteractionId = review.reviewId;
+                a.conversationReview = { ...structuredClone(review), scope: structuredClone(snapshot.scope) };
+                // Deliberately preserve uncertain state and the paused grant. No resume, probe or send.
+                return conversationReviewStatus(s, this.context(s), target, this.now());
+            }));
         }
         async enroll(approval) { return this.command(() => this.store.transaction(s => state.enroll(s, this.context(s), approval, this.now()))); }
         async acknowledgeProducer(ack) { return this.command(() => this.store.transaction(s => state.acknowledgeProducer(s, this.context(s), ack, this.now()))); }
         async pause(reason = 'owner_paused') { return this.command(() => this.store.transaction(s => state.pause(s, reason, this.now()))); }
         async status() { return this.store.transaction(s => state.status(s, this.context(s), this.now())); }
         async prepare(job, source, response = false) {
-            if ((job?.contentKind === 'bridge_response') !== response) throw Error('protocol_kind_mismatch');
+            if (protocolKind(job) !== response) throw Error('protocol_kind_mismatch');
             const authority = await this.responseAuthority(job);
             const result = await this.command(() => this.store.transaction(s => state.prepare(s, this.context(s), job, source, this.random(), this.now(), authority)));
             if (result.state !== 'prepared')
@@ -2248,7 +2364,7 @@ var RivuleContinuous = (() => {
             return result;
         }
         async commit(intentId, permit, source, response = false) {
-            await this.store.transaction(s => { if ((s.qqContinuous?.attempts[intentId]?.job?.contentKind === 'bridge_response') !== response) throw Error('protocol_kind_mismatch'); });
+            await this.store.transaction(s => { if (protocolKind(s.qqContinuous?.attempts[intentId]?.job) !== response) throw Error('protocol_kind_mismatch'); });
             const token = this.tokens.get(intentId);
             if (!token || token.expiresAt <= this.now())
                 return { state: 'suppressed', reason: 'preparation_not_live' };
@@ -2287,7 +2403,7 @@ var RivuleContinuous = (() => {
             }
         }
     }
-    return { ContinuousDeliveryController, POLICY, currentGate, status, enroll, pause, maintainHistory, reserveEnrollmentAttempt, unresolvedAttempts, acknowledgeUnknown, safeReason };
+    return { ContinuousDeliveryController, POLICY, currentGate, status, enroll, pause, maintainHistory, nextConversationExpiry, reserveEnrollmentAttempt, unresolvedAttempts, acknowledgeUnknown, safeReason };
 })();
 function continuousPermissionProof(state) {
     if (state.qqRevoked === true)
@@ -2355,6 +2471,8 @@ async function continuousController(actor) {
     };
     actor.continuous = new RivuleContinuous.ContinuousDeliveryController({ store: actor.store, command: fn => actor.command(fn), context, now: () => actor.now(), random: () => randomHex(24),
         verifyResponse: (job, context, grant) => verifyResponseAuthority(actor, job, context, grant),
+        verifyConversation: (job, context, grant) => verifyConversationAuthority(actor, job, context, grant),
+        verifyConversationReview: (scope, review) => verifyConversationReviewAuthority(actor, scope, review),
         acquireToken: async () => {
             const c = actor.config(), b = await actor.store.transaction(s => s.binding);
             const transport = new QQC2CTransport({ appId: c.appId, ownerId: c.ownerId, userOpenId: b?.userOpenId, appSecret: () => actor.env.QQ_APP_SECRET, allowedSources: [], allowedProjects: [], allowedImageOrigins: [] }, null, actor.network, actor.now);
@@ -2409,6 +2527,60 @@ async function verifyResponseAuthority(actor, job, context, grant) {
     } catch { throw Error('response_consent_required'); }
     finally { clearTimeout(timer); }
 }
+async function verifyConversationAuthority(actor, job, context, grant) {
+    const endpoint = actor.env.QQ_RESPONSE_AUTHORITY;
+    if (actor.env.QQ_CONVERSATION_AUTHORITY_ENABLED !== 'true' || typeof endpoint?.fetch !== 'function')
+        throw Error('conversation_consent_required');
+    const nonce = randomHex(32), checkedAt = actor.now();
+    const body = JSON.stringify({ version: 2, nonce, timestamp: checkedAt, ownerId: context.ownerId,
+        appId: context.appId, userOpenId: context.binding.userOpenId, bindingFingerprint: context.bindingFingerprint,
+        runtimeEpoch: context.runtimeEpoch, grantId: grant.id, job });
+    const packet = { body, signature: await hmac(actor.env.QQ_BRIDGE_SECRET, 'rivule-qq-conversation-authority-request-v2', body) };
+    let timer;
+    try {
+        const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(Error('conversation_consent_required')), 5000); });
+        const proof = await Promise.race([(async () => {
+            const response = await endpoint.fetch(new Request('https://rivule-owner.internal/internal/qq-conversation-authority', {
+                method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(packet),
+                redirect: 'manual', signal: AbortSignal.timeout(5000) }));
+            if (!response.ok || response.redirected) throw Error('conversation_consent_required');
+            const responsePacket = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(await qqReadBytes(response.body, 8192)));
+            return check(actor.env.QQ_BRIDGE_SECRET, 'rivule-qq-conversation-authority-response-v2', responsePacket);
+        })(), timeout]);
+        if (!proof || Object.keys(proof).sort().join(',') !== 'authorized,nonce,requestHash,validUntil,version' || proof.version !== 2 ||
+            proof.authorized !== true || proof.nonce !== nonce || proof.requestHash !== await hash(body) ||
+            !Number.isSafeInteger(proof.validUntil) || proof.validUntil <= actor.now() || proof.validUntil > checkedAt + 30000)
+            throw Error('conversation_consent_required');
+        return { authorized: true, validUntil: proof.validUntil };
+    } catch { throw Error('conversation_consent_required'); }
+    finally { clearTimeout(timer); }
+}
+async function verifyConversationReviewAuthority(actor, scope, review) {
+    const endpoint = actor.env.QQ_RESPONSE_AUTHORITY;
+    if (actor.env.QQ_CONVERSATION_AUTHORITY_ENABLED !== 'true' || typeof endpoint?.fetch !== 'function')
+        throw Error('conversation_review_denied');
+    const nonce = randomHex(32), checkedAt = actor.now();
+    const body = JSON.stringify({ version: 1, nonce, timestamp: checkedAt, scope, review });
+    const packet = { body, signature: await hmac(actor.env.QQ_BRIDGE_SECRET, 'rivule-qq-conversation-review-authority-request-v1', body) };
+    let timer;
+    try {
+        const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(Error('conversation_review_denied')), 5000); });
+        const proof = await Promise.race([(async () => {
+            const response = await endpoint.fetch(new Request('https://rivule-owner.internal/internal/qq-conversation-review-authority', {
+                method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(packet),
+                redirect: 'manual', signal: AbortSignal.timeout(5000) }));
+            if (!response.ok || response.redirected) throw Error('conversation_review_denied');
+            const responsePacket = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(await qqReadBytes(response.body, 8192)));
+            return check(actor.env.QQ_BRIDGE_SECRET, 'rivule-qq-conversation-review-authority-response-v1', responsePacket);
+        })(), timeout]);
+        if (!proof || Object.keys(proof).sort().join(',') !== 'authorized,nonce,requestHash,validUntil,version' || proof.version !== 1 ||
+            proof.authorized !== true || proof.nonce !== nonce || proof.requestHash !== await hash(body) ||
+            !Number.isSafeInteger(proof.validUntil) || proof.validUntil <= actor.now() || proof.validUntil > checkedAt + 30000)
+            throw Error('conversation_review_denied');
+        return { authorized: true, validUntil: proof.validUntil };
+    } catch { throw Error('conversation_review_denied'); }
+    finally { clearTimeout(timer); }
+}
 async function continuousRequest(actor, packet) {
     const secret = actor.env.QQ_BRIDGE_SECRET, envelope = await check(secret, 'rivule-qq-request-v2', packet), c = actor.config();
     if (!envelope || Object.keys(envelope).sort().join(',') !== 'appId,operation,ownerId,payload,timestamp,version' || envelope.version !== 2 || envelope.ownerId !== c.ownerId || envelope.appId !== c.appId || !Number.isSafeInteger(envelope.timestamp) || Math.abs(actor.now() - envelope.timestamp) > 30000)
@@ -2430,34 +2602,43 @@ async function continuousRequest(actor, packet) {
                 return { active: true, ownerId: context.ownerId, appId: context.appId,
                     userOpenId: context.binding.userOpenId, generation: context.runtimeEpoch,
                     bindingFingerprint: context.bindingFingerprint, grantId: grant.id, runtimeEpoch: context.runtimeEpoch,
+                    grantIssuedAt: grant.issuedAt,
+                    conversationVerifierConfigured: actor.env.QQ_CONVERSATION_AUTHORITY_ENABLED === 'true' && typeof actor.env.QQ_RESPONSE_AUTHORITY?.fetch === 'function',
                     responseVerifierConfigured: actor.env.QQ_RESPONSE_AUTHORITY_ENABLED === 'true' && typeof actor.env.QQ_RESPONSE_AUTHORITY?.fetch === 'function',
                     validUntil: Math.min(grant.hardUntil, actor.now() + 30000) };
             } catch { return { active: false }; }
         });
     }
+    else if (envelope.operation === 'conversation_review_status') {
+        result = await ctl.conversationReviewStatus(envelope.payload);
+    }
+    else if (envelope.operation === 'conversation_review') {
+        result = await ctl.conversationReview(envelope.payload);
+    }
     else if (envelope.operation === 'acknowledge_producer') {
         result = await ctl.acknowledgeProducer(envelope.payload);
     }
-    else if (envelope.operation === 'prepare' || envelope.operation === 'response_prepare') {
+    else if (envelope.operation === 'prepare' || envelope.operation === 'response_prepare' || envelope.operation === 'conversation_prepare') {
         if (!envelope.payload || Object.keys(envelope.payload).sort().join(',') !== 'job,source')
             throw Error('continuous_schema_invalid');
         const job = envelope.payload.job;
         if (typeof job?.content !== 'string' || job.payloadHash !== await hash(job.content))
             throw Error('continuous_payload_digest_mismatch');
         try {
-            result = await ctl.prepare(job, envelope.payload.source, envelope.operation === 'response_prepare');
+            result = await ctl.prepare(job, envelope.payload.source, envelope.operation === 'conversation_prepare' ? 'conversation' : envelope.operation === 'response_prepare');
         }
         catch (error) {
             result = { state: 'suppressed', reason: 'preflight_not_sent', diagnostic: { stage: 'gateway_prepare', code: RivuleContinuous.safeReason(error) } };
         }
     }
-    else if (envelope.operation === 'commit' || envelope.operation === 'response_commit') {
+    else if (envelope.operation === 'commit' || envelope.operation === 'response_commit' || envelope.operation === 'conversation_commit') {
         if (!envelope.payload || Object.keys(envelope.payload).sort().join(',') !== 'intentId,permit,source')
             throw Error('continuous_schema_invalid');
-        result = await ctl.commit(envelope.payload.intentId, envelope.payload.permit, envelope.payload.source, envelope.operation === 'response_commit');
+        result = await ctl.commit(envelope.payload.intentId, envelope.payload.permit, envelope.payload.source, envelope.operation === 'conversation_commit' ? 'conversation' : envelope.operation === 'response_commit');
     }
     else
         throw Error('continuous_operation_invalid');
+    if (envelope.operation === 'conversation_prepare' || envelope.operation === 'conversation_commit') await actor.arm?.();
     const body = JSON.stringify({ version: 2, requestHash: await hash(packet.body), result });
     return { body, signature: await hmac(secret, 'rivule-qq-response-v2', body) };
 }
@@ -3078,14 +3259,19 @@ var GatewayActor = class {
         }
     }
     async planAlarm() {
-        const control = await this.store.transaction((state2) => state2.control);
+        const retention = await this.store.transaction(s => {
+            RivuleContinuous.maintainHistory(s, this.now());
+            return { control: s.control, expiresAt: RivuleContinuous.nextConversationExpiry(s) };
+        });
+        const control = retention.control;
         if (!control?.running) {
-            await this.ctx.storage.deleteAlarm();
+            if (Number.isFinite(retention.expiresAt)) await this.ctx.storage.setAlarm(Math.max(this.now() + 1000, retention.expiresAt));
+            else await this.ctx.storage.deleteAlarm();
             return;
         }
         const c = this.config(), view = await this.store.transaction(s => runtimeBudgetView(s, c.budget, this.now()));
         const client = this.runtime?.client, now = this.now();
-        const times = [now + 3e4, ...view.mode === "stop" ? [now + view.remainingMs] : []];
+        const times = [now + 3e4, retention.expiresAt, ...view.mode === "stop" ? [now + view.remainingMs] : []];
         if (client?.ws) {
             if (!client.ready)
                 times.push(client.deadline);
@@ -3142,7 +3328,7 @@ var GatewayActor = class {
             state.control = { running: false, reason };
             this.unhealthy(state, "connection_unavailable");
         });
-        await this.ctx.storage.deleteAlarm();
+        await this.arm();
     }
     async stop() {
         return this.command(async () => {
@@ -3154,9 +3340,12 @@ var GatewayActor = class {
     async alarm() {
         return this.command(async () => {
             this.recordDiagnostic(diagnosticRecord("alarm", "started", this.now()));
-            const running = await this.store.transaction((state) => state.control?.running);
+            const running = await this.store.transaction((state) => {
+                RivuleContinuous.maintainHistory(state, this.now());
+                return state.control?.running;
+            });
             if (!running) {
-                await this.ctx.storage.deleteAlarm();
+                await this.arm();
                 this.recordDiagnostic(diagnosticRecord("alarm", "completed", this.now()));
                 return;
             }

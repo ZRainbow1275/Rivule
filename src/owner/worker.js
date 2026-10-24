@@ -1,3 +1,12 @@
+import { ConversationQQReview } from './conversation-qq-review.mjs';
+import { qqConversationReviewAuthorityResponse } from './conversation-qq-review-authority.mjs';
+import { ConversationQQQueue } from './conversation-qq-queue.mjs';
+import { ConversationQQCommandAdapter } from './conversation-qq-command-adapter.mjs';
+import { qqConversationAuthorityResponse } from './conversation-qq-authority.mjs';
+import { ConversationOperationAuthority } from './conversation-operation-authority.mjs';
+import { ConversationBridge } from './conversation-bridge.mjs';
+import { conversationActions, conversationTools, conversationScope, conversationSourceOperation, configuredConversationGrant } from './conversation-source-contract.mjs';
+import { ConversationDiscordAdapter } from './conversation-discord-adapter.mjs';
 import { QQResponseConsent, qqResponseAuthorityResponse } from './qq-response-consent.mjs';
 import { QQCommandAdapter } from './qq-command-adapter.mjs';
 import { MessageBridge, BridgeError } from './message-bridge.mjs';
@@ -8134,7 +8143,7 @@ var OwnerCore = class {
         return this.projectAllowed(event.project_id) && this.b.sources.some((s) => s.source_id === event.source_id && s.enabled);
     }
     suppressDisallowedJobs() {
-        for (const job of this.rows("SELECT id,payload,view_key,intent FROM outbox WHERE status IN ('queued','retry_wait')")) {
+        for (const job of this.rows("SELECT id,receipt,payload,view_key,intent FROM outbox WHERE status IN ('queued','retry_wait')")) {
             const request = job.intent === "request" ? this.one("SELECT payload FROM requests WHERE request_key=?", job.view_key.slice("request:".length)) : null;
             if (!this.projectAllowed(JSON.parse(job.payload).project_id) || request && !this.projectAllowed(JSON.parse(request.payload).project_id)) {
                 this.rows("UPDATE outbox SET status='suppressed',last_error='project_not_authorized' WHERE id=?", job.id);
@@ -8774,7 +8783,7 @@ async function ingress(request, env, getOwner2) {
             return jsonResponse({ status: "milestone1", mcp: "not_configured", oauth: "not_configured", discord_delivery: "disabled", pa_connectivity: "not_claimed", sankey: "python_reference_only" });
         if (path === "/mcp")
             return jsonResponse({ error: "mcp_oauth_not_configured" }, 503);
-        if (request.method !== "POST" || !["/v1/events", "/v1/receipt", "/v1/task/snapshot", "/v1/bridge"].includes(path))
+        if (request.method !== "POST" || !["/v1/events", "/v1/receipt", "/v1/task/snapshot", "/v1/bridge", "/v2/bridge"].includes(path))
             return jsonResponse({ error: "not_found" }, 404);
         const body = await boundedBody(request);
         await authenticate(request, body, b, env, Date.now());
@@ -9190,7 +9199,7 @@ var QQDurableInbox = class {
     constructor(storage) {
         this.storage = storage;
     }
-    async enqueueOnce(event) {
+    async enqueueOnce(event, options = {}) {
         const key = "qq:in:" + await qqHash(JSON.stringify([event.appId, event.userOpenId, event.dedupeId]));
         const { eventId: _eventId, ...stable } = event;
         const fingerprint = await qqHash(JSON.stringify(stable));
@@ -9205,7 +9214,7 @@ var QQDurableInbox = class {
             const count = await tx.get(countKey) ?? 0;
             if (!Number.isSafeInteger(count) || count < 0 || count >= QQ_INBOX_LIMIT)
                 return "full";
-            await tx.put(key, { fingerprint, event, status: "pending" });
+            await tx.put(key, { fingerprint, event: options.retainContent === false ? { ...event, content: null } : event, status: "pending" });
             await tx.put(countKey, count + 1);
             return "stored";
         });
@@ -9619,7 +9628,7 @@ var QQServiceQueue = class {
         }
     }
 };
-var PA_SCOPES = ["pa:publish", "pa:receipt"];
+var PA_SCOPES = ["pa:publish", "pa:receipt", "pa:conversation:publish", "pa:conversation:read", "pa:conversation:commands"];
 function loadOAuthConfig(env, bindings = loadBindings(env)) {
     if (env.OAUTH_ALLOW_DYNAMIC_CLIENTS !== void 0 && !["true", "false"].includes(env.OAUTH_ALLOW_DYNAMIC_CLIENTS))
         throw new Rejected("oauth_dynamic_config_invalid", 503);
@@ -9717,7 +9726,7 @@ function authorizeRequest(auth, config2) {
 __name(authorizeRequest, "authorizeRequest");
 var escape2 = __name((value) => value.replace(/[&<>"']/g, (char) => "&#" + char.charCodeAt(0) + ";"), "escape");
 function consentPage(details, handle, source, request, config2) {
-    const scopes = validatePaScopes(request.scope).map((scope) => `<label><input type="checkbox" name="scope" value="${scope}" checked> ${scope === "pa:publish" ? "\u53D1\u5E03\u6B64\u6765\u6E90\u7684\u4EFB\u52A1\u72B6\u6001\uFF08\u5199\u5165\u5E76\u53EF\u80FD\u53D1\u9001 Discord \u901A\u77E5\uFF09" : "\u67E5\u8BE2\u6B64\u6765\u6E90\u81EA\u5DF1\u63D0\u4EA4\u7684\u56DE\u6267及单个任务状态快照"}</label><br>`).join("");
+    const scopes = validatePaScopes(request.scope).map((scope) => `<label><input type="checkbox" name="scope" value="${scope}" checked> ${scope.startsWith('pa:conversation:') ? ({'pa:conversation:publish':'发布明确审查过的一般会话最终回复（独立授权，不属于任务更新）','pa:conversation:read':'读取此来源的一般会话桥接能力与回执','pa:conversation:commands':'认领及确认此来源一般会话中的用户指令（执行仍须来源策略）'}[scope]) : scope === "pa:publish" ? "\u53D1\u5E03\u6B64\u6765\u6E90\u7684\u4EFB\u52A1\u72B6\u6001\uFF08\u5199\u5165\u5E76\u53EF\u80FD\u53D1\u9001 Discord \u901A\u77E5\uFF09" : "\u67E5\u8BE2\u6B64\u6765\u6E90\u81EA\u5DF1\u63D0\u4EA4\u7684\u56DE\u6267及单个任务状态快照"}</label><br>`).join("");
     const sourceChoice = source ? `<p>\u56FA\u5B9A\u6765\u6E90\uFF1A${escape2(source.display_name)}\uFF08${escape2(source.source_id)}\uFF09</p><input type="hidden" name="source_id" value="${escape2(source.source_id)}">` : `<p>\u6B64\u5BA2\u6237\u7AEF\u81EA\u884C\u767B\u8BB0\uFF0C\u540D\u79F0\u4E0D\u8BC1\u660E\u5176\u8EAB\u4EFD\u3002\u8BF7\u9009\u62E9\u4F60\u6B63\u5728\u8FDE\u63A5\u7684\u6765\u6E90\uFF1A</p><label>\u6388\u6743\u6765\u6E90 <select name="source_id" required><option value="" selected disabled>\u8BF7\u9009\u62E9\u4F60\u6B63\u5728\u8FDE\u63A5\u7684 PA</option>${config2.bindings.sources.filter((source2) => source2.enabled && sourceAllows(source2, "oauth")).map((source2) => `<option value="${escape2(source2.source_id)}">${escape2(source2.display_name)}\uFF08${escape2(source2.source_id)}\uFF09</option>`).join("")}</select></label><p>\u6BCF\u6B21\u6388\u6743\u4EC5\u5141\u8BB8\u4E00\u4E2A\u6765\u6E90\uFF1B\u540C\u4E00\u5BA2\u6237\u7AEF\u91CD\u65B0\u6388\u6743\u4F1A\u66FF\u6362\u5B83\u4E4B\u524D\u7684\u6388\u6743\u3002</p>`;
     return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>\u6388\u6743 PA Terminal</title><h1>\u5141\u8BB8 ${escape2(details.clientName)} \u8FDE\u63A5\uFF1F</h1><p>\u6388\u6743\u5C06\u8FD4\u56DE ${escape2(details.redirectHost)}\u3002${details.clientDomain ? "\u5BA2\u6237\u7AEF\u57DF\u540D\uFF1A" + escape2(details.clientDomain) : "\u5BA2\u6237\u7AEF\u540D\u79F0\u7531\u5176\u81EA\u884C\u58F0\u660E\u3002"}</p>${details.redirectIsLoopback ? "<p>\u8FD9\u4F1A\u6388\u6743\u4F60\u7535\u8111\u4E0A\u7684\u5E94\u7528\uFF1B\u4EC5\u5728\u4F60\u521A\u53D1\u8D77\u8FDE\u63A5\u65F6\u7EE7\u7EED\u3002</p>" : ""}<p>\u63A5\u6536\u4EBA\u56FA\u5B9A\u4E3A\u5DF2\u914D\u7F6E\u7684\u672C\u4EBA Discord \u79C1\u4FE1\u3002\u8FD9\u91CC\u4E0D\u6279\u51C6\u3001\u6062\u590D\u6216\u6267\u884C\u539F\u5E73\u53F0\u4EFB\u52A1\u3002</p><form method="post" action="/authorize"><input type="hidden" name="handle" value="${escape2(handle)}">${sourceChoice}${scopes}<p><button name="decision" value="approve">\u5141\u8BB8\u5E76\u767B\u5F55</button> <button name="decision" value="deny">\u62D2\u7EDD</button></p></form></html>`;
 }
@@ -9791,7 +9800,7 @@ __name(consentForm, "consentForm");
 function withDefaultAuthorizationScope(request) {
     const url = new URL(request.url), values = url.searchParams.getAll("scope");
     if (values.length === 0) {
-        url.searchParams.set("scope", PA_SCOPES.join(" "));
+        url.searchParams.set("scope", "pa:publish pa:receipt");
         return new Request(url, request);
     }
     if (values.length !== 1 || !/^[\x21\x23-\x5B\x5D-\x7E]+(?: [\x21\x23-\x5B\x5D-\x7E]+)*$/.test(values[0]))
@@ -9804,7 +9813,7 @@ async function withScopePolicyMetadata(request, response) {
     if (request.method !== "GET" || url.pathname !== "/.well-known/oauth-authorization-server" || !response.ok)
         return response;
     const data = await response.json();
-    data.rivule_scope_policy = { omitted_scope: [...PA_SCOPES], explicit_empty_scope: "invalid_scope", consent_required: true, source_binding: "one_owner_approved_source", project_policy: "existing_owner_allowlist" };
+    data.rivule_scope_policy = { omitted_scope: ["pa:publish", "pa:receipt"], explicit_empty_scope: "invalid_scope", consent_required: true, source_binding: "one_owner_approved_source", project_policy: "existing_owner_allowlist" };
     return new Response(JSON.stringify(data), { status: response.status, headers: response.headers });
 }
 async function handleOAuthAuthorization(request, config2, oauth, identity, trace) {
@@ -25103,7 +25112,7 @@ async function mcpResponse(request, ctx, config2, owner, trace) {
         const server = new Server({ name: "rivule", version: "0.4.0" }, { capabilities: { tools: {} }, instructions: "Task updates are the default. Read bridge_capabilities for this PA; only an owner opt-in permits bridge_publish_response for registered existing task contexts. Sources must actively call the bridge, not forward incoming relay echoes, reasoning, secrets or raw tool traffic. Do not put secrets or recipient IDs in event data. Tool acceptance is not proof of Discord delivery. No global task discovery or upstream approval is provided." });
         server.onerror = () => trace?.mark("mcp_sdk", "mcp_sdk_error", 500);
         server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [
-                ...bridgeTools,
+                ...bridgeTools, ...conversationTools,
                 { name: "publish_task_update", description: "Publish one explicitly selected PA task update to the owner notification relay. This is a write which may send Discord DMs. standard may update the overview and send a separate critical card. overview_only updates only the single Discord overview, and rejects approval or review-required updates. A separately authorized QQ channel may also deliver its own notification; notification_mode does not select or authorize channels. Does not approve or resume upstream actions.", inputSchema: { type: "object", $defs: eventDefinitions, properties: { event: embeddedEventSchema, notification_mode: { type: "string", enum: ["standard", "overview_only"], default: "standard", description: "overview_only creates or edits just the overview; standard may also send a separate terminal or approval card. Reusing an event_id with a different mode conflicts." } }, required: ["event"], additionalProperties: false }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true }, securitySchemes: [{ type: "oauth2", scopes: ["pa:publish"] }], _meta: { securitySchemes: [{ type: "oauth2", scopes: ["pa:publish"] }] } },
                 { name: "get_delivery_status", description: "Read the delivery status of a receipt created by this authenticated source. The top-level delivery and deliveries describe Discord; optional channels contains independently configured channel receipts. Unknown outcomes remain unknown. Successful reads may refresh this authenticated source’s connection verification in existing proof storage; they do not initialize queues, change delivery history, or schedule notifications.", inputSchema: { type: "object", properties: { receipt_id: { type: "string", pattern: "^rcpt_[a-f0-9]{32}$" } }, required: ["receipt_id"], additionalProperties: false }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }, securitySchemes: [{ type: "oauth2", scopes: ["pa:receipt"] }], _meta: { securitySchemes: [{ type: "oauth2", scopes: ["pa:receipt"] }] } },
                 { name: "get_task_snapshot", description: "Read one exact project/task/run/branch from this authenticated source only. Returns the actual nullable source_seq, projected status and pending actions. Sequence advice is nonreserved, not approval, not compare-and-swap and must not be blindly auto-assigned or retried. No discovery, notification, source-proof refresh, expiry or alarm writes, even on cold start.", inputSchema: taskSnapshotInputSchema, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }, securitySchemes: [{ type: "oauth2", scopes: ["pa:receipt"] }], _meta: { securitySchemes: [{ type: "oauth2", scopes: ["pa:receipt"] }] } },
@@ -25116,7 +25125,12 @@ async function mcpResponse(request, ctx, config2, owner, trace) {
                 let result2;
                 if (!args || typeof args !== "object")
                     throw new Rejected("invalid_tool_arguments");
-                if (call.params.name.startsWith('bridge_') && bridgeActions.includes(call.params.name.slice(7))) {
+                if (call.params.name.startsWith('bridge_conversation_') && conversationActions.includes(call.params.name.slice(20))) {
+                    const action=call.params.name.slice(20);
+                    authorizeOAuthContext(request,ctx,config2,[conversationScope(action)]);
+                    result2=await owner.conversation(principal,action,args);
+                }
+                else if (call.params.name.startsWith('bridge_') && bridgeActions.includes(call.params.name.slice(7))) {
                     const action=call.params.name.slice(7);
                     authorizeOAuthContext(request, ctx, config2, [action==='capabilities'||action==='response_receipt'?'pa:receipt':'pa:publish']);
                     result2=await owner.bridge(principal,action,args);
@@ -25357,6 +25371,16 @@ __name(gateway, "gateway");
 async function gatewayCore(request, env, ctx, trace) {
     try {
         const b = loadBindings(env), url = new URL(request.url);
+        if(url.href==='https://rivule-owner.internal/internal/qq-conversation-review-authority') {
+            trace?.skip();
+            if(env.QQ_CONVERSATION_AUTHORITY_ENABLED!=='true'||request.method!=='POST')return jsonResponse({error:'conversation_review_authority_unavailable'},403);
+            return getOwner(env).fetch(request);
+        }
+        if(url.href==='https://rivule-owner.internal/internal/qq-conversation-authority') {
+            trace?.skip();
+            if(env.QQ_CONVERSATION_AUTHORITY_ENABLED!=='true'||request.method!=='POST')return jsonResponse({error:'conversation_authority_unavailable'},403);
+            return getOwner(env).fetch(request);
+        }
         if(url.href==='https://rivule-owner.internal/internal/qq-response-authority') {
             trace?.skip();
             if(env.QQ_RESPONSE_AUTHORITY_ENABLED!=='true'||request.method!=='POST')return jsonResponse({error:'response_authority_unavailable'},403);
@@ -26538,7 +26562,11 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,at REAL NO
             }
             suppressDisallowedJobs() {
                 this.channels.suppressBridgeJobs?.();
-                for (const job of this.rows("SELECT id,payload,view_key,intent FROM outbox WHERE status IN ('queued','retry_wait')")) {
+                for (const job of this.rows("SELECT id,receipt,payload,view_key,intent FROM outbox WHERE status IN ('queued','retry_wait')")) {
+                    if(job.intent==='bridge_conversation_response') {
+                        if(this.channels.conversationDispatchAllowed?.(job)!==true)this.rows("UPDATE outbox SET status='suppressed',last_error='conversation_authority_changed' WHERE id=?",job.id);
+                        continue;
+                    }
                     const request = job.intent === "request" ? this.one("SELECT payload FROM requests WHERE request_key=?", job.view_key.slice("request:".length)) : null;
                     if (!this.projectAllowed(JSON.parse(job.payload).project_id) || request && !this.projectAllowed(JSON.parse(request.payload).project_id)) {
                         this.rows("UPDATE outbox SET status='suppressed',last_error='project_not_authorized' WHERE id=?", job.id);
@@ -26617,6 +26645,11 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,at REAL NO
                 if (view === "overview" || view.startsWith("request:"))
                     this.rows("UPDATE outbox SET status='coalesced' WHERE view_key=? AND status IN ('queued','retry_wait')", view);
                 this.rows("INSERT OR IGNORE INTO outbox(receipt,view_key,intent,payload,revision,status,next_at) VALUES(?,?,?,?,?,'queued',?)", receipt, view, intent, canonical(payload), revision, nextAt);
+            }
+            enqueueConversation(authority) {
+                if(!authority||authority.kind!=='conversation'||authority.version!==2||this.channels.conversationAuthority?.(authority.receipt_id)?.sequence!==authority.sequence)throw new BridgeError('conversation_authority_required',403);
+                const receipt=authority.receipt_id;
+                this.rows("INSERT OR IGNORE INTO outbox(receipt,view_key,intent,payload,revision,status,next_at) VALUES(?,?,'bridge_conversation_response',?,?,'queued',?)",receipt,'bridge_conversation_response:'+receipt,JSON.stringify(authority),authority.sequence,this.clock());
             }
             async ingest(source, raw, requestedMode = "standard") {
                 const mode = notificationMode(requestedMode);
@@ -28013,6 +28046,11 @@ var __rivuleDisplay = (function (__displayBridge) {
         }
         function buildEventMessage(dispatch) {
             const p = dispatch.payload ?? {}, event = p.event ?? {}, sources = p.sources ?? [], review = p.intent === "review";
+            if(p.intent==='bridge_conversation_response') {
+                if(event.kind!=='conversation'||event.version!==2||event.context?.kind!=='conversation'||event.context?.version!==2)throw new Error('invalid_conversation_render');
+                const source=sources.find(s=>s.source_id===event.source_id);
+                return {content:safeDiscord(`${source?.display_name??event.source_id} · 会话回复`,180),allowed_mentions:mentionPolicy(),embeds:[{title:'普通会话 · 来源主动同步',description:safeDiscord(event.text,1200),footer:{text:'来源声明的会话；指令仍由原 PA 按自身策略处理。'}}],components:event.commands_enabled?[{type:1,components:[{type:2,style:2,label:'向这条回复下达指令',custom_id:'rvconv:'+event.receipt_id}]}]:[],attachments:[]};
+            }
             if(p.intent==='bridge_response'||p.intent==='bridge_task') {
                 const source=sources.find(s=>s.source_id===event.source_id),label=p.intent==='bridge_response'?'PA 回复':'任务更新';
                 const components=event.bridge_context_ref?[{type:1,components:[{type:2,style:1,label:'向此 PA 下达指令',custom_id:'rvcommand:'+event.bridge_context_ref}]}]:[];
@@ -28242,7 +28280,7 @@ var OwnerTerminal = class extends DurableObject {
                 const ctx = this.ctx, env = this.env, b = loadBindings(env);
                 const sourceBindingContext = {};
                 this.core = new OwnerCore(ctx.storage, b, { sourceBindingContext, synthetic: false, enabled: env.DELIVERY_ENABLED === "true", sender: createDiscordSender({ bindings: b, guildId: env.GUILD_ID, token: __name(() => env.DISCORD_BOT_TOKEN, "token"), prepare, beforeSend: dispatch => {
-                    if(!['bridge_response','bridge_task'].includes(dispatch.payload.intent))return true;
+                    if(!['bridge_response','bridge_task','bridge_conversation_response'].includes(dispatch.payload.intent))return true;
                     const receipt=dispatch.viewKey.slice(dispatch.payload.intent.length+1);
                     const row=this.core.one("SELECT status FROM outbox WHERE receipt=? AND view_key=?",receipt,dispatch.viewKey);
                     return row?.status==='sending'&&this.bridgeDispatchAllowed({receipt,intent:dispatch.payload.intent,payload:JSON.stringify(dispatch.payload.event)});
@@ -28252,9 +28290,11 @@ var OwnerTerminal = class extends DurableObject {
                             this.messageBridge?.recordTask(event,id,{discord:mode!=='overview_only'});
                             this.qq.enqueue(event, id);
                         }, "onAccepted"),
-                        nextAlarmAt: __name(() => Math.min(this.qq.nextAlarmAt(), this.messageBridge?.nextExpiry() ?? Infinity, (readonlyTables(this.ctx.storage).has('bridge_discord_modals')?readonlyRows(this.ctx.storage,'SELECT MIN(expires) AS at FROM bridge_discord_modals')[0]?.at??Infinity:Infinity)), "nextAlarmAt"),
+                        nextAlarmAt: __name(() => Math.min(this.qq.nextAlarmAt(), this.conversationQQ?.nextAlarmAt()??Infinity, this.messageBridge?.nextExpiry() ?? Infinity, this.conversationBridge?.nextExpiry()??Infinity, (readonlyTables(this.ctx.storage).has('conversation_discord_modals')?readonlyRows(this.ctx.storage,'SELECT MIN(expires) AS at FROM conversation_discord_modals')[0]?.at??Infinity:Infinity), (readonlyTables(this.ctx.storage).has('bridge_discord_modals')?readonlyRows(this.ctx.storage,'SELECT MIN(expires) AS at FROM bridge_discord_modals')[0]?.at??Infinity:Infinity)), "nextAlarmAt"),
                         suppressBridgeJobs: () => this.suppressBridgeJobs(),
                         bridgeDispatchAllowed: job => this.bridgeDispatchAllowed(job),
+                        conversationDispatchAllowed: job => this.conversationDispatchAllowed(job),
+                        conversationAuthority: receipt => this.conversationBridge?.responseAuthority(receipt,'discord'),
                         receipt: __name((source, id) => {
                             const qq = this.qq.receipt(source, id);
                             return qq ? { qq } : void 0;
@@ -28269,6 +28309,9 @@ var OwnerTerminal = class extends DurableObject {
                 });
                 Object.assign(sourceBindingContext, await __ownerUiOverlay.sourceBindingContexts(b, env));
                 await this.ensureMessageBridge();
+                await this.ensureConversationBridge();
+                this.conversationOperationAuthority.reconcile();
+                if(this.conversationQQ.has())await this.conversationQQ.recover();
                 this.qq.attachMessageBridge?.(this.messageBridge);
                 await this.qq.initialize();
                 await this.core.initialize();
@@ -28278,6 +28321,7 @@ var OwnerTerminal = class extends DurableObject {
     async fetch(request) {
         if (isDashboardRoute(new URL(request.url))) {
             const bindings = loadBindings(this.env);
+            let conversationQQTarget;
             return dashboardResponse(request, {
                 env: this.env, bindings, storage: this.ctx.storage,
                 identity: {
@@ -28295,12 +28339,56 @@ var OwnerTerminal = class extends DurableObject {
                     try { qq = dashboardProducerStatus(QQBridgeQueue.producerSnapshot(this.ctx.storage, now)); } catch {}
                     return { source: proof, qq, observed_at: new Date(now).toISOString() };
                 },
+                manageConversation: async (source,action,args,admissionGuard)=>{
+                    const bridge=await this.ensureConversationBridge();
+                    if(action==='settings'){await admissionGuard();return {preference:bridge.preference(source,args.channel),observation:bridge.ownerObservation(source,args.channel)};}
+                    if(action==='review_binding'){
+                        const contexts=await __ownerUiOverlay.sourceBindingContexts(bindings,this.env);
+                        const activation=readonlyTables(this.ctx.storage).has('qq_continuous_meta')?readonlyRows(this.ctx.storage,"SELECT v FROM qq_continuous_meta WHERE k='activation'")[0]?.v:null;let target=null;try{target=JSON.parse(activation??'null')?.bindingFingerprint??null;}catch{}
+                        return digest(canonical([source,contexts[source.source_id]??null,this.env.QQ_APP_ID??null,this.env.QQ_USER_OPENID??null,target,this.env.QQ_CONVERSATION_AUTHORITY_ENABLED==='true']));
+                    }
+                    if(action==='review_list')return this.conversationQQ.unknownReceipts().filter(r=>r.source_id===source.source_id).slice(0,20).map(r=>{
+                        const row=this.conversationQQReview.has()?this.conversationQQReview.rows("SELECT review_id,state FROM conversation_qq_reviews WHERE receipt_id=? AND state IN ('confirmed','readback','blocked') ORDER BY created_at,review_id LIMIT 1",r.receipt_id)[0]:null;
+                        return {receipt_id:r.receipt_id,source_id:r.source_id,sequence:r.sequence,accepted_at:r.accepted_at,state:'unknown',...row?{review:{review_id:row.review_id,state:row.state==='blocked'?'blocked':'readback_required',next_step:row.state==='blocked'?'manual_reconciliation_required':'owner_review_readback'}}:{}};
+                    });
+                    if(action==='review_prepare'){
+                        if(!this.conversationQQ.unknownReceipts().some(r=>r.source_id===source.source_id&&r.receipt_id===args.receipt_id))throw new BridgeError('conversation_review_not_found',404);
+                        if(admissionGuard)await admissionGuard();return this.conversationQQReview.preview(args.receipt_id);
+                    }
+                    if(action==='review_confirm'||action==='review_readback'){
+                        const row=this.conversationQQReview.one(args.review_id);let original;try{original=JSON.parse(row?.snapshot??'null')?.original;}catch{}
+                        if(!row||original?.source_id!==source.source_id)throw new BridgeError('conversation_review_not_found',404);
+                        if(admissionGuard)await admissionGuard();
+                        const result=action==='review_confirm'?await this.conversationQQReview.confirm(args.review_id,args.scope,admissionGuard):await this.conversationQQReview.readback(args.review_id);
+                        if(this.core)await this.core.schedule();return result;
+                    }
+                    if(action==='display_binding')return bridge.bindingToken(source);
+                    if(action==='catalog')return bridge.catalog(source,args);
+                    if(action==='binding') {
+                        this.conversationOperationAuthority.reconcile();
+                        const channel=args.channel,recipient=bridge.recipientBinding(channel);let sourceBinding,canEnable=false;
+                        try{sourceBinding=bridge.binding(source);bridge.grant(source,'publish_response');canEnable=!!recipient;}catch{sourceBinding=canonical([source,this.env.CONVERSATION_OPERATION_GRANTS_JSON??null]);}
+                        if(channel==='qq'){
+                            // The first call occurs before controller transaction. Rechecks
+                            // inside admission only read this request-local verified snapshot.
+                            if(conversationQQTarget===undefined){conversationQQTarget=null;try{conversationQQTarget=await this.conversationQQ.commandAuthority();}catch{}}
+                            const t=conversationQQTarget;
+                            canEnable=canEnable&&t?.active===true&&t.conversationVerifierConfigured===true&&t.ownerId===bindings.ownerId&&t.appId===this.env.QQ_APP_ID&&t.userOpenId===this.env.QQ_USER_OPENID&&t.validUntil>Date.now()&&recipient===JSON.stringify([t.ownerId,t.appId,t.userOpenId,t.bindingFingerprint]);
+                        }
+                        return {binding:await digest(canonical([sourceBinding,channel,recipient])),recipient_label:recipient?(channel==='qq'?'本人 QQ · 已确认绑定（账号隐藏）':'本人 Discord 私信 · 已确认配置（账号隐藏）'):null,can_enable:canEnable};
+                    }
+                    if(action!=='preference')throw new BridgeError('invalid_conversation_management');
+                    const result=await bridge.setPreference(source,args,admissionGuard);
+                    if(readonlyTables(this.ctx.storage).has('outbox'))for(const job of readonlyRows(this.ctx.storage,"SELECT * FROM outbox WHERE intent='bridge_conversation_response' AND status IN ('queued','retry_wait')"))if(!this.conversationDispatchAllowed(job))readonlyRows(this.ctx.storage,"UPDATE outbox SET status='suppressed',last_error='conversation_consent_changed' WHERE id=?",job.id);
+                    return result;
+                },
                 manageBridge: async (source, action, args, admissionGuard) => {
                     const bridge=await this.ensureMessageBridge();
-                    if(action==='capabilities')return bridge.capabilities(source);
+                    if(action==='settings'){await admissionGuard();return bridge.preference(source);}
                     if(action==='binding')return bridge.bindingToken(source);
-                    if(action==='qq_status')return this.qqResponseConsent.status(source);
+                    if(action==='qq_status'){await admissionGuard();return this.qqResponseConsent.status(source);}
                     if(action==='qq_target')return this.qqResponseTarget();
+                    if(action==='qq_binding'){let activation=null;try{activation=readonlyTables(this.ctx.storage).has('qq_continuous_meta')?JSON.parse(readonlyRows(this.ctx.storage,"SELECT v FROM qq_continuous_meta WHERE k='activation'")[0]?.v??'null'):null;}catch{}return digest(canonical([bindings.ownerId,this.env.QQ_APP_ID??null,this.env.QQ_USER_OPENID??null,activation?.bindingFingerprint??null]));}
                     if(action==='qq_preference') {
                         const binding=bridge.binding(source);
                         if(args.binding_token!==await bridge.bindingToken(source))throw new BridgeError('bridge_authority_changed',409);
@@ -28323,6 +28411,19 @@ var OwnerTerminal = class extends DurableObject {
                 readSnapshot: (source, query) => readTaskSnapshot(this.ctx.storage, bindings, source, query)
             });
         }
+        if(request.url==='https://rivule-owner.internal/internal/qq-conversation-review-authority') {
+            await this.ensureConversationBridge();const b=loadBindings(this.env);
+            return qqConversationReviewAuthorityResponse(request,{enabled:this.env.QQ_CONVERSATION_AUTHORITY_ENABLED==='true',secret:this.env.QQ_BRIDGE_SECRET,ownerId:b.ownerId,appId:this.env.QQ_APP_ID,userOpenId:this.env.QQ_USER_OPENID,authorize:(scope,review)=>this.conversationQQReview.reviewAuthority(review?.reviewId,scope,review)});
+        }
+        if(request.url==='https://rivule-owner.internal/internal/qq-conversation-authority') {
+            const bridge=await this.ensureConversationBridge(),b=loadBindings(this.env);
+            return qqConversationAuthorityResponse(request,{secret:this.env.QQ_BRIDGE_SECRET,enabled:this.env.QQ_CONVERSATION_AUTHORITY_ENABLED==='true',ownerId:b.ownerId,appId:this.env.QQ_APP_ID,userOpenId:this.env.QQ_USER_OPENID,bridge,loadJob:async receipt=>{
+                if(!this.conversationQQ.has())return null;
+                const row=this.conversationQQ.rows("SELECT status FROM conversation_qq_outbox WHERE receipt_id=?",receipt)[0];
+                if(!row||!['queued','sending'].includes(row.status))return null;
+                try{return await this.conversationQQ.currentJob(receipt);}catch{return null;}
+            }});
+        }
         if(request.url==='https://rivule-owner.internal/internal/qq-response-authority') {
             const bridge=await this.ensureMessageBridge(),queue=await this.readonlyQQQueue();
             return qqResponseAuthorityResponse(request,{secret:this.env.QQ_BRIDGE_SECRET,enabled:this.env.QQ_RESPONSE_AUTHORITY_ENABLED==='true',ownerId:loadBindings(this.env).ownerId,appId:this.env.QQ_APP_ID,consent:this.qqResponseConsent,bridge,loadJob:async receipt=>{
@@ -28339,10 +28440,29 @@ var OwnerTerminal = class extends DurableObject {
             if(!Number.isFinite(deadline)||deadline<=Date.now()||deadline>Date.now()+2500)return jsonResponse({error:'interaction_verification_timeout'},503);
             const bridge=await this.ensureMessageBridge(),b=loadBindings(this.env);
             if(deadline<=Date.now())return jsonResponse({error:'interaction_verification_timeout'},503);
-            const adapter=new DiscordCommandAdapter({storage:this.ctx.storage,bindings:b,bridge,publicKey:this.env.DISCORD_PUBLIC_KEY,timeoutMs:Math.min(1800,deadline-Date.now())});
-            const response=await adapter.handle(new Request(b.publicOrigin+'/discord/interactions',{method:'POST',headers:request.headers,body:request.body,duplex:'half'}));
-            if(response){if(this.core)await this.core.schedule();else {const at=Math.min(bridge.nextExpiry(),adapter.nextExpiry()),old=await this.ctx.storage.getAlarm();if(Number.isFinite(at))await this.ctx.storage.setAlarm(Math.min(old??Infinity,Math.max(Date.now()+1,at)));}}
+            const raw=new Request(b.publicOrigin+'/discord/interactions',{method:'POST',headers:request.headers,body:request.body,duplex:'half'});
+            const conv=new ConversationDiscordAdapter({storage:this.ctx.storage,bindings:b,bridge:await this.ensureConversationBridge(),publicKey:this.env.DISCORD_PUBLIC_KEY,timeoutMs:Math.max(1,Math.min(1800,deadline-Date.now()))});
+            let response=await conv.handle(raw.clone(),{admissionGuard:()=>{if(Date.now()>=deadline)throw new BridgeError('interaction_verification_timeout',503);}}),adapter=null;
+            if(response===null){
+                if(Date.now()>=deadline)return jsonResponse({error:'interaction_verification_timeout'},503);
+                adapter=new DiscordCommandAdapter({storage:this.ctx.storage,bindings:b,bridge,publicKey:this.env.DISCORD_PUBLIC_KEY,timeoutMs:Math.max(1,Math.min(1800,deadline-Date.now()))});
+                response=await adapter.handle(raw);
+            }
+            if(response){if(this.core)await this.core.schedule();else {const at=Math.min(bridge.nextExpiry(),adapter?.nextExpiry()??Infinity,this.conversationBridge.nextExpiry(),conv.nextExpiry()),old=await this.ctx.storage.getAlarm();if(Number.isFinite(at))await this.ctx.storage.setAlarm(Math.min(old??Infinity,Math.max(Date.now()+1,at)));}}
             return response??new Response(null,{status:204});
+        }
+        if (new URL(request.url).pathname === '/v2/bridge') {
+            try {
+                if(new URL(request.url).origin!=='https://owner.internal'||request.method!=='POST')throw new Rejected('internal_route_required',403);
+                const bytes=await boundedBody(request),b=loadBindings(this.env),source=await authenticate(request,bytes,b,this.env,Date.now());
+                const e=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
+                if(!e||Object.keys(e).sort().join(',')!=='action,arguments,kind,version'||e.kind!=='conversation'||e.version!==2)throw new BridgeError('invalid_conversation_operation');
+                if(e.action==='publish_response')await this.initializeLegacy();
+                const bridge=await this.ensureConversationBridge();if(e.action==='register_context')await this.bootstrapConversationSource(source,e.arguments);if(!['capabilities','response_receipt'].includes(e.action))this.conversationOperationAuthority.reconcile();
+                const result=await conversationSourceOperation(bridge,source,e.action,e.arguments);
+                if(!['capabilities','response_receipt'].includes(e.action))await this.scheduleBridgeMutation();
+                return jsonResponse(result);
+            }catch(error){return error instanceof BridgeError?jsonResponse({error:error.code},error.status):safeError(error);}
         }
         if (new URL(request.url).pathname === '/v1/bridge') {
             try {
@@ -28372,7 +28492,9 @@ var OwnerTerminal = class extends DurableObject {
         await this.initializeLegacy();
         if (new URL(request.url).pathname === "/qq/webhook") {
             const ownerId=loadBindings(this.env).ownerId,storage=this.ctx.storage;
-            const inbox=this.env.MESSAGE_BRIDGE_ENABLED==='true'?new QQCommandAdapter({bridge:this.messageBridge,inbox:new QQDurableInbox(storage),config:()=>({...loadQQConfig(this.env,ownerId),enabled:this.env.MESSAGE_BRIDGE_ENABLED==='true'}),authority:()=>this.qq.commandAuthority(),revoked:async c=>await storage.get(await qqGateKey(c.appId,c.userOpenId))===true}):null;
+            const rawInbox=new QQDurableInbox(storage);
+            const taskInbox=this.env.MESSAGE_BRIDGE_ENABLED==='true'?new QQCommandAdapter({bridge:this.messageBridge,inbox:rawInbox,config:()=>({...loadQQConfig(this.env,ownerId),enabled:this.env.MESSAGE_BRIDGE_ENABLED==='true'}),authority:()=>this.qq.commandAuthority(),revoked:async c=>await storage.get(await qqGateKey(c.appId,c.userOpenId))===true}):rawInbox;
+            const inbox=this.env.QQ_CONVERSATION_AUTHORITY_ENABLED==='true'?new ConversationQQCommandAdapter({bridge:this.conversationBridge,inbox:taskInbox,rawInbox,config:()=>({...loadQQConfig(this.env,ownerId),enabled:this.env.QQ_CONVERSATION_AUTHORITY_ENABLED==='true'}),authority:()=>this.conversationQQ.commandAuthority(),revoked:async c=>await storage.get(await qqGateKey(c.appId,c.userOpenId))===true}):taskInbox;
             const response=await handleQQOwnerWebhook(request,this.env,ownerId,storage,Date.now(),inbox);
             await this.core.schedule();return response;
         }
@@ -28393,9 +28515,87 @@ var OwnerTerminal = class extends DurableObject {
     async alarm() {
         await this.initializeLegacy();
         this.messageBridge?.expire();
+        this.conversationOperationAuthority?.reconcile();
+        this.conversationBridge?.expire();
+        if(readonlyTables(this.ctx.storage).has('conversation_discord_modals'))readonlyRows(this.ctx.storage,'DELETE FROM conversation_discord_modals WHERE expires<=?',Date.now());
         if(readonlyTables(this.ctx.storage).has('bridge_discord_modals'))readonlyRows(this.ctx.storage,'DELETE FROM bridge_discord_modals WHERE expires<=?',Date.now());
         await this.qq.drain();
+        if(this.conversationQQ?.has())await this.conversationQQ.drain();
         await this.core.alarm();
+    }
+    async conversationReviewOwnerState(sourceId,original,scope) {
+        const b=loadBindings(this.env),storage=this.ctx.storage,source=b.sources.find(s=>s.source_id===sourceId);
+        if(!source||this.env.QQ_CONVERSATION_AUTHORITY_ENABLED!=='true'||scope.ownerId!==b.ownerId||scope.appId!==this.env.QQ_APP_ID||scope.userOpenId!==this.env.QQ_USER_OPENID)return null;
+        const contexts=await __ownerUiOverlay.sourceBindingContexts(b,this.env),expected=canonical([b.ownerId,b.publicOrigin,source,contexts[sourceId]??null]);
+        const proof=readonlyTables(storage).has('source_connections')?readonlyRows(storage,'SELECT * FROM source_connections WHERE source_id=?',sourceId)[0]:null;
+        if(!proof||proof.binding!==expected||!Number.isSafeInteger(proof.generation)||proof.generation<1)return null;
+        const authority=this.conversationOperationAuthority,ledger=authority.has()?authority.rows('SELECT * FROM conversation_v2_operation_authority WHERE source_id=?',sourceId)[0]:null;
+        let g=authority.configured().find(v=>v.source_id===sourceId);if(!g&&ledger){try{g=JSON.parse(ledger.fingerprint);}catch{}}
+        if(!g||g.provider_id!==source.provider||typeof g.account_binding!=='string'||!g.account_binding)return null;
+        const a=readonlyTables(storage).has('qq_continuous_meta')?JSON.parse(readonlyRows(storage,"SELECT v FROM qq_continuous_meta WHERE k='activation'")[0]?.v??'null'):null;
+        if(!a||a.bindingFingerprint!==scope.bindingFingerprint)return null;
+        const consent=this.conversationBridge.has('conversation_v2_consents')?this.conversationBridge.one("SELECT * FROM conversation_v2_consents WHERE source_id=? AND channel='qq'",sourceId):null;
+        return {sourceId,providerId:source.provider,accountBinding:g.account_binding,generation:proof.generation,grantRevision:ledger?.max_revision??g.revision,sourceBinding:canonical([expected,g,ledger?.revoked??1,proof.revoked]),sourceEnabled:source.enabled&&proof.revoked===0&&g.enabled===true&&ledger?.revoked===0,consentRevision:consent?.revision??0,consentEnabled:consent?.enabled===1,commandsEnabled:consent?.commands_enabled===1,recipient:JSON.stringify([b.ownerId,scope.appId,scope.userOpenId,scope.bindingFingerprint]),verifiedAt:proof.last_verified_at};
+    }
+    async bootstrapConversationSource(source,args) {
+        if(!args||Object.keys(args).sort().join(',')!=='conversation_id,kind,thread_id,version'||args.kind!=='conversation'||args.version!==2||!['conversation_id','thread_id'].every(k=>typeof args[k]==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(args[k])))throw new BridgeError('invalid_conversation_context');
+        const b=loadBindings(this.env),storage=this.ctx.storage,contexts=await __ownerUiOverlay.sourceBindingContexts(b,this.env),binding=canonical([b.ownerId,b.publicOrigin,source,contexts[source.source_id]??null]);
+        const row=readonlyTables(storage).has('source_connections')?readonlyRows(storage,'SELECT * FROM source_connections WHERE source_id=?',source.source_id)[0]:null;
+        const generation=row?(row.binding===binding?row.generation:row.generation+1):1;
+        this.conversationOperationAuthority.reconcile();
+        const grant=this.conversationOperationAuthority.resolveConfigured(source,{selectable:true,generation});
+        if(!grant?.operations.includes('register_context')||row?.binding===binding&&row.revoked)throw new BridgeError('conversation_operation_not_authorized',403);
+        // The signed/authenticated register operation is a source connection
+        // handshake, not a fabricated task nor provider conversation verification.
+        await recordProofContract(storage,b,source,contexts,'initialize');
+    }
+    async ensureConversationBridge() {
+        if(this.conversationBridge)return this.conversationBridge;
+        const b=loadBindings(this.env),storage=this.ctx.storage,contexts=await __ownerUiOverlay.sourceBindingContexts(b,this.env);
+        const activation=()=>readonlyTables(storage).has('qq_continuous_meta')?JSON.parse(readonlyRows(storage,"SELECT v FROM qq_continuous_meta WHERE k='activation'")[0]?.v??'null'):null;
+        readonlyIdentity(storage,b,readonlyTables(storage));
+        this.conversationOperationAuthority=new ConversationOperationAuthority({storage,sources:b.sources,raw:()=>this.env.CONVERSATION_OPERATION_GRANTS_JSON,proof:source=>{
+                const expected=canonical([b.ownerId,b.publicOrigin,source,contexts[source.source_id]??null]);
+                const r=readonlyTables(storage).has('source_connections')?readonlyRows(storage,'SELECT * FROM source_connections WHERE source_id=?',source.source_id)[0]:null;
+                const selectable=r?.binding===expected&&r.revoked===0&&Number.isFinite(r.last_verified_at)&&r.last_verified_at<=Date.now()&&Date.now()-r.last_verified_at<86400000&&['accepted_event','initialize','tools/list','read_probe'].includes(r.evidence_kind);
+                return {selectable,generation:r?.generation};
+            }});
+        this.conversationBridge=new ConversationBridge({storage,sources:b.sources,authority:source=>this.conversationOperationAuthority.resolve(source),
+            recipientBinding:channel=>{
+                if(channel==='discord')return JSON.stringify([b.ownerId,b.appId,b.userId,b.dmId]);
+                if(channel!=='qq'||this.env.QQ_CONVERSATION_AUTHORITY_ENABLED!=='true')return null;
+                try{const c=loadQQConfig(this.env,b.ownerId),a=activation();return c?.enabled&&a?.active&&a.expiresAt>Date.now()?JSON.stringify([b.ownerId,c.appId,c.userOpenId,a.bindingFingerprint]):null;}catch{return null;}
+            },
+            recipient:t=>{
+                if(t.owner_id!==b.ownerId)return false;
+                if(t.channel==='discord')return t.requester_id===b.userId&&t.conversation_id===b.dmId;
+                try{const c=loadQQConfig(this.env,b.ownerId);return t.channel==='qq'&&this.env.QQ_CONVERSATION_AUTHORITY_ENABLED==='true'&&c?.enabled&&t.requester_id===c.userOpenId&&t.conversation_id===c.userOpenId;}catch{return false;}
+            },
+            enqueue:(channel,authority)=>{if(channel==='qq')return this.conversationQQ.enqueue(authority);if(channel!=='discord'||!this.core)throw new BridgeError('conversation_channel_unavailable',409);this.core.enqueueConversation(authority);},
+            delivery:(receipt,channel)=>{
+                if(channel==='qq')return this.conversationQQ?.delivery(receipt)??null;
+                if(channel!=='discord'||!readonlyTables(storage).has('outbox'))return null;
+                const r=readonlyRows(storage,"SELECT status,message_id FROM outbox WHERE receipt=? AND intent='bridge_conversation_response'",receipt)[0];
+                return r?{state:r.status==='sent'?'provider_accepted':['sending','uncertain'].includes(r.status)?'unknown':['queued','retry_wait'].includes(r.status)?'queued':'blocked',message_id:r.message_id}:null;
+            },
+            eraseDelivery:receipt=>{this.conversationQQ?.erase(receipt);if(readonlyTables(storage).has('outbox'))readonlyRows(storage,"UPDATE outbox SET payload='{}',status=CASE WHEN status IN ('queued','retry_wait') THEN 'suppressed' ELSE status END WHERE receipt=? AND intent='bridge_conversation_response'",receipt);}
+        });
+        this.conversationQQ=new ConversationQQQueue({storage,bridge:this.conversationBridge,env:this.env,ownerId:b.ownerId,activation,
+            config:()=>{try{const c=loadQQConfig(this.env,b.ownerId);return c?{...c,enabled:c.enabled&&this.env.QQ_CONVERSATION_AUTHORITY_ENABLED==='true'}:null;}catch{return null;}},
+            sourceAuthority:async id=>{
+                const source=b.sources.find(s=>s.source_id===id);if(!source)return null;
+                try{const grant=this.conversationBridge.grant(source,'publish_response'),c=loadQQConfig(this.env,b.ownerId);if(c&&await storage.get(await qqGateKey(c.appId,c.userOpenId))===true)return null;const row=readonlyRows(storage,'SELECT last_verified_at,generation FROM source_connections WHERE source_id=?',id)[0];return {selectable:!!row&&row.generation===grant.generation,verifiedAt:row?.last_verified_at};}catch{return null;}
+            }
+        });
+        this.conversationQQReview=new ConversationQQReview({storage,queue:this.conversationQQ,currentOwnerState:(source,row,scope)=>this.conversationReviewOwnerState(source,row,scope)});
+        return this.conversationBridge;
+    }
+    conversationDispatchAllowed(job) {
+        const a=this.conversationBridge?.responseAuthority(job.receipt,'discord');
+        try{return !!a&&job.intent==='bridge_conversation_response'&&JSON.stringify(JSON.parse(job.payload))===JSON.stringify(a);}catch{return false;}
+    }
+    async conversation(principal,action,args) {
+        return this.result(async()=>{const source=this.source(principal);if(action==='publish_response')await this.initializeLegacy();const bridge=await this.ensureConversationBridge();if(action==='register_context')await this.bootstrapConversationSource(source,args);if(!['capabilities','response_receipt'].includes(action))this.conversationOperationAuthority.reconcile();const result=await conversationSourceOperation(bridge,source,action,args);if(!['capabilities','response_receipt'].includes(action))await this.scheduleBridgeMutation();return result;},false);
     }
     async ensureMessageBridge() {
         if(this.messageBridge)return this.messageBridge;
@@ -28464,6 +28664,7 @@ var OwnerTerminal = class extends DurableObject {
         return target;
     }
     bridgeDispatchAllowed(job) {
+        if(job.intent==='bridge_conversation_response')return this.conversationDispatchAllowed(job);
         if(!['bridge_task','bridge_response'].includes(job.intent))return true;
         const source=loadBindings(this.env).sources.find(s=>s.source_id===JSON.parse(job.payload).source_id);
         try{return job.intent==='bridge_response'?this.messageBridge.responseAuthorized(job.receipt):!!source&&!!this.messageBridge.taskAuthority(source,job.receipt);}catch{return false;}
@@ -28479,7 +28680,7 @@ var OwnerTerminal = class extends DurableObject {
     }
     async scheduleBridgeMutation() {
         if(this.core)return this.core.schedule();
-        const at=this.messageBridge?.nextExpiry()??Infinity;
+        const at=Math.min(this.messageBridge?.nextExpiry()??Infinity,this.conversationBridge?.nextExpiry()??Infinity);
         if(Number.isFinite(at)){const old=await this.ctx.storage.getAlarm();await this.ctx.storage.setAlarm(Math.min(old??Infinity,Math.max(Date.now()+1,at)));}
     }
     async bridge(principal,action,args) {

@@ -33,7 +33,9 @@
     "SOURCES_JSON": "[]",
     "DASHBOARD_QQ_SETTINGS_ENABLED": "false",
     "MESSAGE_BRIDGE_ENABLED": "false",
-    "QQ_RESPONSE_AUTHORITY_ENABLED": "false"
+    "QQ_RESPONSE_AUTHORITY_ENABLED": "false",
+    "QQ_CONVERSATION_AUTHORITY_ENABLED": "false",
+    "CONVERSATION_OPERATION_GRANTS_JSON": "[]"
   },
   "durable_objects": {
     "bindings": [

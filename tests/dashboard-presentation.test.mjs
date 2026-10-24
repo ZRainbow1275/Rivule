@@ -32,7 +32,7 @@ test('PA canvas has native auth forms, honest preview, accessible controls and r
   assert.match(html, /aria-controls="settings"/); assert.match(html, /<dialog/);
   assert.match(html, /创建时间<\/dt><dd>未知/); assert.match(html, /预览 · 未连接/);
   assert.doesNotMatch(html, /innerHTML|sessionStorage|(?:src|href)="https?:\/\//);
-  assert.equal([...html.matchAll(/fetch\(/g)].length, 4); // selected reads, task picker, QQ and scoped bridge management
+  assert.equal([...html.matchAll(/fetch\(/g)].length, 7); // selected reads, task picker, QQ, task/conversation management, display cancel and review
 });
 
 test('expired session removes prior data and offers owner verification', async () => {

@@ -1,3 +1,4 @@
+import { dashboardConversation, isConversationSettingsPath } from './conversation-controller.mjs';
 import { dashboardBridge, isBridgeSettingsPath } from './bridge-controller.mjs';
 import { TASK_PICKER_VERSION, isTaskPickerPath, dashboardTaskPicker, dashboardDynamicSelections } from './dashboard-task-picker.mjs';
 import { sourceBrand } from './brand-identity.mjs';
@@ -63,13 +64,13 @@ function page() {
   return new Response(body, { headers: h });
 }
 /** Called only by the owner Durable Object's internal dashboard route. */
-export async function dashboardResponse(request, { env, bindings, storage, identity, readSnapshot, readActivity, readTestReceipt, readConnection, manageQQ, manageBridge, readCatalog, readSelection, now = Date.now }) {
+export async function dashboardResponse(request, { env, bindings, storage, identity, readSnapshot, readActivity, readTestReceipt, readConnection, manageQQ, manageBridge, manageConversation, readCatalog, readSelection, now = Date.now }) {
   const url = new URL(request.url);
   if (url.origin !== 'https://owner.internal' || !isDashboardRoute(url)) return json('internal_route_required', 403);
   let config;
   try { config = configuration(env, bindings); } catch { return json('dashboard_configuration_unavailable', 503); }
   if (!config) return json('not_found', 404);
-  if (url.hash || url.pathname !== '/callback' && url.search) return json('invalid_dashboard_request', 400);
+  if (url.hash || !['/callback','/dashboard/conversation/catalog'].includes(url.pathname) && url.search) return json('invalid_dashboard_request', 400);
   const sameOrigin = request.headers.get('origin') === bindings.publicOrigin;
   if (request.method === 'POST' && !sameOrigin) return json('origin_not_accepted', 403);
   const binding = await digest(JSON.stringify([TASK_PICKER_VERSION, bindings.ownerId, bindings.appId, bindings.userId, bindings.dmId, bindings.publicOrigin, bindings.allowedProjectIds, config.source, config.watchlist, config.testReceipt, config.sources, config.additional]));
@@ -127,12 +128,13 @@ export async function dashboardResponse(request, { env, bindings, storage, ident
     h.set('location', '/dashboard');h.append('set-cookie', cookie(SESSION_COOKIE, token, SESSION_TTL / 1000, 'Strict'));
     return new Response(null, { status: 303, headers: h });
   }
-  if (!['/dashboard/data', '/dashboard/logout'].includes(url.pathname) && !isQQSettingsPath(url.pathname) && !isTaskPickerPath(url.pathname) && !isBridgeSettingsPath(url.pathname)) return json('not_found', 404);
+  if (!['/dashboard/data', '/dashboard/logout'].includes(url.pathname) && !isQQSettingsPath(url.pathname) && !isTaskPickerPath(url.pathname) && !isBridgeSettingsPath(url.pathname) && !isConversationSettingsPath(url.pathname)) return json('not_found', 404);
   if (url.pathname === '/dashboard/data' && request.method !== 'GET' || url.pathname === '/dashboard/logout' && request.method !== 'POST') return json('method_not_allowed', 405);
-  if ((url.pathname === '/dashboard/data' || isQQSettingsPath(url.pathname) || isTaskPickerPath(url.pathname) || isBridgeSettingsPath(url.pathname)) && (request.headers.get('sec-fetch-site') !== 'same-origin' || request.headers.has('origin') && !sameOrigin)) return json('origin_not_accepted', 403);
+  if ((url.pathname === '/dashboard/data' || isQQSettingsPath(url.pathname) || isTaskPickerPath(url.pathname) || isBridgeSettingsPath(url.pathname) || isConversationSettingsPath(url.pathname)) && (request.headers.get('sec-fetch-site') !== 'same-origin' || request.headers.has('origin') && !sameOrigin)) return json('origin_not_accepted', 403);
   const token = readCookie(request, SESSION_COOKIE), sessionKey = token ? 'dashboard:session:' + await digest(token) : null;
   const session = sessionKey && await storage.get(sessionKey);
   if (!session || session.expires <= now() || session.binding !== binding) return json('dashboard_login_required', 401);
+  if (isConversationSettingsPath(url.pathname)) return dashboardConversation(request,{session,sessionKey,storage,config,now,manageConversation,headers});
   if (isBridgeSettingsPath(url.pathname)) return dashboardBridge(request, {session,sessionKey,storage,config,now,manageBridge,headers});
   if (isTaskPickerPath(url.pathname)) return dashboardTaskPicker(request, {storage,sessionKey,binding,config,now,headers,readCatalog,readSelection,readTestReceipt});
   if (isQQSettingsPath(url.pathname)) return dashboardQQSettings(request, {env,storage,session,sessionKey,binding,now,manageQQ,headers});

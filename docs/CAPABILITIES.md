@@ -26,4 +26,8 @@ Discord 提供来源筛选、任务总览与详情、进展和待决定通知。
 
 Discord 使用已送达指定任务卡或回复卡的按钮/表单，QQ 使用已送达消息里的明确上下文代码。不会将任意聊天文本猜成给某个 PA 的指令。来源主动 claim/ack，失联领取进入 unknown 且不重新发放，不替来源执行敏感动作。来源不可更改所有者转发偏好。
 
-普通对话没有 task/run/branch 时，当前协议明确不支持。后续应新增独立 conversation 上下文类型、来源操作范围和所有者授权，不能复用项目任务授权或虚构任务 ID。代码不承诺全局拦截各提供商所有响应，不绕过来源自身策略。
+普通对话没有 task/run/branch 时，v1 协议仍明确拒绝；开发中的 v2 使用独立 conversation 上下文类型、来源操作范围和所有者授权，不能复用项目任务授权或虚构任务 ID。代码不承诺全局拦截各提供商所有响应，不绕过来源自身策略。
+
+### Development conversation-v2 (not live acceptance)
+
+Ordinary non-task final responses now have a separate version-2 contract, source operation authorization, owner channel/category consent and immutable receipt routing. They do not enter task events/branches or inherit task project grants. Offline Discord and QQ vertical tests cover the real renderer/queue/signature/independent-owner-verifier paths and exact-context command claim/ack. Shared-bot adapters must withhold other users' conversations; source assertions are not independent provider ownership evidence. Live deployment, source hook installation, consent enablement and actual recipient delivery are not established by this development evidence.
