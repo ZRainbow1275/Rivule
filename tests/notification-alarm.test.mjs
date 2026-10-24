@@ -26,7 +26,7 @@ function fixture(t) {
     const rows = (sql, ...args) => db.prepare(sql).all(...args);
     const state = {now: 1000, alarm: null, writes: [], deletes: 0, diagnostic: Infinity, expiry: Infinity, freshness: Infinity};
     const activation = {active: true, expiresAt: 1e9, startAfterRevision: 0};
-    const config = {enabled: true, allowedProjects: ['project']};
+    const config = {enabled: true, allowedSources: ['source'], allowedProjects: ['project']};
     const storage = {
         getAlarm: async () => state.alarm,
         setAlarm: async at => { state.alarm = at; state.writes.push(at); },

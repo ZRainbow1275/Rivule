@@ -1,0 +1,24 @@
+# Discord inbound command adapter (offline implementation)
+
+`src/owner/discord-command-adapter.mjs` implements signed message-button → modal → durable command queue. It neither registers slash commands nor sends messages or deploys infrastructure. Plain-text DMs are not ingested. A running PA must explicitly pull and acknowledge its queue; accepted is not executed or awakened.
+
+## Integration contract
+
+1. Include this module in `scripts/build.mjs`'s copied owner modules.
+2. For a registered PA context, append a button `{type:2,style:1,label:'向此 PA 下达指令',custom_id:'rvcommand:'+context_ref}` to that context's forwarded bridge response, only if current commands consent allows it. Never derive context from response text. Keep standard task/dashboard controls unchanged.
+3. `bridge.resolveDiscordContext(context_ref, message_id)` must synchronously return the exact stored `{source_id,project_id,task_id,run_id,branch_id,thread_id}` only when the message ID is linked to a provider-accepted response for this context, current source/owner binding, current registration, current consent epoch, unexpired controls and enabled command preference. It must throw on missing, stale, rebound or ambiguous mappings. Resolving is required at both modal opening and submission.
+4. Instantiate `new DiscordCommandAdapter({storage,bindings,bridge,publicKey})` inside the owner Durable Object. The bridge method `enqueueCommand(trusted,input)` enforces all source bindings and idempotently deduplicates channel+event_id; the adapter passes only signature-verified owner/channel/event data and the resolved stored context. The adapter uses `storage.sql.exec` and `storage.transaction`.
+5. Route raw Discord HTTP request to `adapter.handle(request)`. Keep bytes verbatim, including whitespace, plus the original signature/timestamp, URL/method and authorization-header presence. If using an internal RPC, forward a bounded ArrayBuffer, never parsed/re-serialized JSON. The adapter verifies Ed25519 itself; `handleVerified` rejects objects not minted by its own verifier. A non-null Response is final; null means a valid unrelated interaction and should go through the existing handler using an untouched clone. PING returns `{type:1}`. Do not expose a public endpoint that accepts a caller's `trusted` object.
+6. Preserve a total edge→owner response deadline below Discord's three-second initial-response limit. Adapter default 1800 ms covers request read, signature verification and local storage/queue operation. Edge/RPC overhead needs its own remaining budget. Verification timeout returns 503 without invoking the command handler later. After authenticated processing starts, timeout returns an ephemeral uncertain-outcome notice, never a success/failure claim or an automatic resend. Durable queue replay uses the same interaction ID.
+
+Modal tickets expire in five minutes and bind opening interaction, originating message, stored context reference, first submission event and a SHA-256 digest of the exact text. An identical signed duplicate reaches the durable queue with the same ID; changed text or a second event using the ticket is rejected. Ticket storage is bounded at 2,000 live records; instruction plaintext is never stored in tickets. Include adapter.nextExpiry() in the owner alarm deadline and call adapter.expire() on that alarm to erase expired ticket metadata without requiring another interaction. Instruction text is 1–1,200 characters, with control characters rejected and mentions disabled in acknowledgments. Queued command TTL is one hour. Raw request limit is 64 KiB; signature freshness is five minutes.
+
+## Live enablement boundary
+
+This offline module does not establish live end-to-end operation. The deployed app needs its already-authorized Discord Interactions Endpoint URL, matching public verification key/application/owner DM bindings, and current registered PA contexts with commands enabled. If the endpoint is not configured, an authorized operator must set it in the Discord Developer Portal. No new slash-command registration, Gateway intent, OAuth grant or credentials are needed by this button/modal design. An authorized deployment and a real owner roundtrip would be separate verification steps; none was performed here.
+
+Official API references checked for the implementation:
+- https://docs.discord.com/developers/interactions/receiving-and-responding (raw signature verification, component/modal originating message, BOT_DM context, three-second response requirement)
+- https://docs.discord.com/developers/components/using-modal-components (modal input lifecycle)
+
+Offline checks: `node --test tests/discord-command-adapter.test.mjs`. These use real Ed25519 signatures and SQLite, with a fake queue to isolate adapter authorization. Main integration must additionally exercise real MessageBridge correlation/consent/queue deduplication and the actual worker route.

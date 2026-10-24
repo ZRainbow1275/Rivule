@@ -33,6 +33,7 @@ export function readDashboardActivity(storage, bindings, source, query, now = Da
   base.truncated=events.length>30;
   for (const row of events.slice(0,30)) {
     const p=JSON.parse(row.payload);
+    if(row.decision==='bridge_response' && p.kind==='response') {base.withheld_count++;continue;} // Separate message bridge log, not a task-state update.
     if(row.source_id!==source.source_id || row.branch_key!==key || p.source_id!==source.source_id || fields.some(k=>p[k]!==query[k]) || p.event_id!==row.event_id || !Number.isSafeInteger(row.revision) || row.revision<1 || !Number.isFinite(row.received_at) || !/^rcpt_[a-f0-9]{32}$/.test(row.receipt)) throw Error('activity_unavailable');
     if(p.sensitivity!=='normal') {base.withheld_count++;continue;}
     if(!statuses.has(p.source_status) || !kinds.has(p.kind) || !Number.isFinite(Date.parse(p.occurred_at))) throw Error('activity_unavailable');

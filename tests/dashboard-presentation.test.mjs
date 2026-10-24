@@ -19,7 +19,7 @@ function clientFixture(fetch, storage, timers = {}) {
   const elements = new Map(), window = new Element(), document = new Element();
   document.getElementById = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   document.createElement = () => new Element(); document.createElementNS = () => new Element(); document.body = new Element();
-  vm.runInNewContext('(' + dashboardClient.toString() + ')()', { selectedWorkbench, document, window, fetch, Date, localStorage: storage, AbortController, setTimeout, clearTimeout, ...timers });
+  vm.runInNewContext('(' + dashboardClient.toString() + ')()', { selectedWorkbench, document, window, fetch, Date, crypto, localStorage: storage, AbortController, setTimeout, clearTimeout, ...timers });
   return { get: document.getElementById, load: () => window.listeners.pageshow(), pageshow: event=>window.listeners.pageshow(event), hide: () => window.listeners.pagehide(), visible: value=>{document.hidden=!value;document.listeners.visibilitychange();} };
 }
 
@@ -32,7 +32,7 @@ test('PA canvas has native auth forms, honest preview, accessible controls and r
   assert.match(html, /aria-controls="settings"/); assert.match(html, /<dialog/);
   assert.match(html, /创建时间<\/dt><dd>未知/); assert.match(html, /预览 · 未连接/);
   assert.doesNotMatch(html, /innerHTML|sessionStorage|(?:src|href)="https?:\/\//);
-  assert.equal([...html.matchAll(/fetch\(/g)].length, 2); // task read and explicit same-origin QQ management
+  assert.equal([...html.matchAll(/fetch\(/g)].length, 4); // selected reads, task picker, QQ and scoped bridge management
 });
 
 test('expired session removes prior data and offers owner verification', async () => {
@@ -349,4 +349,85 @@ test('global update failure marks every retained PA card possibly stale and succ
  let fail=false;const c=clientFixture(async()=>{if(fail)throw Error('offline');return {status:200,ok:true,json:async()=>({state:'connected',items:[],sources:[{source_id:'muse-main',display_name:'Muse',state:'connected',items:[{state:'available',task_name:'Retained Muse task'}]}]})};});
  await c.load();const first=c.get('canvas').children.at(-1);fail=true;await c.load();assert.equal(first.attributes['data-state'],'warning');const notice=first.children.find(n=>n.className==='snapshot-warning');assert.ok(notice);assert.equal(notice.hidden,false);assert.match(notice.textContent,/上次快照.*可能已过期/);assert.equal(first.removed,undefined);
  fail=false;await c.load();assert.equal(first.removed,true);const replacement=c.get('canvas').children.at(-1);assert.equal(replacement.children.find(n=>n.className==='snapshot-warning').hidden,true);
+});
+
+const pickerMeta=()=>({state:'access_required',csrf:'csrf-picker',sources:[{source_id:'zot-main',display_name:'Zot'},{source_id:'muse-main',display_name:'Muse'}],scope:'既有授权项目',expires_at:new Date(Date.now()+60000).toISOString(),selected_count:1,limit:20});
+const pickerPage=(overrides={})=>({state:'catalog',csrf:'csrf-picker',source_id:'zot-main',items:[{ref:'row-a',task_name:'<img private>',project_name:'Project',branch_name:'Main',source_status:'running',last_confirmed_at:'2026-10-23T00:00:00Z',stale:false,archived:false,selected:false,configured:false}],selected_refs:[],selected_count:1,limit:20,next_cursor:null,...overrides});
+const ok=data=>({status:200,ok:true,json:async()=>data});
+const flushPicker=async()=>{for(let i=0;i<30;i++)await Promise.resolve();};
+
+test('picker opens metadata only; catalog read requires exact source consent and does not fetch logs',async()=>{
+ const calls=[];const c=clientFixture(async(path,options)=>{calls.push([path,options]);return ok(path==='/dashboard/task-picker'?pickerMeta():pickerPage());});
+ await c.get('choose-tasks').listeners.click({currentTarget:c.get('choose-tasks')});
+ assert.equal(calls.length,1);assert.equal(calls[0][0],'/dashboard/task-picker');assert.equal(calls[0][1].method,'GET');assert.equal(c.get('task-picker').open,true);assert.equal(c.get('picker-cancel').focused,true);assert.match(c.get('picker-scope').children[1].textContent,/尚不读取任务正文或日志/);assert.match(c.get('picker-scope').children[2].textContent,/不启动任务.*不发送通知/);
+ await c.get('picker-access').listeners.click();assert.equal(calls[1][0],'/dashboard/task-picker/access');const access=JSON.parse(calls[1][1].body);assert.match(access.request_id,/^[a-f0-9]{32}$/);assert.deepEqual({...access,request_id:undefined},{csrf:'csrf-picker',source_id:'zot-main',confirm:true,request_id:undefined});
+ assert.equal(c.get('picker-rows').children[0].children[1].children[0].textContent,'<img private>');assert.equal(c.get('items').children.length,0);assert.equal(calls.length,2);c.hide();await flushPicker();
+});
+test('picker selections survive pages, preserve unvisited selected refs, and only apply reads details',async()=>{
+ const calls=[];const c=clientFixture(async(path,options)=>{calls.push([path,options]);if(path==='/dashboard/data')return ok({items:[]});if(path==='/dashboard/task-picker')return ok(pickerMeta());if(path.endsWith('/access'))return ok(pickerPage({selected_refs:['preselected-unvisited'],next_cursor:'page-2'}));if(path.endsWith('/page'))return ok(pickerPage({items:[{ref:'preselected-unvisited',task_name:'Already selected',selected:true,configured:false}],selected_refs:['preselected-unvisited']}));if(path.endsWith('/apply'))return ok({state:'applied'});return ok({state:'cancelled'});});
+ await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();const input=c.get('picker-rows').children[0].children[0];input.checked=true;input.listeners.change();assert.equal(c.get('picker-count').textContent,'已选 2 / 20（所有 PA 合计）');
+ await c.get('picker-more').listeners.click();assert.equal(input.checked,true);assert.equal(c.get('picker-rows').children[1].children[0].checked,true);assert.equal(calls.some(([p])=>p==='/dashboard/data'),false);
+ await c.get('picker-apply').listeners.click();assert.deepEqual(JSON.parse(calls.find(([p])=>p.endsWith('/apply'))[1].body).refs,['preselected-unvisited','row-a']);assert.equal(calls.at(-1)[0],'/dashboard/data');assert.equal(c.get('task-picker').open,false);assert.equal(c.get('picker-rows').children.length,0);assert.equal(c.get('choose-tasks').focused,true);c.hide();
+});
+test('picker fixed choices stay checked and global configured+dynamic limit is enforced',async()=>{
+ const c=clientFixture(async path=>ok(path==='/dashboard/task-picker'?pickerMeta():pickerPage({selected_count:20,items:[{ref:'fixed',task_name:'Fixed',selected:true,configured:true},{ref:'new',task_name:'New',selected:false,configured:false}]})));
+ await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();const rows=c.get('picker-rows').children;assert.equal(rows[0].children[0].disabled,true);assert.equal(rows[0].children[0].checked,true);
+ rows[1].children[0].checked=true;rows[1].children[0].listeners.change();assert.equal(rows[1].children[0].checked,false);assert.match(c.get('picker-feedback').textContent,/最多选择 20/);assert.equal(c.get('picker-count').textContent,'已选 20 / 20（所有 PA 合计）');c.hide();await flushPicker();
+});
+test('cancel revokes only chooser and clears private rows; reopen requires fresh consent',async()=>{
+ const calls=[];const c=clientFixture(async(path,options)=>{calls.push([path,options]);return ok(path==='/dashboard/task-picker'?pickerMeta():path.endsWith('/cancel')?{state:'cancelled'}:pickerPage());});
+ await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();c.get('task-picker').listeners.cancel({preventDefault(){}});await flushPicker();assert.equal(c.get('task-picker').open,false);assert.equal(c.get('picker-rows').children.length,0);assert.equal(c.get('picker-scope').children.length,0);assert.equal(calls.at(-1)[0],'/dashboard/task-picker/cancel');assert.equal(calls.at(-1)[1].keepalive,true);assert.equal(calls.some(([p])=>p.endsWith('/apply')),false);
+ await c.get('choose-tasks').listeners.click({});assert.equal(calls.at(-1)[0],'/dashboard/task-picker');assert.equal(c.get('picker-apply').hidden,true);c.hide();await flushPicker();
+});
+test('late access response cannot repopulate cancelled or reopened picker',async()=>{
+ let release;const c=clientFixture(async path=>{if(path==='/dashboard/task-picker')return ok(pickerMeta());if(path.endsWith('/access'))return new Promise(r=>release=r);return ok({state:'cancelled'});});
+ await c.get('choose-tasks').listeners.click({});const pending=c.get('picker-access').listeners.click();c.get('picker-cancel').listeners.click();await c.get('choose-tasks').listeners.click({});release(ok(pickerPage()));await pending;assert.equal(c.get('task-picker').open,true);assert.equal(c.get('picker-rows').children.length,0);assert.equal(c.get('picker-access').hidden,false);assert.match(c.get('picker-feedback').textContent,/尚未读取任务目录/);c.hide();await flushPicker();
+});
+test('hidden page and owner expiry clear picker content and never display late private rows',async()=>{
+ for(const mode of ['hidden','401']){
+ let expire=false;const c=clientFixture(async path=>expire?{status:401,ok:false}:ok(path==='/dashboard/task-picker'?pickerMeta():pickerPage()));await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();assert.equal(c.get('picker-rows').children.length,1);
+ if(mode==='hidden')c.visible(false);else{expire=true;await c.load();}
+ assert.equal(c.get('task-picker').open,false);assert.equal(c.get('picker-rows').children.length,0);assert.equal(c.get('picker-scope').children.length,0);await flushPicker();
+ }
+});
+test('in-flight data refresh cannot wipe picker state or focus',async()=>{
+ const c=clientFixture(async path=>ok(path==='/dashboard/task-picker'?pickerMeta():path==='/dashboard/data'?{items:[],sources:[]}:pickerPage()));
+ await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();const row=c.get('picker-rows').children[0];await c.load();assert.equal(c.get('task-picker').open,true);assert.equal(c.get('picker-rows').children[0],row);c.hide();await flushPicker();
+});
+test('empty real PA cards expose scoped picker buttons, not fabricated task rows',async()=>{
+ const calls=[];const c=clientFixture(async(path,options)=>{calls.push([path,options]);return ok(path==='/dashboard/data'?{items:[],sources:[{source_id:'muse-main',display_name:'Muse',items:[]}]}:pickerMeta());});await c.load();const card=c.get('canvas').children.at(-1),button=card.children.at(-1).children[0];assert.equal(button.textContent,'选择已上报任务');assert.equal(card.attributes['data-palette'],'teal');assert.match(card.children[2].children[1].textContent,/不代表此 PA 没有工作/);await button.listeners.click();assert.match(c.get('picker-title').textContent,/Muse/);assert.equal(calls.at(-1)[0],'/dashboard/task-picker');c.hide();await flushPicker();
+});
+test('picker grants use fresh random request IDs and cancellation cannot target a later dialog',async()=>{
+ const calls=[];const c=clientFixture(async(path,options)=>{calls.push([path,options]);return ok(path==='/dashboard/task-picker'?pickerMeta():path.endsWith('/cancel')?{state:'cancelled'}:pickerPage());});
+ await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();c.get('picker-cancel').listeners.click();await flushPicker();const first=JSON.parse(calls.find(([p])=>p.endsWith('/access'))[1].body).request_id;assert.match(first,/^[a-f0-9]{32}$/);assert.equal(JSON.parse(calls.find(([p])=>p.endsWith('/cancel'))[1].body).request_id,first);
+ await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();const second=JSON.parse(calls.filter(([p])=>p.endsWith('/access')).at(-1)[1].body).request_id;assert.notEqual(second,first);c.hide();await flushPicker();
+});
+test('picker apply failure reports uncertainty, never retries or silently reads details',async()=>{
+ const calls=[];const c=clientFixture(async(path,options)=>{calls.push(path);if(path.endsWith('/apply'))throw Error('lost response');return ok(path==='/dashboard/task-picker'?pickerMeta():path.endsWith('/cancel')?{state:'cancelled'}:pickerPage());});
+ await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();await c.get('picker-apply').listeners.click();assert.match(c.get('status').textContent,/结果未确认.*未自动重试/);assert.equal(calls.filter(p=>p.endsWith('/apply')).length,1);assert.equal(calls.includes('/dashboard/data'),false);assert.equal(c.get('task-picker').open,false);await flushPicker();
+});
+test('picker unauthorized response also cancels pending dashboard reads',async()=>{
+ let release;const c=clientFixture(async path=>{if(path==='/dashboard/data')return new Promise(r=>release=r);if(path.endsWith('/access'))return {status:401,ok:false};return ok(pickerMeta());});
+ await c.get('choose-tasks').listeners.click({});const reading=c.load();await c.get('picker-access').listeners.click();await reading;release(ok({items:[{task_name:'Obsolete private data'}]}));await flushPicker();assert.equal(c.get('task-picker').open,false);assert.equal(c.get('items').children.length,0);assert.equal(c.get('controls').hidden,true);assert.equal(c.get('login').hidden,false);
+});
+test('restricted selection409 clears all task data but retains actual source chooser identities',async()=>{
+ let expired=false;const c=clientFixture(async()=>expired?{status:409,ok:false}:ok({items:[{task_name:'Private Zot'}],sources:[{source_id:'muse-main',display_name:'Muse',provider:'muse',items:[{task_name:'Private Muse',summary:'Secret'}]}]}));await c.load();expired=true;await c.load();assert.equal(c.get('items').children.length,0);assert.equal(c.get('activity-list').children[0].textContent,'等待读取所选任务');const card=c.get('canvas').children.at(-1);assert.equal(card.children.at(-1).children[0].textContent,'选择已上报任务');assert.doesNotMatch(JSON.stringify(card.children),/Private Muse|Secret/);assert.match(c.get('status').textContent,/清除旧内容/);
+});
+test('session expiry clears private work independently of polling while picker is open',async()=>{
+ const timers=new Map();let next=0;const expiry=new Date(Date.now()+5000).toISOString();const c=clientFixture(async path=>ok(path==='/dashboard/data'?{items:[{task_name:'Private work'}],session_expires_at:expiry}:path==='/dashboard/task-picker'?pickerMeta():pickerPage()),undefined,{setTimeout(fn,ms){timers.set(++next,{fn,ms});return next;},clearTimeout(id){timers.delete(id);}});
+ await c.load();await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();const timeout=[...timers.values()].find(t=>t.ms>0 && t.ms<=5000);assert.ok(timeout);timeout.fn();assert.equal(c.get('items').children.length,0);assert.equal(c.get('picker-rows').children.length,0);assert.equal(c.get('task-picker').open,false);assert.equal(c.get('controls').hidden,true);assert.match(c.get('status').textContent,/会话已到期/);await flushPicker();
+});
+test('unavailable prior choices show no metadata and can be removed to recover access',async()=>{
+ const calls=[];const c=clientFixture(async(path,options)=>{calls.push([path,options]);if(path==='/dashboard/data')return ok({items:[]});if(path.endsWith('/apply'))return ok({state:'applied'});return ok(path==='/dashboard/task-picker'?pickerMeta():pickerPage({items:[],selected_refs:['unavailable-ref'],unavailable_selected_refs:['unavailable-ref']}));});
+ await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();assert.equal(c.get('picker-apply').disabled,true);const row=c.get('picker-rows').children[0];assert.match(row.children[1].textContent,/原有所选任务已不可用/);assert.equal(row.children.length,2);row.children[0].checked=false;row.children[0].listeners.change();assert.equal(c.get('picker-apply').disabled,false);await c.get('picker-apply').listeners.click();assert.deepEqual(JSON.parse(calls.find(([p])=>p.endsWith('/apply'))[1].body).refs,[]);c.hide();
+});
+test('later catalog page never reselects an initial ref the user already deselected',async()=>{
+ const c=clientFixture(async path=>ok(path==='/dashboard/task-picker'?pickerMeta():pickerPage({items:[{ref:'selected-ref',selected:true,configured:false,task_name:'Selected'}],selected_refs:['selected-ref'],next_cursor:path.endsWith('/page')?null:'next'})));await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();const input=c.get('picker-rows').children[0].children[0];input.checked=false;input.listeners.change();await c.get('picker-more').listeners.click();assert.equal(input.checked,false);assert.equal(c.get('picker-count').textContent,'已选 0 / 20（所有 PA 合计）');c.hide();await flushPicker();
+});
+test('background session check preserves open chooser but immediately clears it on revocation',async()=>{
+ const timers=new Map();let tid=0,revoked=false,dataReads=0;
+ const c=clientFixture(async path=>{if(path==='/dashboard/data'){dataReads++;return revoked?{status:401,ok:false}:ok({state:'connected',items:[]});}return ok(path==='/dashboard/task-picker'?pickerMeta():pickerPage());},undefined,{setTimeout(fn,ms){timers.set(++tid,{fn,ms});return tid;},clearTimeout(id){timers.delete(id);}});
+ await c.load();await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();const row=c.get('picker-rows').children[0];
+ [...timers.values()].find(t=>t.ms===30000).fn();await flushPicker();assert.equal(dataReads,2);assert.equal(c.get('task-picker').open,true);assert.equal(c.get('picker-rows').children[0],row);
+ revoked=true;[...timers.values()].find(t=>t.ms===30000).fn();await flushPicker();assert.equal(dataReads,3);assert.equal(c.get('task-picker').open,false);assert.equal(c.get('picker-rows').children.length,0);assert.equal(c.get('controls').hidden,true);c.hide();
 });

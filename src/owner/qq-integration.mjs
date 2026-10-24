@@ -619,6 +619,21 @@ const qqLocalSuppression = new Set(['source_or_event_changed', 'projection_chang
 const QQBridgeQueueV1 = QQBridgeQueue;
 QQBridgeQueue = class extends QQBridgeQueueV1 {
     attachAuthority(read) { this.readAuthority = read; }
+    attachMessageBridge(bridge) { this.messageBridge = bridge; }
+    commandAuthority() { return qqV2Request(this, 'command_authority', null); }
+    bridgeProjection(source, receiptId, row) {
+        if(this.messageBridge?.qqResponseAuthorized?.(source,receiptId)!==true)throw Error('projection_not_authorized');
+        const authority = this.messageBridge?.responseAuthority(source, receiptId);
+        if (!authority || authority.decision !== 'bridge_response' || authority.receiptId !== receiptId || authority.revision !== row.revision || row.source_id !== source.source_id || JSON.stringify(authority.event) !== row.payload || authority.event.kind !== 'response' || authority.event.sensitivity !== 'normal')
+            throw Error('projection_not_authorized');
+        return authority;
+    }
+    enqueueResponse(source, receiptId) {
+        const row = this.rows('SELECT revision,source_id,payload,decision FROM events WHERE receipt=?', receiptId)[0];
+        if (!row || row.decision !== 'bridge_response') return false;
+        const authority = this.bridgeProjection(source, receiptId, row);
+        return this.enqueue(authority.event, receiptId);
+    }
     async initialize() { await super.initialize(); if (this.rows("SELECT name FROM sqlite_master WHERE type='table' AND name='qq_continuous_skips'").length)
         this.migrateAdmissionReason(); }
     migrateAdmissionReason() { if (!this.rows('PRAGMA table_info(qq_continuous_skips)').some(c => c.name === 'reason'))
@@ -635,10 +650,10 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
         return { ...capacity, delivery, latestAdmission: qqAdmissionSnapshot(storage) };
     }
     recordAdmissionSkip(event, receiptId, reason) {
-        if (!/^rcpt_[a-f0-9]{32}$/.test(receiptId ?? '') || !this.rows("SELECT name FROM sqlite_master WHERE type='table' AND name='qq_continuous_skips'").length)
+        if (!/^(?:rcpt_[a-f0-9]{32}|bridge_[a-f0-9-]{36})$/.test(receiptId ?? '') || !this.rows("SELECT name FROM sqlite_master WHERE type='table' AND name='qq_continuous_skips'").length)
             return;
         const row = this.rows('SELECT revision,source_id,decision FROM events WHERE receipt=?', receiptId)[0];
-        if (!row || row.source_id !== event.source_id || row.decision !== 'applied')
+        if (!row || row.source_id !== event.source_id || !['applied', 'bridge_response'].includes(row.decision))
             return;
         this.storage.transactionSync(() => {
             this.rows('INSERT OR IGNORE INTO qq_continuous_skips(receipt,source_id,revision,recorded_at,reason) VALUES(?,?,?,?,?)', receiptId, row.source_id, row.revision, this.now(), qqAdmissionReason(reason));
@@ -746,19 +761,20 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
             if (!c.allowedProjects.includes(event.project_id))
                 return skip('project_not_authorized');
             const source = this.sources.find(s => s.source_id === event.source_id && s.enabled), proof = this.readAuthority?.(event.source_id);
-            if (!source || proof?.selectable !== true || !Number.isSafeInteger(proof.connection_generation))
+            if (!source || !c.allowedSources.includes(source.source_id) || proof?.selectable !== true || !Number.isSafeInteger(proof.connection_generation))
                 return skip('source_unverified');
             if (event.sensitivity !== 'normal')
                 return skip('sensitivity_excluded');
             if (event.kind === 'heartbeat')
                 return skip('heartbeat_excluded');
             const row = this.rows('SELECT revision,source_id,payload,decision FROM events WHERE receipt=?', receiptId)[0];
-            if (!row || row.decision !== 'applied' || row.source_id !== source.source_id || row.revision <= a.startAfterRevision)
+            if (!row || !['applied', 'bridge_response'].includes(row.decision) || row.source_id !== source.source_id || row.revision <= a.startAfterRevision)
                 return skip('event_not_current');
             if (row.revision <= this.retentionFloor() || row.revision <= this.capacityFloor())
                 return skip('admission_history_excluded');
-            const projected = projection(validateEvent(JSON.parse(row.payload), source, this.now()));
-            if (JSON.stringify(projected) !== JSON.stringify(projection(validateEvent(event, source, this.now()))))
+            const bridgeResponse = row.decision === 'bridge_response';
+            const projected = bridgeResponse ? this.bridgeProjection(source, receiptId, row).event : projection(validateEvent(JSON.parse(row.payload), source, this.now()));
+            if (JSON.stringify(projected) !== JSON.stringify(bridgeResponse ? event : projection(validateEvent(event, source, this.now()))))
                 return skip('projection_not_authorized');
             if (this.rows('SELECT receipt FROM qq_continuous_outbox WHERE receipt=?', receiptId).length)
                 return true;
@@ -772,7 +788,7 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
             // Keep the oldest window start; updates cannot postpone the notification indefinitely.
             for (const prior of this.rows("SELECT * FROM qq_continuous_outbox WHERE status='queued' AND source_id=?", source.source_id)) {
                 const previous = JSON.parse(prior.payload);
-                if (prior.revision < row.revision && prior.receipt !== receiptId && prior.source_generation === proof.connection_generation && isRoutineProgress(previous) && sameNotificationBranch(previous, projected)) {
+                if (projected.kind !== 'response' && prior.revision < row.revision && prior.receipt !== receiptId && prior.source_generation === proof.connection_generation && isRoutineProgress(previous) && sameNotificationBranch(previous, projected)) {
                     if (isRoutineProgress(projected)) receivedAt = Math.min(receivedAt, prior.recorded_at);
                     superseded.push(prior.receipt);
                 }
@@ -813,18 +829,31 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
     async currentJob(row, a) {
         const source = this.sources.find(s => s.source_id === row.source_id && s.enabled), proof = this.readAuthority?.(row.source_id);
         const accepted = this.rows('SELECT revision,source_id,payload,decision FROM events WHERE receipt=?', row.receipt)[0];
-        if (!source || proof?.selectable !== true || typeof proof.binding !== 'string' || proof.connection_generation !== row.source_generation || !accepted || accepted.decision !== 'applied' || accepted.revision !== row.revision || accepted.source_id !== row.source_id || row.revision <= a.startAfterRevision)
+        if (!source || !this.config()?.allowedSources.includes(row.source_id) || proof?.selectable !== true || typeof proof.binding !== 'string' || proof.connection_generation !== row.source_generation || !accepted || !['applied', 'bridge_response'].includes(accepted.decision) || accepted.revision !== row.revision || accepted.source_id !== row.source_id || row.revision <= a.startAfterRevision)
             throw Error('source_or_event_changed');
-        const event = projection(validateEvent(JSON.parse(accepted.payload), source, this.now()));
+        const bridgeResponse = accepted.decision === 'bridge_response';
+        const response = bridgeResponse ? this.bridgeProjection(source, row.receipt, accepted) : null;
+        const event = response ? response.event : projection(validateEvent(JSON.parse(accepted.payload), source, this.now()));
         if (JSON.stringify(event) !== row.payload || event.sensitivity !== 'normal' || event.kind === 'heartbeat' || !this.config().allowedProjects.includes(event.project_id))
             throw Error('projection_changed');
-        const content = formatQQNotification(event, source, this.now());
+        const taskContext = !response ? this.messageBridge?.taskAuthority(source, row.receipt) : null;
+        const correlation = response ?? taskContext;
+        const content = response ? `${source.name ?? source.source_id} · PA 回复\n${event.summary}${this.messageBridge.preference(source).commands_enabled ? `\n\n回复指令：/rivule ${response.context_ref} <指令>` : ''}` : formatQQNotification(event, source, this.now()) + (taskContext ? `\n\n回复指令：/rivule ${taskContext.context_ref} <指令>` : '');
         const sourceBindingDigest = await hash(proof.binding), payloadHash = await hash(content);
         const current = this.readAuthority?.(row.source_id);
         if (current?.selectable !== true || current.connection_generation !== proof.connection_generation || current.binding !== proof.binding)
             throw Error('source_changed_during_projection');
         const job = { intentId: await hash(JSON.stringify([row.source_id, row.receipt])), sourceId: row.source_id, sourceGeneration: row.source_generation, sourceBindingDigest, projectId: event.project_id, receiptId: row.receipt, eventId: event.event_id, acceptedRevision: row.revision, payloadHash, content, grantId: a.grantId, bindingFingerprint: a.bindingFingerprint };
         const verification = { selectable: true, enabled: true, revoked: false, sourceId: row.source_id, generation: row.source_generation, bindingDigest: sourceBindingDigest, verifiedAt: current.last_verified_at, applied: true, receiptId: row.receipt, eventId: event.event_id, acceptedRevision: row.revision, projectAllowed: true, projectId: event.project_id, sensitivity: event.sensitivity, kind: event.kind, payloadHash };
+        if (correlation) {
+            job.contentKind = response ? 'bridge_response' : 'task_update'; job.contextRef = correlation.context_ref; job.consentRevision = correlation.consent_revision;
+            verification.contentKind = job.contentKind; verification.contextRef = correlation.context_ref; verification.consentRevision = correlation.consent_revision;
+        }
+        if (response) {
+            delete job.acceptedRevision; job.responseRevision = row.revision; job.threadId = response.context.thread_id;
+            delete verification.applied; delete verification.acceptedRevision;
+            Object.assign(verification, { responseRevision: row.revision, threadId: job.threadId, decision: 'bridge_response', registeredContext: true, scope: 'task_context_only', mode: 'every_response' });
+        }
         return { job, source: verification };
     }
     async drain() {
@@ -847,7 +876,8 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
             diagnosticStage = 'owner_projection';
             const first = await this.currentJob(row, a);
             diagnosticStage = 'gateway_prepare';
-            const prepared = await qqV2Request(this, 'prepare', first);
+            const responseJob = first.job.contentKind === 'bridge_response';
+            const prepared = await qqV2Request(this, responseJob ? 'response_prepare' : 'prepare', first);
             let result;
             if (prepared.state !== 'prepared') {
                 const diagnostic = qqStoredDiagnostic(prepared.diagnostic);
@@ -862,7 +892,7 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
                 if (JSON.stringify(fresh.job) !== JSON.stringify(first.job))
                     throw Error('job_changed');
                 commitStarted = true;
-                result = await qqV2Request(this, 'commit', { intentId: first.job.intentId, permit: { intentId: first.job.intentId, challenge: prepared.challenge, expiresAt: prepared.expiresAt, grantRevision: prepared.grantRevision, payloadHash: first.job.payloadHash }, source: fresh.source });
+                result = await qqV2Request(this, responseJob ? 'response_commit' : 'commit', { intentId: first.job.intentId, permit: { intentId: first.job.intentId, challenge: prepared.challenge, expiresAt: prepared.expiresAt, grantRevision: prepared.grantRevision, payloadHash: first.job.payloadHash }, source: fresh.source });
             }
             await this.storage.transaction(async () => { this.rows('UPDATE qq_continuous_outbox SET status=?,result=?,recorded_at=? WHERE receipt=?', result.state, JSON.stringify(result), this.now(), row.receipt); if (result.state !== 'sent' && !qqLocalSuppression.has(result.reason)) {
                 const current = this.activation();

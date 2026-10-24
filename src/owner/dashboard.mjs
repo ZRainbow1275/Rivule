@@ -1,3 +1,5 @@
+import { dashboardBridge, isBridgeSettingsPath } from './bridge-controller.mjs';
+import { TASK_PICKER_VERSION, isTaskPickerPath, dashboardTaskPicker, dashboardDynamicSelections } from './dashboard-task-picker.mjs';
 import { sourceBrand } from './brand-identity.mjs';
 import { dashboardQQSettings, isQQSettingsPath } from './dashboard-settings.mjs';
 import { ownerDashboardHtml } from './presentation.mjs';
@@ -61,7 +63,7 @@ function page() {
   return new Response(body, { headers: h });
 }
 /** Called only by the owner Durable Object's internal dashboard route. */
-export async function dashboardResponse(request, { env, bindings, storage, identity, readSnapshot, readActivity, readTestReceipt, readConnection, manageQQ, now = Date.now }) {
+export async function dashboardResponse(request, { env, bindings, storage, identity, readSnapshot, readActivity, readTestReceipt, readConnection, manageQQ, manageBridge, readCatalog, readSelection, now = Date.now }) {
   const url = new URL(request.url);
   if (url.origin !== 'https://owner.internal' || !isDashboardRoute(url)) return json('internal_route_required', 403);
   let config;
@@ -70,7 +72,7 @@ export async function dashboardResponse(request, { env, bindings, storage, ident
   if (url.hash || url.pathname !== '/callback' && url.search) return json('invalid_dashboard_request', 400);
   const sameOrigin = request.headers.get('origin') === bindings.publicOrigin;
   if (request.method === 'POST' && !sameOrigin) return json('origin_not_accepted', 403);
-  const binding = await digest(JSON.stringify([bindings.ownerId, bindings.appId, bindings.userId, bindings.publicOrigin, config.source, config.watchlist, config.testReceipt, config.sources, config.additional]));
+  const binding = await digest(JSON.stringify([TASK_PICKER_VERSION, bindings.ownerId, bindings.appId, bindings.userId, bindings.dmId, bindings.publicOrigin, bindings.allowedProjectIds, config.source, config.watchlist, config.testReceipt, config.sources, config.additional]));
   if (url.pathname === '/dashboard' && request.method === 'GET') return page();
   if (url.pathname === '/dashboard/login' && request.method === 'POST') {
     const state = 'rd_' + random(), browser = random(), key = 'dashboard:login:' + await digest(state);
@@ -125,19 +127,23 @@ export async function dashboardResponse(request, { env, bindings, storage, ident
     h.set('location', '/dashboard');h.append('set-cookie', cookie(SESSION_COOKIE, token, SESSION_TTL / 1000, 'Strict'));
     return new Response(null, { status: 303, headers: h });
   }
-  if (!['/dashboard/data', '/dashboard/logout'].includes(url.pathname) && !isQQSettingsPath(url.pathname)) return json('not_found', 404);
+  if (!['/dashboard/data', '/dashboard/logout'].includes(url.pathname) && !isQQSettingsPath(url.pathname) && !isTaskPickerPath(url.pathname) && !isBridgeSettingsPath(url.pathname)) return json('not_found', 404);
   if (url.pathname === '/dashboard/data' && request.method !== 'GET' || url.pathname === '/dashboard/logout' && request.method !== 'POST') return json('method_not_allowed', 405);
-  if ((url.pathname === '/dashboard/data' || isQQSettingsPath(url.pathname)) && (request.headers.get('sec-fetch-site') !== 'same-origin' || request.headers.has('origin') && !sameOrigin)) return json('origin_not_accepted', 403);
+  if ((url.pathname === '/dashboard/data' || isQQSettingsPath(url.pathname) || isTaskPickerPath(url.pathname) || isBridgeSettingsPath(url.pathname)) && (request.headers.get('sec-fetch-site') !== 'same-origin' || request.headers.has('origin') && !sameOrigin)) return json('origin_not_accepted', 403);
   const token = readCookie(request, SESSION_COOKIE), sessionKey = token ? 'dashboard:session:' + await digest(token) : null;
   const session = sessionKey && await storage.get(sessionKey);
   if (!session || session.expires <= now() || session.binding !== binding) return json('dashboard_login_required', 401);
+  if (isBridgeSettingsPath(url.pathname)) return dashboardBridge(request, {session,sessionKey,storage,config,now,manageBridge,headers});
+  if (isTaskPickerPath(url.pathname)) return dashboardTaskPicker(request, {storage,sessionKey,binding,config,now,headers,readCatalog,readSelection,readTestReceipt});
   if (isQQSettingsPath(url.pathname)) return dashboardQQSettings(request, {env,storage,session,sessionKey,binding,now,manageQQ,headers});
   if (url.pathname === '/dashboard/logout') {
-    await storage.delete(sessionKey);const h = headers();h.set('location', '/dashboard');h.append('set-cookie', cookie(SESSION_COOKIE, '', 0, 'Strict'));
+    await storage.transaction(async tx => { await tx.delete(sessionKey); });const h = headers();h.set('location', '/dashboard');h.append('set-cookie', cookie(SESSION_COOKIE, '', 0, 'Strict'));
     return new Response(null, { status: 303, headers: h });
   }
+  let dynamic;
+  try { dynamic = await dashboardDynamicSelections({session,config,readSelection,now}); } catch { return json('task_selection_unavailable',409); }
   let selectedTest = null;
-  const watchlist = [...config.watchlist];
+  const watchlist = [...config.watchlist, ...(dynamic[config.source.source_id] || [])];
   if (config.testReceipt) {
     try { selectedTest = await readTestReceipt(config.source, config.testReceipt); } catch { return json('dashboard_receipt_unavailable', 503); }
     if (!selectedTest || fields.some(k => !validId(selectedTest[k])) || !bindings.allowedProjectIds.includes(selectedTest.project_id)) return json('dashboard_receipt_unavailable', 503);
@@ -149,9 +155,10 @@ export async function dashboardResponse(request, { env, bindings, storage, ident
     try { model.connection = await readConnection(config.source); }
     catch { model.connection = { source: { status: 'unknown', evidence_kind: null, last_verified_at: null, proof_max_age_ms: 86400000 }, qq: { status: 'unknown', reason: 'state_unavailable', scope: 'owner_producer_only' }, observed_at: new Date(now()).toISOString() }; }
   }
+  model.session_expires_at = new Date(session.expires).toISOString();
   model.sources = [];
   for (const source of config.sources) {
-    const projection = await readDashboardWatchlist({sourceId:source.source_id, authorizedSourceIds:[source.source_id], watchlist:config.additional[source.source_id] || [], readSnapshot:query=>readSnapshot(source,query),readActivity:readActivity ? query=>readActivity(source,query) : undefined});
+    const projection = await readDashboardWatchlist({sourceId:source.source_id, authorizedSourceIds:[source.source_id], watchlist:[...(config.additional[source.source_id] || []), ...(dynamic[source.source_id] || [])], readSnapshot:query=>readSnapshot(source,query),readActivity:readActivity ? query=>readActivity(source,query) : undefined});
     const brand=sourceBrand(source);
     projection.display_name = dashboardText(brand.name,120);
     projection.provider = ['dot','qq','muse'].includes(source.provider) ? source.provider : null;

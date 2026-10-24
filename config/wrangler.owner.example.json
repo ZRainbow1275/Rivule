@@ -31,7 +31,9 @@
     "QQ_OWNER_ID": "REPLACE_QQ_OWNER_ID",
     "QQ_SETUP_ENABLED": "false",
     "SOURCES_JSON": "[]",
-    "DASHBOARD_QQ_SETTINGS_ENABLED": "false"
+    "DASHBOARD_QQ_SETTINGS_ENABLED": "false",
+    "MESSAGE_BRIDGE_ENABLED": "false",
+    "QQ_RESPONSE_AUTHORITY_ENABLED": "false"
   },
   "durable_objects": {
     "bindings": [

@@ -18,7 +18,8 @@
     "QQ_OWNER_ID": "REPLACE_QQ_OWNER_ID",
     "QQ_PROOF_ENABLED": "false",
     "QQ_SETUP_ENABLED": "false",
-    "DASHBOARD_QQ_SETTINGS_ENABLED": "false"
+    "DASHBOARD_QQ_SETTINGS_ENABLED": "false",
+    "QQ_RESPONSE_AUTHORITY_ENABLED": "false"
   },
   "durable_objects": {
     "bindings": [

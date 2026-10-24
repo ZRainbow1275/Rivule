@@ -34,7 +34,7 @@ test('real QQ admission coalesces queued progress, retains first window and pres
  db.exec(`CREATE TABLE events(receipt TEXT PRIMARY KEY,revision INTEGER,source_id TEXT,payload TEXT,decision TEXT);CREATE TABLE qq_continuous_outbox(receipt TEXT PRIMARY KEY,source_id TEXT,source_generation INTEGER,revision INTEGER,payload TEXT,status TEXT,recorded_at INTEGER,result TEXT);`);
  let now=1000;const rows=(q,...args)=>db.prepare(q).all(...args);
  const queue=Object.create(QQBridgeQueue.prototype);
- Object.assign(queue,{rows,now:()=>now,sources:[{source_id:'a',enabled:true}],config:()=>({enabled:true,allowedProjects:['p']}),activation:()=>({active:true,expiresAt:1e9,startAfterRevision:0}),readAuthority:()=>({selectable:true,connection_generation:1}),retentionFloor:()=>0,capacityFloor:()=>0,recordAdmissionSkip:()=>{throw Error('unexpected skip')}});
+ Object.assign(queue,{rows,now:()=>now,sources:[{source_id:'a',enabled:true}],config:()=>({enabled:true,allowedSources:['a'],allowedProjects:['p']}),activation:()=>({active:true,expiresAt:1e9,startAfterRevision:0}),readAuthority:()=>({selectable:true,connection_generation:1}),retentionFloor:()=>0,capacityFloor:()=>0,recordAdmissionSkip:()=>{throw Error('unexpected skip')}});
  const add=(id,patch={})=>{const e={...event,event_id:id,sensitivity:'normal',occurred_at:new Date(0).toISOString(),...patch};rows("INSERT INTO events VALUES(?,?,?,?,?)",id,Number(id.slice(1)),'a',JSON.stringify(e),'applied');assert.equal(queue.enqueue(e,id),true);return e;};
  const e1=add('e1');now=2000;add('e2');queue.enqueue(e1,'e1');
  assert.equal(rows("SELECT status FROM qq_continuous_outbox WHERE receipt='e2'")[0].status,'queued');
@@ -150,7 +150,7 @@ test('failed QQ replacement admission preserves prior queued progress across com
  db.exec(`CREATE TABLE events(receipt TEXT PRIMARY KEY,revision INTEGER,source_id TEXT,payload TEXT,decision TEXT);CREATE TABLE qq_continuous_outbox(receipt TEXT PRIMARY KEY,source_id TEXT,source_generation INTEGER,revision INTEGER,payload TEXT,status TEXT,recorded_at INTEGER,result TEXT);CREATE TRIGGER reject_replacement BEFORE INSERT ON qq_continuous_outbox WHEN NEW.receipt='e2' BEGIN SELECT RAISE(ABORT,'fixture insert failure'); END;`);
  const rows=(sql,...args)=>db.prepare(sql).all(...args), skips=[];
  const queue=Object.create(QQBridgeQueue.prototype);
- Object.assign(queue,{rows,now:()=>1000,sources:[{source_id:'a',enabled:true}],config:()=>({enabled:true,allowedProjects:['p']}),activation:()=>({active:true,expiresAt:1e9,startAfterRevision:0}),readAuthority:()=>({selectable:true,connection_generation:1}),retentionFloor:()=>0,capacityFloor:()=>0,recordAdmissionSkip:(_,id,reason)=>skips.push({id,reason})});
+ Object.assign(queue,{rows,now:()=>1000,sources:[{source_id:'a',enabled:true}],config:()=>({enabled:true,allowedSources:['a'],allowedProjects:['p']}),activation:()=>({active:true,expiresAt:1e9,startAfterRevision:0}),readAuthority:()=>({selectable:true,connection_generation:1}),retentionFloor:()=>0,capacityFloor:()=>0,recordAdmissionSkip:(_,id,reason)=>skips.push({id,reason})});
  const events=[1,2].map(i=>({...event,event_id:'e'+i,sensitivity:'normal',occurred_at:new Date(0).toISOString()}));
  for(const [i,e] of events.entries()) rows('INSERT INTO events VALUES(?,?,?,?,?)',e.event_id,i+1,'a',JSON.stringify(e),'applied');
  assert.equal(queue.enqueue(events[0],'e1'),true);

@@ -12,6 +12,14 @@ Rivule 是面向个人 AI 助手的自托管通知入口。助手通过 MCP 或 
 
 [开始使用](docs/GETTING_STARTED.zh.md) · [产品展示](docs/showcase/index.html) · [交给 AI 协助](docs/AI_HANDOFF.zh.md)
 
+## 开发中的双向消息桥接（尚未部署验收）
+
+源码新增按 PA 独立管理的「任务更新 / 每次任务回复」及指令回传。PA 必须主动调用 MCP、HTTP 或来源 hook；Discord 的指定消息按钮与 QQ 的明确上下文指令可进入原 PA 的持久队列，由原 PA 领取、按自身权限判断、回报完成或拒绝。排队不代表已执行，也不会唤醒没有相应能力的 PA。
+
+当前仅覆盖真实已登记的 task/run/branch/thread，普通无任务对话尚未支持。QQ 回复另需所有者明确的来源、接收账户和消息类别授权，以及网关独立回查 owner 的固定服务绑定；旧任务通知授权不自动扩展。模板保持关闭，本地离线回归不等于生产送达。管理页面只是控制入口，不是消息桥接的主体。
+
+[来源 hook / API](docs/source-bridge-hook.md) · [Discord 回传](docs/discord-command-adapter.md) · [QQ 回传](docs/integrations/qq-message-commands.md) · [QQ 独立验权](docs/qq-response-authority.md)
+
 ## 先接通一个助手
 
 1. 构建源码，由所有者配置 Cloudflare 服务与 Discord bot

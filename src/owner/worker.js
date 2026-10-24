@@ -1,3 +1,9 @@
+import { QQResponseConsent, qqResponseAuthorityResponse } from './qq-response-consent.mjs';
+import { QQCommandAdapter } from './qq-command-adapter.mjs';
+import { MessageBridge, BridgeError } from './message-bridge.mjs';
+import { bridgeTools, bridgeSourceOperation, bridgeActions } from './bridge-source-contract.mjs';
+import { DiscordCommandAdapter } from './discord-command-adapter.mjs';
+import { readDashboardCatalog, readDashboardCatalogSelection } from './dashboard-catalog.mjs';
 import { readDashboardActivity } from './dashboard-activity.mjs';
 import { readDashboardSourceProof, dashboardProducerStatus } from "./dashboard-connection.mjs";
 import { sourceBrand, knownBrandImage } from "./brand-identity.mjs";
@@ -8273,7 +8279,7 @@ var OwnerCore = class {
                 else if (mode === "standard" && terminal.has(event.kind))
                     this.enqueue(receipt, "event:" + receipt, "terminal", payload, revision);
                 this.enqueue(receipt, "overview", "overview", payload, revision);
-                this.channels.onAccepted?.(payload, receipt);
+                this.channels.onAccepted?.(payload, receipt, mode);
             }
             else if (decision === "unsequenced_needs_review" || decision === "terminal_guard" && event.kind === "needs_input")
                 this.enqueue(receipt, "review:" + receipt, "review", payload, revision);
@@ -8555,7 +8561,7 @@ var OwnerCore = class {
                 const result2 = await this.sender(dispatch);
                 if (result2.notSent === true) {
                     status = "blocked";
-                    error2 = ["preflight_configuration", "preflight_bot_identity", "preflight_guild_bot", "preflight_guild_owner", "preflight_dm_identity", "preflight_render"].includes(result2.reason ?? "") ? result2.reason : "preflight_or_render_failed";
+                    error2 = ["preflight_configuration", "preflight_bot_identity", "preflight_guild_bot", "preflight_guild_owner", "preflight_dm_identity", "preflight_render", "preflight_authority"].includes(result2.reason ?? "") ? result2.reason : "preflight_or_render_failed";
                 }
                 else if (result2.status === 200) {
                     const data = result2.body;
@@ -8768,7 +8774,7 @@ async function ingress(request, env, getOwner2) {
             return jsonResponse({ status: "milestone1", mcp: "not_configured", oauth: "not_configured", discord_delivery: "disabled", pa_connectivity: "not_claimed", sankey: "python_reference_only" });
         if (path === "/mcp")
             return jsonResponse({ error: "mcp_oauth_not_configured" }, 503);
-        if (request.method !== "POST" || !["/v1/events", "/v1/receipt", "/v1/task/snapshot"].includes(path))
+        if (request.method !== "POST" || !["/v1/events", "/v1/receipt", "/v1/task/snapshot", "/v1/bridge"].includes(path))
             return jsonResponse({ error: "not_found" }, 404);
         const body = await boundedBody(request);
         await authenticate(request, body, b, env, Date.now());
@@ -9455,7 +9461,7 @@ async function routeQQWebhook(request, env, ownerId, getOwner2) {
     }
 }
 __name(routeQQWebhook, "routeQQWebhook");
-async function handleQQOwnerWebhook(request, env, ownerId, storage, now = Date.now()) {
+async function handleQQOwnerWebhook(request, env, ownerId, storage, now = Date.now(), commandInbox = null) {
     const url = new URL(request.url);
     if (url.origin !== "https://owner.internal" || url.pathname !== "/qq/webhook" || url.search || url.hash || request.headers.has("origin") && request.headers.get("origin") !== env.PUBLIC_ORIGIN)
         return response("internal_route_required", 403);
@@ -9468,7 +9474,7 @@ async function handleQQOwnerWebhook(request, env, ownerId, storage, now = Date.n
     }
     if (!c)
         return response("qq_disabled", 503);
-    return handleQQWebhook(request, { enabled: true, appId: c.appId, userOpenId: c.userOpenId, appSecret: c.appSecret }, new QQDurableInbox(storage), now);
+    return handleQQWebhook(request, { enabled: true, appId: c.appId, userOpenId: c.userOpenId, appSecret: c.appSecret }, commandInbox ?? new QQDurableInbox(storage), now);
 }
 __name(handleQQOwnerWebhook, "handleQQOwnerWebhook");
 var QQServiceQueue = class {
@@ -15354,6 +15360,7 @@ function createDiscordSender(config2, transport = fetch) {
             headers["content-type"] = "application/json";
             body = JSON.stringify(payload);
         }
+        if(config2.beforeSend && config2.beforeSend(dispatch)!==true)return {status:0,notSent:true,reason:'preflight_authority'};
         const result2 = await transport(API + "/channels/" + b.dmId + "/messages" + (dispatch.messageId ? "/" + dispatch.messageId : ""), { method: dispatch.messageId ? "PATCH" : "POST", headers, body, redirect: "manual", signal: AbortSignal.timeout(15e3) });
         let data;
         try {
@@ -25093,9 +25100,10 @@ async function mcpResponse(request, ctx, config2, owner, trace) {
         const rpcStage = parsed.method === "initialize" ? "mcp_initialize" : parsed.method === "tools/list" ? "mcp_list" : parsed.method === "tools/call" ? "mcp_call" : null;
         if (rpcStage)
             trace?.mark(rpcStage);
-        const server = new Server({ name: "rivule", version: "0.4.0" }, { capabilities: { tools: {} }, instructions: "Explicitly report this source\u2019s task updates only. Do not put secrets or recipient IDs in event data. Tool acceptance is not proof of Discord delivery. No global task discovery or upstream approval is provided." });
+        const server = new Server({ name: "rivule", version: "0.4.0" }, { capabilities: { tools: {} }, instructions: "Task updates are the default. Read bridge_capabilities for this PA; only an owner opt-in permits bridge_publish_response for registered existing task contexts. Sources must actively call the bridge, not forward incoming relay echoes, reasoning, secrets or raw tool traffic. Do not put secrets or recipient IDs in event data. Tool acceptance is not proof of Discord delivery. No global task discovery or upstream approval is provided." });
         server.onerror = () => trace?.mark("mcp_sdk", "mcp_sdk_error", 500);
         server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [
+                ...bridgeTools,
                 { name: "publish_task_update", description: "Publish one explicitly selected PA task update to the owner notification relay. This is a write which may send Discord DMs. standard may update the overview and send a separate critical card. overview_only updates only the single Discord overview, and rejects approval or review-required updates. A separately authorized QQ channel may also deliver its own notification; notification_mode does not select or authorize channels. Does not approve or resume upstream actions.", inputSchema: { type: "object", $defs: eventDefinitions, properties: { event: embeddedEventSchema, notification_mode: { type: "string", enum: ["standard", "overview_only"], default: "standard", description: "overview_only creates or edits just the overview; standard may also send a separate terminal or approval card. Reusing an event_id with a different mode conflicts." } }, required: ["event"], additionalProperties: false }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true }, securitySchemes: [{ type: "oauth2", scopes: ["pa:publish"] }], _meta: { securitySchemes: [{ type: "oauth2", scopes: ["pa:publish"] }] } },
                 { name: "get_delivery_status", description: "Read the delivery status of a receipt created by this authenticated source. The top-level delivery and deliveries describe Discord; optional channels contains independently configured channel receipts. Unknown outcomes remain unknown. Successful reads may refresh this authenticated source’s connection verification in existing proof storage; they do not initialize queues, change delivery history, or schedule notifications.", inputSchema: { type: "object", properties: { receipt_id: { type: "string", pattern: "^rcpt_[a-f0-9]{32}$" } }, required: ["receipt_id"], additionalProperties: false }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }, securitySchemes: [{ type: "oauth2", scopes: ["pa:receipt"] }], _meta: { securitySchemes: [{ type: "oauth2", scopes: ["pa:receipt"] }] } },
                 { name: "get_task_snapshot", description: "Read one exact project/task/run/branch from this authenticated source only. Returns the actual nullable source_seq, projected status and pending actions. Sequence advice is nonreserved, not approval, not compare-and-swap and must not be blindly auto-assigned or retried. No discovery, notification, source-proof refresh, expiry or alarm writes, even on cold start.", inputSchema: taskSnapshotInputSchema, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }, securitySchemes: [{ type: "oauth2", scopes: ["pa:receipt"] }], _meta: { securitySchemes: [{ type: "oauth2", scopes: ["pa:receipt"] }] } },
@@ -25108,7 +25116,12 @@ async function mcpResponse(request, ctx, config2, owner, trace) {
                 let result2;
                 if (!args || typeof args !== "object")
                     throw new Rejected("invalid_tool_arguments");
-                if (call.params.name === "publish_task_update") {
+                if (call.params.name.startsWith('bridge_') && bridgeActions.includes(call.params.name.slice(7))) {
+                    const action=call.params.name.slice(7);
+                    authorizeOAuthContext(request, ctx, config2, [action==='capabilities'||action==='response_receipt'?'pa:receipt':'pa:publish']);
+                    result2=await owner.bridge(principal,action,args);
+                }
+                else if (call.params.name === "publish_task_update") {
                     authorizeOAuthContext(request, ctx, config2, ["pa:publish"]);
                     if (!Object.hasOwn(args, "event") || Object.keys(args).some((k) => !["event", "notification_mode"].includes(k)))
                         throw new Rejected("invalid_tool_arguments");
@@ -25344,6 +25357,11 @@ __name(gateway, "gateway");
 async function gatewayCore(request, env, ctx, trace) {
     try {
         const b = loadBindings(env), url = new URL(request.url);
+        if(url.href==='https://rivule-owner.internal/internal/qq-response-authority') {
+            trace?.skip();
+            if(env.QQ_RESPONSE_AUTHORITY_ENABLED!=='true'||request.method!=='POST')return jsonResponse({error:'response_authority_unavailable'},403);
+            return getOwner(env).fetch(request);
+        }
         if (url.origin !== b.publicOrigin)
             throw new Rejected("origin_not_accepted", 403);
         if (isDashboardRoute(url)) {
@@ -25352,8 +25370,17 @@ async function gatewayCore(request, env, ctx, trace) {
         }
         if (url.pathname === "/healthz")
             return jsonResponse({ status: "configured_candidate", delivery_enabled: env.DELIVERY_ENABLED === "true", oauth_configured: env.OAUTH_ENABLED === "true", pa_connectivity: "not_claimed", real_deployment_acceptance: "pending" });
-        if (url.pathname === "/discord/interactions")
-            return qqInteractionResponse(request, b, env.DISCORD_PUBLIC_KEY ?? "", env.GUILD_ID ?? "", async (p) => unwrap(await getOwner(env).selectView(p)), { ...env, __qqWaitUntil: promise => ctx?.waitUntil?.(promise) }, interactionResponse, verifyDiscordInteraction, jsonResponse, safeError, trace);
+        if (url.pathname === "/discord/interactions") {
+            if(request.method!=='POST'||url.search||request.headers.has('authorization'))return jsonResponse({error:'invalid_interaction'},403);
+            const deadline=Date.now()+2400;let timer;
+            try{return await Promise.race([(async()=>{
+                const headers=new Headers(request.headers);headers.set('x-rivule-bridge-deadline',String(deadline));
+                const bridgeReply=await getOwner(env).fetch(new Request('https://owner.internal/bridge/discord',{method:'POST',headers,body:request.clone().body,duplex:'half'}));
+                if(bridgeReply.status!==204)return bridgeReply;
+                if(Date.now()>=deadline)return jsonResponse({error:'interaction_outcome_unknown'},503);
+                return qqInteractionResponse(request,b,env.DISCORD_PUBLIC_KEY??'',env.GUILD_ID??'',async p=>unwrap(await getOwner(env).selectView(p)),{...env,__qqWaitUntil:promise=>ctx?.waitUntil?.(promise)},interactionResponse,verifyDiscordInteraction,jsonResponse,safeError,trace);
+            })(),new Promise(resolve=>{timer=setTimeout(()=>resolve(jsonResponse({error:'interaction_outcome_unknown'},503)),2400);})]);}finally{clearTimeout(timer);}
+        }
         if (url.pathname === "/qq/webhook")
             return routeQQWebhook(request, env, b.ownerId, (name) => env.OWNERS.get(env.OWNERS.idFromName(name)));
         if (url.pathname.startsWith("/v1/muse/"))
@@ -25391,6 +25418,7 @@ async function gatewayCore(request, env, ctx, trace) {
                         handshake: async (principal, method) => unwrap(await owner.recordSourceHandshake(principal, method)),
                         publish: __name(async (principal, event, mode) => unwrap(await owner.publish(principal, event, mode)), "publish"),
                         delivery: __name(async (principal, id) => unwrap(await owner.delivery(principal, id)), "delivery"),
+                        bridge: async (principal, action, args) => unwrap(await owner.bridge(principal, action, args)),
                         taskSnapshot: async (principal, query) => unwrap(await owner.taskSnapshot(principal, query)),
                         diagnostics: __name(async (principal, query) => appendMuseConfiguration(async () => unwrap(await owner.connectionDiagnostics(principal, query)), e), "diagnostics")
                     }, trace);
@@ -26509,6 +26537,7 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,at REAL NO
                 return this.projectAllowed(event.project_id) && this.b.sources.some((s) => s.source_id === event.source_id && s.enabled);
             }
             suppressDisallowedJobs() {
+                this.channels.suppressBridgeJobs?.();
                 for (const job of this.rows("SELECT id,payload,view_key,intent FROM outbox WHERE status IN ('queued','retry_wait')")) {
                     const request = job.intent === "request" ? this.one("SELECT payload FROM requests WHERE request_key=?", job.view_key.slice("request:".length)) : null;
                     if (!this.projectAllowed(JSON.parse(job.payload).project_id) || request && !this.projectAllowed(JSON.parse(request.payload).project_id)) {
@@ -26663,7 +26692,7 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,at REAL NO
                         else if (mode === "standard" && terminal.has(event.kind))
                             this.enqueue(receipt, "event:" + receipt, "terminal", payload, revision);
                         this.enqueue(receipt, "overview", "overview", payload, revision);
-                        this.channels.onAccepted?.(payload, receipt);
+                        this.channels.onAccepted?.(payload, receipt, mode);
                     }
                     else if (decision === "unsequenced_needs_review" || decision === "terminal_guard" && event.kind === "needs_input")
                         this.enqueue(receipt, "review:" + receipt, "review", payload, revision);
@@ -26956,6 +26985,10 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,at REAL NO
                     if (!job)
                         return !this.enabled || !this.sender ? { status: "held", reason: "delivery_not_enabled" } : { status: "no_dispatch" };
                     await this.storage.sync();
+                    if(this.channels.bridgeDispatchAllowed && !this.channels.bridgeDispatchAllowed(job)) {
+                        await this.storage.transaction(async()=>{this.rows("UPDATE outbox SET status='suppressed',last_error='bridge_consent_changed' WHERE id=?",job.id);await this.schedule();});
+                        return {status:'suppressed',reason:'bridge_consent_changed'};
+                    }
                     const request = job.intent === "request" ? this.one("SELECT * FROM requests WHERE request_key=?", job.view_key.slice("request:".length)) : null;
                     const event = request ? JSON.parse(request.payload) : JSON.parse(job.payload);
                     const dispatch = {
@@ -26972,7 +27005,7 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,at REAL NO
                         const result = await this.sender(dispatch);
                         if (result.notSent === true) {
                             status = "blocked";
-                            error = ["preflight_configuration", "preflight_bot_identity", "preflight_guild_bot", "preflight_guild_owner", "preflight_dm_identity", "preflight_render"].includes(result.reason ?? "") ? result.reason : "preflight_or_render_failed";
+                            error = ["preflight_configuration", "preflight_bot_identity", "preflight_guild_bot", "preflight_guild_owner", "preflight_dm_identity", "preflight_render", "preflight_authority"].includes(result.reason ?? "") ? result.reason : "preflight_or_render_failed";
                         }
                         else if (result.status === 200) {
                             const data = result.body;
@@ -27980,6 +28013,11 @@ var __rivuleDisplay = (function (__displayBridge) {
         }
         function buildEventMessage(dispatch) {
             const p = dispatch.payload ?? {}, event = p.event ?? {}, sources = p.sources ?? [], review = p.intent === "review";
+            if(p.intent==='bridge_response'||p.intent==='bridge_task') {
+                const source=sources.find(s=>s.source_id===event.source_id),label=p.intent==='bridge_response'?'PA 回复':'任务更新';
+                const components=event.bridge_context_ref?[{type:1,components:[{type:2,style:1,label:'向此 PA 下达指令',custom_id:'rvcommand:'+event.bridge_context_ref}]}]:[];
+                return {content:safeDiscord(`${source?.display_name??event.source_id} · ${label}`,200),allowed_mentions:mentionPolicy(),embeds:[{title:safeDiscord(`${event.project_name} · ${event.task_name} / ${event.branch_name}`,240),description:safeDiscord(event.summary,1200),footer:{text:'来源主动同步；指令由原 PA 判断，桥接不代表执行授权。'}}],components,attachments:[]};
+            }
             const v = displayBranch(event, { rendered_at: p.rendered_at ?? (new Date()).toISOString(), sources, request: p.intent === "request" ? p.request : void 0, review });
             const request = p.intent === "request", requestState = p.request?.state;
             const label = review ? "状态待核对" : request && requestState === "expired" ? "请求已过期" : request && ["changed", "resolved_by_source"].includes(requestState) ? "请求已更新" : v.state.label;
@@ -28203,12 +28241,20 @@ var OwnerTerminal = class extends DurableObject {
             this.initialized = this.ctx.blockConcurrencyWhile(async () => {
                 const ctx = this.ctx, env = this.env, b = loadBindings(env);
                 const sourceBindingContext = {};
-                this.core = new OwnerCore(ctx.storage, b, { sourceBindingContext, synthetic: false, enabled: env.DELIVERY_ENABLED === "true", sender: createDiscordSender({ bindings: b, guildId: env.GUILD_ID, token: __name(() => env.DISCORD_BOT_TOKEN, "token"), prepare }), channels: {
+                this.core = new OwnerCore(ctx.storage, b, { sourceBindingContext, synthetic: false, enabled: env.DELIVERY_ENABLED === "true", sender: createDiscordSender({ bindings: b, guildId: env.GUILD_ID, token: __name(() => env.DISCORD_BOT_TOKEN, "token"), prepare, beforeSend: dispatch => {
+                    if(!['bridge_response','bridge_task'].includes(dispatch.payload.intent))return true;
+                    const receipt=dispatch.viewKey.slice(dispatch.payload.intent.length+1);
+                    const row=this.core.one("SELECT status FROM outbox WHERE receipt=? AND view_key=?",receipt,dispatch.viewKey);
+                    return row?.status==='sending'&&this.bridgeDispatchAllowed({receipt,intent:dispatch.payload.intent,payload:JSON.stringify(dispatch.payload.event)});
+                } }), channels: {
                         qqSetupEnabled: env.QQ_SETUP_ENABLED === "true",
-                        onAccepted: __name((event, id) => {
+                        onAccepted: __name((event, id, mode) => {
+                            this.messageBridge?.recordTask(event,id,{discord:mode!=='overview_only'});
                             this.qq.enqueue(event, id);
                         }, "onAccepted"),
-                        nextAlarmAt: __name(() => this.qq.nextAlarmAt(), "nextAlarmAt"),
+                        nextAlarmAt: __name(() => Math.min(this.qq.nextAlarmAt(), this.messageBridge?.nextExpiry() ?? Infinity, (readonlyTables(this.ctx.storage).has('bridge_discord_modals')?readonlyRows(this.ctx.storage,'SELECT MIN(expires) AS at FROM bridge_discord_modals')[0]?.at??Infinity:Infinity)), "nextAlarmAt"),
+                        suppressBridgeJobs: () => this.suppressBridgeJobs(),
+                        bridgeDispatchAllowed: job => this.bridgeDispatchAllowed(job),
                         receipt: __name((source, id) => {
                             const qq = this.qq.receipt(source, id);
                             return qq ? { qq } : void 0;
@@ -28222,6 +28268,8 @@ var OwnerTerminal = class extends DurableObject {
                     return { ...this.core.connections.status(source), binding: this.core.connections.binding(source) };
                 });
                 Object.assign(sourceBindingContext, await __ownerUiOverlay.sourceBindingContexts(b, env));
+                await this.ensureMessageBridge();
+                this.qq.attachMessageBridge?.(this.messageBridge);
                 await this.qq.initialize();
                 await this.core.initialize();
             });
@@ -28247,11 +28295,66 @@ var OwnerTerminal = class extends DurableObject {
                     try { qq = dashboardProducerStatus(QQBridgeQueue.producerSnapshot(this.ctx.storage, now)); } catch {}
                     return { source: proof, qq, observed_at: new Date(now).toISOString() };
                 },
+                manageBridge: async (source, action, args, admissionGuard) => {
+                    const bridge=await this.ensureMessageBridge();
+                    if(action==='capabilities')return bridge.capabilities(source);
+                    if(action==='binding')return bridge.bindingToken(source);
+                    if(action==='qq_status')return this.qqResponseConsent.status(source);
+                    if(action==='qq_target')return this.qqResponseTarget();
+                    if(action==='qq_preference') {
+                        const binding=bridge.binding(source);
+                        if(args.binding_token!==await bridge.bindingToken(source))throw new BridgeError('bridge_authority_changed',409);
+                        if(args.enabled) {
+                            const target=await this.qqResponseTarget();
+                            if(!args.target||JSON.stringify(this.qqResponseConsent.target({...args.target,validUntil:target.validUntil}))!==JSON.stringify(this.qqResponseConsent.target(target)))throw new BridgeError('qq_response_target_changed',409);
+                            args.target=target;
+                        }
+                        return this.qqResponseConsent.set(source,{...args,expected_binding:binding},admissionGuard);
+                    }
+                    const result=await bridge.setPreference(source,args,admissionGuard);
+                    this.suppressBridgeJobs();
+                    return result;
+                },
                 manageQQ: (operation, payload) => qqWebSettingsBridge(this.env, this.ctx.storage, bindings, operation, payload),
                 readTestReceipt: (source, selector) => readDashboardTestReceipt(this.ctx.storage, bindings, source, selector),
+                readCatalog: (source, after) => readDashboardCatalog(this.ctx.storage, bindings, source, after),
+                readSelection: (source, query) => readDashboardCatalogSelection(this.ctx.storage, bindings, source, query),
                 readActivity: (source, query) => readDashboardActivity(this.ctx.storage, bindings, source, query),
                 readSnapshot: (source, query) => readTaskSnapshot(this.ctx.storage, bindings, source, query)
             });
+        }
+        if(request.url==='https://rivule-owner.internal/internal/qq-response-authority') {
+            const bridge=await this.ensureMessageBridge(),queue=await this.readonlyQQQueue();
+            return qqResponseAuthorityResponse(request,{secret:this.env.QQ_BRIDGE_SECRET,enabled:this.env.QQ_RESPONSE_AUTHORITY_ENABLED==='true',ownerId:loadBindings(this.env).ownerId,appId:this.env.QQ_APP_ID,consent:this.qqResponseConsent,bridge,loadJob:async receipt=>{
+                if(!readonlyTables(this.ctx.storage).has('qq_continuous_outbox')||!readonlyTables(this.ctx.storage).has('qq_continuous_meta'))return null;
+                const row=queue.rows("SELECT * FROM qq_continuous_outbox WHERE receipt=? AND status IN ('queued','sending')",receipt)[0],activation=queue.activation();
+                if(!row||!activation?.active||activation.expiresAt<=Date.now()||!queue.config()?.enabled)return null;
+                return queue.currentJob(row,activation);
+            }});
+        }
+
+        if (new URL(request.url).pathname === '/bridge/discord') {
+            if(new URL(request.url).origin!=='https://owner.internal'||request.method!=='POST')return jsonResponse({error:'internal_route_required'},403);
+            const deadline=Number(request.headers.get('x-rivule-bridge-deadline'));
+            if(!Number.isFinite(deadline)||deadline<=Date.now()||deadline>Date.now()+2500)return jsonResponse({error:'interaction_verification_timeout'},503);
+            const bridge=await this.ensureMessageBridge(),b=loadBindings(this.env);
+            if(deadline<=Date.now())return jsonResponse({error:'interaction_verification_timeout'},503);
+            const adapter=new DiscordCommandAdapter({storage:this.ctx.storage,bindings:b,bridge,publicKey:this.env.DISCORD_PUBLIC_KEY,timeoutMs:Math.min(1800,deadline-Date.now())});
+            const response=await adapter.handle(new Request(b.publicOrigin+'/discord/interactions',{method:'POST',headers:request.headers,body:request.body,duplex:'half'}));
+            if(response){if(this.core)await this.core.schedule();else {const at=Math.min(bridge.nextExpiry(),adapter.nextExpiry()),old=await this.ctx.storage.getAlarm();if(Number.isFinite(at))await this.ctx.storage.setAlarm(Math.min(old??Infinity,Math.max(Date.now()+1,at)));}}
+            return response??new Response(null,{status:204});
+        }
+        if (new URL(request.url).pathname === '/v1/bridge') {
+            try {
+                if(new URL(request.url).origin!=='https://owner.internal'||request.method!=='POST')throw new Rejected('internal_route_required',403);
+                const bytes=await boundedBody(request),b=loadBindings(this.env),source=await authenticate(request,bytes,b,this.env,Date.now());
+                const envelope=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes));
+                if(!envelope||Object.keys(envelope).sort().join(',')!=='action,arguments,version'||envelope.version!==1)throw new BridgeError('invalid_bridge_operation');
+                if(envelope.action==='publish_response')await this.initializeLegacy();
+                const result=await bridgeSourceOperation(await this.ensureMessageBridge(),source,envelope.action,envelope.arguments);
+                if(!['capabilities','response_receipt'].includes(envelope.action))await this.scheduleBridgeMutation();
+                return jsonResponse(result);
+            } catch(error) {return error instanceof BridgeError?jsonResponse({error:error.code},error.status):safeError(error);}
         }
         if (new URL(request.url).pathname === "/v1/task/snapshot")
             return taskSnapshotOwnerRequest(request, this.env, this.ctx.storage);
@@ -28267,8 +28370,12 @@ var OwnerTerminal = class extends DurableObject {
                 }
             });
         await this.initializeLegacy();
-        if (new URL(request.url).pathname === "/qq/webhook")
-            return handleQQOwnerWebhook(request, this.env, loadBindings(this.env).ownerId, this.ctx.storage);
+        if (new URL(request.url).pathname === "/qq/webhook") {
+            const ownerId=loadBindings(this.env).ownerId,storage=this.ctx.storage;
+            const inbox=this.env.MESSAGE_BRIDGE_ENABLED==='true'?new QQCommandAdapter({bridge:this.messageBridge,inbox:new QQDurableInbox(storage),config:()=>({...loadQQConfig(this.env,ownerId),enabled:this.env.MESSAGE_BRIDGE_ENABLED==='true'}),authority:()=>this.qq.commandAuthority(),revoked:async c=>await storage.get(await qqGateKey(c.appId,c.userOpenId))===true}):null;
+            const response=await handleQQOwnerWebhook(request,this.env,ownerId,storage,Date.now(),inbox);
+            await this.core.schedule();return response;
+        }
         if (new URL(request.url).pathname.startsWith("/v1/muse/"))
             return museOwnerRequest(request, this.env, {
                 publish: __name(async (source, event, mode) => this.core.ingest(source, event, mode), "publish"),
@@ -28285,8 +28392,106 @@ var OwnerTerminal = class extends DurableObject {
     }
     async alarm() {
         await this.initializeLegacy();
+        this.messageBridge?.expire();
+        if(readonlyTables(this.ctx.storage).has('bridge_discord_modals'))readonlyRows(this.ctx.storage,'DELETE FROM bridge_discord_modals WHERE expires<=?',Date.now());
         await this.qq.drain();
         await this.core.alarm();
+    }
+    async ensureMessageBridge() {
+        if(this.messageBridge)return this.messageBridge;
+        const b=loadBindings(this.env),storage=this.ctx.storage;
+        readonlyIdentity(storage,b,readonlyTables(storage));
+        const contexts=await __ownerUiOverlay.sourceBindingContexts(b,this.env);
+        this.messageBridge=new MessageBridge({storage,bindings:b,
+            sourceBinding: source => {
+                const expected=canonical([b.ownerId,b.publicOrigin,source,contexts[source.source_id]??null]);
+                const tables=readonlyTables(storage),row=tables.has('source_connections')?readonlyRows(storage,'SELECT binding,generation,revoked FROM source_connections WHERE source_id=?',source.source_id)[0]:null;
+                return [expected,row?.binding===expected?row.generation:null,row?.revoked??null];
+            },
+            recipient: trusted => {if(trusted.channel==='discord')return trusted.requester_id===b.userId&&trusted.conversation_id===b.dmId;try{const c=loadQQConfig(this.env,b.ownerId);return this.env.MESSAGE_BRIDGE_ENABLED==='true'&&c&&trusted.channel==='qq'&&trusted.requester_id===c.userOpenId&&trusted.conversation_id===c.userOpenId;}catch{return false;}},
+            onResponseAccepted: (source,receipt) => {if(this.messageBridge.qqResponseAuthorized(source,receipt))this.qq?.enqueueResponse(source,receipt);},
+            responseChannelReceipt: (source,receipt) => {
+                const row=readonlyTables(storage).has('qq_continuous_outbox')?readonlyRows(storage,'SELECT status,result FROM qq_continuous_outbox WHERE source_id=? AND receipt=?',source.source_id,receipt)[0]:null;
+                if(!row)return {state:this.qqResponseConsent.status(source).enabled?'not_queued':'not_enabled',reason:'no_qq_response_admission'};
+                const raw=row.result?JSON.parse(row.result):{state:row.status};
+                return {...raw,state:raw.state==='sent'?'provider_accepted':raw.state==='sending'||raw.state==='uncertain'?'unknown':raw.state,recipient_confirmation:'not_observed'};
+            },
+            enqueueTask: (source,event,receipt,meta) => {
+                if(!this.core)return;
+                const revision=this.core.one('SELECT revision FROM events WHERE receipt=?',receipt)?.revision;
+                this.core.enqueue(receipt,'bridge_task:'+receipt,'bridge_task',{...event,bridge_context_ref:meta.context_ref,bridge_consent_revision:meta.consent_revision},revision);
+            },
+            enqueueResponse: (source,context,text,receipt,meta) => {
+                if(!this.core)throw new BridgeError('bridge_dispatch_unavailable',503);
+                const key=branchKey({...context,source_id:source.source_id}),old=this.core.one('SELECT payload FROM branches WHERE branch_key=?',key);
+                const event={...JSON.parse(old.payload),kind:'response',event_id:'bridge:'+crypto.randomUUID(),summary:text,occurred_at:new Date().toISOString(),action:null,blocker:null,phase_id:null,phase_label:null,progress:null,bridge_context_ref:meta.context_ref,bridge_consent_revision:meta.consent_revision};
+                this.core.rows("INSERT INTO events(source_id,event_id,receipt,branch_key,hash,payload,decision,received_at) VALUES(?,?,?,?,?,?,'bridge_response',?)",source.source_id,event.event_id,receipt,key,'bridge_response',canonical(event),Date.now());
+                this.core.connections.record(source,'accepted_event',Date.now());
+                const revision=this.core.one('SELECT revision FROM events WHERE receipt=?',receipt).revision;
+                this.core.enqueue(receipt,'bridge_response:'+receipt,'bridge_response',event,revision);
+            }
+        });
+        this.qqResponseConsent=new QQResponseConsent({storage,bridge:this.messageBridge});
+        this.messageBridge.extraCapabilities=source=>({qq_response:this.qqResponseConsent.status(source),response_channels:{discord:'existing_authorized_outbox',qq:this.qqResponseConsent.status(source).enabled?'owner_authorized_queue':'owner_consent_required'}});
+        this.messageBridge.qqResponseAuthorized=(source,receipt)=>{
+            try {
+                if(this.env.QQ_RESPONSE_AUTHORITY_ENABLED!=='true'||!this.qqResponseConsent.status(source).enabled)return false;
+                const activation=this.qq?.activation()??(readonlyTables(storage).has('qq_continuous_meta')?JSON.parse(readonlyRows(storage,"SELECT v FROM qq_continuous_meta WHERE k='activation'")[0]?.v??'null'):null);
+                const event=readonlyRows(storage,'SELECT revision FROM events WHERE receipt=? AND source_id=?',receipt,source.source_id)[0];
+                return !!activation?.active&&activation.expiresAt>Date.now()&&this.qqResponseConsent.authorized(source,{ownerId:b.ownerId,appId:this.env.QQ_APP_ID,userOpenId:this.env.QQ_USER_OPENID,bindingFingerprint:activation.bindingFingerprint},event?.revision)&&!!this.messageBridge.responseAuthority(source,receipt);
+            }catch{return false;}
+        };
+        return this.messageBridge;
+    }
+    async readonlyQQQueue() {
+        const b=loadBindings(this.env),bridge=await this.ensureMessageBridge(),contexts=await __ownerUiOverlay.sourceBindingContexts(b,this.env);
+        const queue=Object.create(QQBridgeQueue.prototype);
+        Object.assign(queue,{storage:this.ctx.storage,env:this.env,ownerId:b.ownerId,sources:b.sources,now:Date.now,transport:fetch});
+        queue.attachMessageBridge(bridge);
+        queue.attachAuthority(sourceId=>{
+            const source=b.sources.find(s=>s.source_id===sourceId);if(!source||!readonlyTables(this.ctx.storage).has('source_connections'))return null;
+            const binding=canonical([b.ownerId,b.publicOrigin,source,contexts[sourceId]??null]);
+            const row=readonlyRows(this.ctx.storage,'SELECT * FROM source_connections WHERE source_id=?',sourceId)[0];
+            return {binding,selectable:source.enabled&&row?.binding===binding&&row.revoked===0&&Number.isSafeInteger(row.generation)&&row.generation>=1&&['accepted_event','initialize','tools/list','read_probe'].includes(row.evidence_kind)&&Number.isFinite(row.last_verified_at)&&row.last_verified_at>=0&&row.last_verified_at<=Date.now()&&Date.now()-row.last_verified_at<86400000,connection_generation:row?.generation,last_verified_at:row?.last_verified_at};
+        });
+        return queue;
+    }
+    async qqResponseTarget() {
+        if(this.env.QQ_RESPONSE_AUTHORITY_ENABLED!=='true')throw new BridgeError('qq_response_authority_not_configured',409);
+        const queue=await this.readonlyQQQueue(),target=await queue.commandAuthority();
+        if(target?.responseVerifierConfigured!==true||target.ownerId!==loadBindings(this.env).ownerId||target.appId!==this.env.QQ_APP_ID||target.userOpenId!==this.env.QQ_USER_OPENID)throw new BridgeError('qq_response_target_unavailable',409);
+        this.qqResponseConsent.target(target);
+        return target;
+    }
+    bridgeDispatchAllowed(job) {
+        if(!['bridge_task','bridge_response'].includes(job.intent))return true;
+        const source=loadBindings(this.env).sources.find(s=>s.source_id===JSON.parse(job.payload).source_id);
+        try{return job.intent==='bridge_response'?this.messageBridge.responseAuthorized(job.receipt):!!source&&!!this.messageBridge.taskAuthority(source,job.receipt);}catch{return false;}
+    }
+    suppressBridgeJobs() {
+        if(!this.messageBridge)return;
+        const tables=readonlyTables(this.ctx.storage);if(!tables.has('outbox'))return;
+        for(const job of readonlyRows(this.ctx.storage,"SELECT id,receipt,intent,payload FROM outbox WHERE intent IN ('bridge_response','bridge_task') AND status IN ('queued','retry_wait')")) {
+            const source=loadBindings(this.env).sources.find(s=>s.source_id===JSON.parse(job.payload).source_id);
+            const allowed=job.intent==='bridge_response'?this.messageBridge.responseAuthorized(job.receipt):source&&this.messageBridge.taskAuthority(source,job.receipt);
+            if(!allowed)readonlyRows(this.ctx.storage,"UPDATE outbox SET status='suppressed',last_error='bridge_consent_changed' WHERE id=?",job.id);
+        }
+    }
+    async scheduleBridgeMutation() {
+        if(this.core)return this.core.schedule();
+        const at=this.messageBridge?.nextExpiry()??Infinity;
+        if(Number.isFinite(at)){const old=await this.ctx.storage.getAlarm();await this.ctx.storage.setAlarm(Math.min(old??Infinity,Math.max(Date.now()+1,at)));}
+    }
+    async bridge(principal,action,args) {
+        return this.result(async()=>{
+            const source=this.source(principal);
+            if(action==='publish_response')await this.initializeLegacy();
+            const bridge=await this.ensureMessageBridge();
+            const result=await bridgeSourceOperation(bridge,source,action,args);
+            // QQ response channel stays unsupported until its separate owner grant flow exists.
+            if(!['capabilities','response_receipt'].includes(action))await this.scheduleBridgeMutation();
+            return result;
+        },false);
     }
     source(principal) {
         const c = loadOAuthConfig(this.env);
@@ -28304,7 +28509,7 @@ var OwnerTerminal = class extends DurableObject {
             return { ok: true, result: await operation() };
         }
         catch (e) {
-            return { ok: false, error: e instanceof Rejected ? e.code : "operation_result_unknown", status: e instanceof Rejected ? e.status : 503 };
+            return { ok: false, error: e instanceof Rejected || e instanceof BridgeError ? e.code : "operation_result_unknown", status: e instanceof Rejected || e instanceof BridgeError ? e.status : 503 };
         }
     }
     async taskSnapshot(principal, query) {
