@@ -1,3 +1,4 @@
+import { validBridgeText } from '../owner/bridge-text.mjs';
 /** Source-side hooks. Transport authenticates one configured PA; never logs payloads. */
 const fields = ['project_id','task_id','run_id','branch_id','thread_id'];
 const identifier = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(value);
@@ -20,7 +21,7 @@ function safe(message) {
   // own content policy/DLP before setting these fields. Unknown is withheld.
   return message?.content_kind === 'user_visible_response' && message.origin === 'source'
     && message.sensitivity === 'normal' && message.reviewed_for_secrets === true
-    && typeof message.text === 'string' && message.text.trim() && message.text.length<=1200
+    && validBridgeText(message.text)
     && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(message.text)
     && !/(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-[a-zA-Z0-9_-]{16,}|Bearer\s+\S+)|(?:password|api[_ -]?key|access[_ -]?token)\s*[:=]\s*\S+)/i.test(message.text);
 }

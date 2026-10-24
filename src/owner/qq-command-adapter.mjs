@@ -40,8 +40,8 @@ export class QQCommandAdapter {
     if(event?.channel!=='qq_c2c'||event.type!=='message'||event.appId!==c.appId||event.userOpenId!==c.userOpenId||!valid(event.eventId)||!valid(event.messageId))fail('qq_command_identity_invalid');
     const at=Date.parse(event.timestamp);
     if(!Number.isFinite(at)||at>this.now()+30000||this.now()-at>300000)fail('qq_command_event_stale');
-    const match=/^\/rivule ([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}) ([\s\S]{1,1200})$/.exec(event.content.trim());
-    if(!match||!match[2].trim())fail('qq_command_syntax_invalid');
+    const framed=event.content.trimStart(),match=/^\/rivule ([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}) ([\s\S]{1,1200})$/.exec(framed);
+    if(!match||match[0].length!==framed.length||!match[2].trim())fail('qq_command_syntax_invalid');
     const event_id='qq_'+await hash(JSON.stringify([c.appId,c.userOpenId,event.messageId]));
     const trusted={channel:'qq',owner_id:c.ownerId,requester_id:c.userOpenId,conversation_id:c.userOpenId,event_id};
     const resolved=await this.bridge.resolveQQContext(match[1],trusted);

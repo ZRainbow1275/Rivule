@@ -52,3 +52,8 @@ test('local revoke after remote authority read still blocks guarded durable admi
  const f=fixture();f.setBeforeGuard(()=>f.send({type:'FRIEND_DEL',eventId:'revoke-during-admission',extra:{openid:'owner-openid'}}));
  assert.equal((await f.send()).status,503);assert.equal(f.commands.size,0);
 });
+
+test('task command parser preserves trailing whitespace and rejects oversized final-newline body',async()=>{
+ const f=fixture(),text='x'.repeat(1199)+'\n';assert.equal((await f.send({content:'/rivule '+ref+' '+text})).status,200);assert.equal([...f.commands.values()][0].input.text,text);
+ const g=fixture();assert.equal((await g.send({content:'/rivule '+ref+' '+'x'.repeat(1200)+'\n'})).status,503);assert.equal(g.commands.size,0);
+});

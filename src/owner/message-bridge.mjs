@@ -1,3 +1,4 @@
+import { validBridgeText } from './bridge-text.mjs';
 // Durable, owner-scoped PA bridge. Authentication belongs to the calling adapter;
 // identities and configuration are revalidated here before every state transition.
 export const BRIDGE_MODES = ['task_updates', 'every_response'];
@@ -8,7 +9,7 @@ const canonical = v => JSON.stringify(v, Object.keys(v).sort());
 const digest = async value => [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(v=>v.toString(16).padStart(2,'0')).join('');
 export class BridgeError extends Error { constructor(code, status=422) { super(code); this.code=code;this.status=status; } }
 const fail = (code,status) => {throw new BridgeError(code,status);};
-const text = v => typeof v === 'string' && v.trim().length && v.length<=1200 && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v);
+const text = validBridgeText;
 export const bridgeSchema = `
 CREATE TABLE IF NOT EXISTS bridge_contexts(source_id TEXT NOT NULL,context TEXT NOT NULL,binding TEXT NOT NULL,context_ref TEXT UNIQUE NOT NULL,consent_revision INTEGER NOT NULL,context_kind TEXT NOT NULL DEFAULT 'task' CHECK(context_kind='task'),PRIMARY KEY(source_id,context));
 CREATE TABLE IF NOT EXISTS bridge_preferences(source_id TEXT PRIMARY KEY,binding TEXT NOT NULL,mode TEXT NOT NULL,commands_enabled INTEGER NOT NULL,revision INTEGER NOT NULL);

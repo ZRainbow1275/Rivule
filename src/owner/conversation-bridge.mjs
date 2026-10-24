@@ -1,9 +1,10 @@
+import { validBridgeText } from './bridge-text.mjs';
 import {BridgeError} from './message-bridge.mjs';
 const fail=(code,status=422)=>{throw new BridgeError(code,status);};
 const exact=(v,keys)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
 const id=v=>typeof v==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(v);
 const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v);
-const visible=v=>typeof v==='string'&&v.trim().length>0&&v.length<=1200&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v);
+const visible=validBridgeText;
 const secret=v=>/(?:-----BEGIN[\s\S]*PRIVATE KEY|\bBearer\s+\S+|\b(?:sk-|gh[pousr]_|github_pat_)[A-Za-z0-9_-]{8,}|(?:password|api[_-]?key|authorization|secret|token)["']?\s*[:=])/i.test(v);
 const hash=async v=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(v))),b=>b.toString(16).padStart(2,'0')).join('');
 export const CONVERSATION_OPERATIONS=['register_context','publish_response','response_receipt','claim','acknowledge'];

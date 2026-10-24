@@ -1,3 +1,4 @@
+import { discordBridgeText } from './bridge-text.mjs';
 import { ConversationQQReview } from './conversation-qq-review.mjs';
 import { qqConversationReviewAuthorityResponse } from './conversation-qq-review-authority.mjs';
 import { ConversationQQQueue } from './conversation-qq-queue.mjs';
@@ -28049,12 +28050,12 @@ var __rivuleDisplay = (function (__displayBridge) {
             if(p.intent==='bridge_conversation_response') {
                 if(event.kind!=='conversation'||event.version!==2||event.context?.kind!=='conversation'||event.context?.version!==2)throw new Error('invalid_conversation_render');
                 const source=sources.find(s=>s.source_id===event.source_id);
-                return {content:safeDiscord(`${source?.display_name??event.source_id} · 会话回复`,180),allowed_mentions:mentionPolicy(),embeds:[{title:'普通会话 · 来源主动同步',description:safeDiscord(event.text,1200),footer:{text:'来源声明的会话；指令仍由原 PA 按自身策略处理。'}}],components:event.commands_enabled?[{type:1,components:[{type:2,style:2,label:'向这条回复下达指令',custom_id:'rvconv:'+event.receipt_id}]}]:[],attachments:[]};
+                return {content:safeDiscord(`${source?.display_name??event.source_id} · 会话回复`,180),allowed_mentions:mentionPolicy(),embeds:[{title:'普通会话 · 来源主动同步',description:discordBridgeText(event.text),footer:{text:'来源声明的会话；指令仍由原 PA 按自身策略处理。'}}],components:event.commands_enabled?[{type:1,components:[{type:2,style:2,label:'向这条回复下达指令',custom_id:'rvconv:'+event.receipt_id}]}]:[],attachments:[]};
             }
             if(p.intent==='bridge_response'||p.intent==='bridge_task') {
                 const source=sources.find(s=>s.source_id===event.source_id),label=p.intent==='bridge_response'?'PA 回复':'任务更新';
                 const components=event.bridge_context_ref?[{type:1,components:[{type:2,style:1,label:'向此 PA 下达指令',custom_id:'rvcommand:'+event.bridge_context_ref}]}]:[];
-                return {content:safeDiscord(`${source?.display_name??event.source_id} · ${label}`,200),allowed_mentions:mentionPolicy(),embeds:[{title:safeDiscord(`${event.project_name} · ${event.task_name} / ${event.branch_name}`,240),description:safeDiscord(event.summary,1200),footer:{text:'来源主动同步；指令由原 PA 判断，桥接不代表执行授权。'}}],components,attachments:[]};
+                return {content:safeDiscord(`${source?.display_name??event.source_id} · ${label}`,200),allowed_mentions:mentionPolicy(),embeds:[{title:safeDiscord(`${event.project_name} · ${event.task_name} / ${event.branch_name}`,240),description:p.intent==='bridge_response'?discordBridgeText(event.summary):safeDiscord(event.summary,2400),footer:{text:'来源主动同步；指令由原 PA 判断，桥接不代表执行授权。'}}],components,attachments:[]};
             }
             const v = displayBranch(event, { rendered_at: p.rendered_at ?? (new Date()).toISOString(), sources, request: p.intent === "request" ? p.request : void 0, review });
             const request = p.intent === "request", requestState = p.request?.state;

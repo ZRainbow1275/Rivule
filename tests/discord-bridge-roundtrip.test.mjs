@@ -30,3 +30,10 @@ test('production source ingestion, immutable Discord renderer/dispatcher, signed
  const ack=await bridgeSourceOperation(bridge,pa,'acknowledge',{command_id:claim.command_id,claim_token:claim.claim_token,outcome:'rejected'});assert.equal(ack.state,'rejected');assert.equal(core.one('SELECT payload FROM bridge_commands').payload,null);
  const before=core.one("SELECT COUNT(*) n FROM outbox WHERE intent='bridge_task'").n;await core.ingest(pa,{...event,event_id:'e3',source_seq:3,summary:'Overview only'},'overview_only');assert.equal(core.one("SELECT COUNT(*) n FROM outbox WHERE intent='bridge_task'").n,before,'overview-only never adds a separate command card');
 });
+
+test('task-context response renderer uses full escaped body within aggregate embed budgets',async()=>{
+ for(const summary of ['*'.repeat(1200),'@'.repeat(1200),'中👩🏽‍💻\t\r\n  ']){
+  const result=await worker.prepare({payload:{intent:'bridge_response',event:{source_id:'pa',project_name:'P'.repeat(120),task_name:'T'.repeat(120),branch_name:'B'.repeat(80),summary},sources:[]}}),card=result.payload,expected='\u200b'+summary.replace(/@/g,'@\u200b').replace(/[\\`*_{}\[\]<>|~]/g,'\\$&')+'\u200b';
+  assert.equal(card.embeds[0].description,expected);assert.ok(card.embeds[0].title.length+card.embeds[0].description.length+card.embeds[0].footer.text.length<=6000);assert.equal(JSON.stringify(card.allowed_mentions),JSON.stringify({parse:[]}));
+ }
+});

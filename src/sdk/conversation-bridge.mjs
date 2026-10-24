@@ -1,9 +1,10 @@
+import { validBridgeText } from '../owner/bridge-text.mjs';
 /** Conversation-v2 only. Does not fall back to task routes or invent contexts. */
 const id=v=>typeof v==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(v);
 const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v);
 const secret=v=>/(?:-----BEGIN[\s\S]*PRIVATE KEY|\bBearer\s+\S+|\b(?:sk-|gh[pousr]_|github_pat_)[A-Za-z0-9_-]{8,}|(?:password|api[_-]?key|authorization|secret|token)["']?\s*[:=])/i.test(v);
 const messageFields=['response_id','text','content_kind','origin','sensitivity','reviewed'];
-const safe=v=>v&&Object.keys(v).length===messageFields.length&&messageFields.every(key=>Object.hasOwn(v,key))&&v.content_kind==='user_visible_response'&&v.origin==='source'&&v.sensitivity==='normal'&&v.reviewed===true&&typeof v.text==='string'&&v.text.trim()&&v.text.length<=1200&&!/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v.text)&&!secret(v.text);
+const safe=v=>v&&Object.keys(v).length===messageFields.length&&messageFields.every(key=>Object.hasOwn(v,key))&&v.content_kind==='user_visible_response'&&v.origin==='source'&&v.sensitivity==='normal'&&v.reviewed===true&&validBridgeText(v.text)&&!secret(v.text);
 export function createConversationBridge({source_id,call,ownerBinding,recipientBinding,resolveConversationOwner}){
  if(!id(source_id)||typeof call!=='function')throw Error('source_transport_required');
  if(typeof ownerBinding!=='string'||!ownerBinding||ownerBinding.length>1024||typeof recipientBinding!=='string'||!recipientBinding||recipientBinding.length>1024||typeof resolveConversationOwner!=='function')throw Error('trusted_provider_ownership_resolver_required');

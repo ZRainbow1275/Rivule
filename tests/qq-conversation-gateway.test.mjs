@@ -5,8 +5,8 @@ import vm from 'node:vm';
 import {webcrypto} from 'node:crypto';
 const raw=readFileSync(new URL('../src/gateway/worker.mjs',import.meta.url),'utf8');
 const sandbox=vm.createContext({structuredClone,TextEncoder,TextDecoder,EventTarget,URL,Response,Request,AbortSignal,setTimeout,clearTimeout,crypto:webcrypto,fetch(){throw Error('offline only');}});
-vm.runInContext(raw.replace('import { DurableObject } from "cloudflare:workers";','class DurableObject {}').replace('export { QQGatewayObject, worker_default as default };','')+'\nglobalThis.subject={RivuleContinuous,continuousRequest,verifyConversationAuthority,verifyConversationReviewAuthority,GatewayActor,hmac,check,hash};',sandbox);
-const {RivuleContinuous:C,continuousRequest,verifyConversationAuthority,verifyConversationReviewAuthority,GatewayActor,hmac,check,hash}=sandbox.subject;
+vm.runInContext(raw.replace('import { DurableObject } from "cloudflare:workers";','class DurableObject {}').replace('export { QQGatewayObject, worker_default as default };','')+'\nglobalThis.subject={RivuleContinuous,continuousRequest,verifyConversationAuthority,verifyConversationReviewAuthority,GatewayActor,continuousController,hmac,check,hash};',sandbox);
+const {RivuleContinuous:C,continuousRequest,verifyConversationAuthority,verifyConversationReviewAuthority,GatewayActor,continuousController,hmac,check,hash}=sandbox.subject;
 async function fixture(){
  let now=400000,posts=0,reads=0,allowed=true;const state={};
  const binding={ownerId:'owner',appId:'123',userOpenId:'recipient',confirmedAt:100};
@@ -110,7 +110,7 @@ const ownerWorker=readFileSync(new URL('../src/owner/worker.js',import.meta.url)
 const webhookSandbox=vm.createContext({TextEncoder,TextDecoder,Response,Request,Headers,URL,crypto:webcrypto,__name:x=>x,qqHash:hash,qqReadBytes:async stream=>new Uint8Array(await new Response(stream).arrayBuffer())});
 vm.runInContext(ownerWorker.slice(ownerWorker.indexOf('async function qqGateKey('),ownerWorker.indexOf('var response = ',ownerWorker.indexOf('var QQDurableInbox')))+'\nglobalThis.api={handleQQWebhook,qqSign,QQDurableInbox,qqGateKey};',webhookSandbox);
 const {handleQQWebhook,qqSign,QQDurableInbox,qqGateKey}=webhookSandbox.api;
-async function pairedFixture(t){
+async function pairedFixture(t,text='An ordinary conversation reply'){
  const f=await fixture(),db=new DatabaseSync(':memory:');t.after(()=>db.close());const kv=new Map();
  const storage={sql:{exec(q,...a){if(q.includes('CREATE TABLE')){db.exec(q);return {toArray:()=>[]};}return {toArray:()=>db.prepare(q).all(...a)};}},transaction:async fn=>fn(storage),sync:async()=>{},get:async k=>kv.get(k),put:async(k,v)=>kv.set(k,v)};
  const source={source_id:'source',enabled:true},sourceGrant={enabled:true,provider_id:'dot',account_binding:'configured-account',generation:1,revision:2,operations:[...CONVERSATION_OPERATIONS]};
@@ -123,7 +123,7 @@ async function pairedFixture(t){
  f.actor.env.QQ_CONVERSATION_AUTHORITY_ENABLED='true';f.actor.env.QQ_RESPONSE_AUTHORITY={fetch:request=>qqConversationAuthorityResponse(request,{secret:env.QQ_BRIDGE_SECRET,enabled:true,ownerId:'owner',appId:'123',userOpenId:'recipient',bridge,loadJob:r=>queue.currentJob(r),now:f.actor.now})};
  const reg=await bridge.registerContext(source,{kind:'conversation',version:2,conversation_id:'actual-source-conversation',thread_id:'actual-source-thread'});
  const preference=enabled=>bridge.setPreference(source,{channel:'qq',enabled,commands_enabled:enabled,selection:{mode:enabled?'all_registered':'none',context_refs:[]},expected_revision:bridge.preference(source,'qq').revision,confirm:true});
- await preference(true);const receipt=await bridge.publishResponse(source,{context_ref:reg.context_ref,response_id:'response-1',text:'An ordinary conversation reply',content_kind:'user_visible_response',origin:'source',sensitivity:'normal',reviewed:true});
+ await preference(true);const receipt=await bridge.publishResponse(source,{context_ref:reg.context_ref,response_id:'response-1',text,content_kind:'user_visible_response',origin:'source',sensitivity:'normal',reviewed:true});
  const inbox=new QQDurableInbox(storage);const adapter=new ConversationQQCommandAdapter({bridge,inbox,rawInbox:inbox,config:()=>config,authority:()=>queue.commandAuthority(),revoked:async c=>!!await storage.get(await qqGateKey(c.appId,c.userOpenId)),now:f.actor.now});
  async function command({author='recipient',signature=true,text='Explain the second point',id='message-1'}={}){
   const raw=JSON.stringify({op:0,id:'event-'+id,t:'C2C_MESSAGE_CREATE',d:{id,author:{user_openid:author},content:'/rivule-chat '+receipt.receipt_id+' '+text,timestamp:new Date(f.actor.now()).toISOString()}}),stamp=String(f.actor.now()/1000),sig=signature?await qqSign('offline-app-secret',new TextEncoder().encode(stamp+raw)):'0'.repeat(128);
@@ -221,4 +221,18 @@ test('paired lost review response resolves by readback only and never repeats ga
 test('paired producer cannot self-clear review without committed owner confirmation',async t=>{
  const f=await pairedReviewFixture(t),preview=await f.review.preview(f.receipt.receipt_id),row=f.review.one(preview.review_id),saved=JSON.parse(row.snapshot),identity=await f.review.identity(f.receipt.receipt_id);
  const payload={...identity,reviewId:preview.review_id,snapshotDigest:saved.gatewayDigest,sequenceFloor:saved.maxSequence};await assert.rejects(f.call('conversation_review',payload),/conversation_review_denied/);assert.equal(f.state.qqContinuous.attempts[identity.intentId].reviewedAt,undefined);assert.equal(f.review.one(preview.review_id).state,'prepared');
+});
+
+
+test('paired QQ full boundary text reaches provider untruncated; exact whitespace command is preserved',async t=>{
+ const text='*'.repeat(590)+'中文👩🏽‍💻\r\n\t'+'@'.repeat(580),f=await pairedFixture(t,text);let content,posts=0;f.ctl.post=async intent=>{posts++;content=intent.content;return {state:'sent',messageId:'full-text-receipt'};};const result=await f.queue.drain();assert.equal(result.reason,'provider_accepted');assert.ok(content.includes('\n'+text+'\n\n回复指令：'));assert.equal(f.queue.delivery(f.receipt.receipt_id).state,'provider_accepted');await f.queue.drain();assert.equal(posts,1);const command='  preserve\t中文👩🏽‍💻\n  ';assert.equal((await f.command({text:command})).status,200);const claim=await f.bridge.claim(f.source,{context_ref:f.reg.context_ref,claim_id:'spaces'});assert.equal(claim.text,command);
+});
+
+
+test('paired QQ actual provider HTTP length rejection is not sent and never silently split or retried',async t=>{
+ const f=await pairedFixture(t,'中'.repeat(1200));let calls=0,body;const transport=await continuousController({...f.actor,continuous:null,network:async(url,options)=>{calls++;body=JSON.parse(options.body);return Response.json({code:40054007,message:'content exceeds provider length'}, {status:400});}});f.ctl.post=transport.post;
+ assert.equal((await f.queue.drain()).state,'not_sent');assert.ok(body.content.includes('中'.repeat(1200)));assert.equal(f.queue.delivery(f.receipt.receipt_id).state,'not_sent');await f.queue.drain();assert.equal(calls,1);
+});
+test('QQ command final newline counts toward exact body bound and is never discarded',async t=>{
+ const f=await pairedFixture(t);await f.queue.drain();assert.equal((await f.command({id:'over-bound',text:'x'.repeat(1200)+'\n'})).status,503);assert.equal(f.db.prepare('SELECT COUNT(*) n FROM conversation_v2_commands').get().n,0);const text='x'.repeat(1199)+'\n';assert.equal((await f.command({id:'at-bound',text})).status,200);assert.equal((await f.bridge.claim(f.source,{context_ref:f.reg.context_ref,claim_id:'bound'})).text,text);
 });

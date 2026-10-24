@@ -24,7 +24,7 @@ export class ConversationQQCommandAdapter {
   const {c,stamp}=await this.current(),configuration=JSON.stringify(c);
   if(event?.channel!=='qq_c2c'||event.type!=='message'||event.appId!==c.appId||event.userOpenId!==c.userOpenId||!valid(event.eventId)||!valid(event.messageId))fail('conversation_qq_identity_invalid');
   const at=Date.parse(event.timestamp);if(!Number.isFinite(at)||at>this.now()+30000||this.now()-at>300000)fail('conversation_qq_event_stale');
-  const match=/^\/rivule-chat ([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}) ([\s\S]{1,1200})$/.exec(event.content.trim());if(!match||!match[2].trim())fail('conversation_qq_syntax_invalid');
+  const framed=event.content.trimStart(),match=/^\/rivule-chat ([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}) ([\s\S]{1,1200})$/.exec(framed);if(!match||match[0].length!==framed.length||!match[2].trim())fail('conversation_qq_syntax_invalid');
   const a=this.bridge.responseAuthority(match[1],'qq');if(!a?.commands_enabled||!c.allowedSources.includes(a.source_id))fail('conversation_qq_context_unavailable');
   const event_id='qq_'+await hash(JSON.stringify([c.appId,c.userOpenId,event.messageId])),trusted={channel:'qq',owner_id:c.ownerId,requester_id:c.userOpenId,conversation_id:c.userOpenId,event_id};
   const latest=await this.current();if(latest.stamp!==stamp)fail('conversation_qq_authority_changed');

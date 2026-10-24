@@ -1,3 +1,4 @@
+import { validBridgeText } from './bridge-text.mjs';
 // Separate ordinary-conversation queue: no synthetic project, task, or task cursor.
 const enc=new TextEncoder(),hex=v=>[...new Uint8Array(v)].map(n=>n.toString(16).padStart(2,'0')).join('');
 const hash=async v=>hex(await crypto.subtle.digest('SHA-256',enc.encode(v)));
@@ -7,7 +8,7 @@ const fail=code=>{throw Object.assign(new Error(code),{code});};
 const stable=v=>v&&typeof v==='object'?Array.isArray(v)?v.map(stable):Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v;
 export const canonicalConversationContext=value=>JSON.stringify(stable(value));
 export function formatConversationQQResponse(a){
- if(a?.kind!=='conversation'||a.version!==2||!uuid(a.receipt_id)||typeof a.text!=='string'||!a.text.trim()||a.text.length>1200||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(a.text))fail('conversation_payload_invalid');
+ if(a?.kind!=='conversation'||a.version!==2||!uuid(a.receipt_id)||!validBridgeText(a.text))fail('conversation_payload_invalid');
  return `${a.source_id} · PA 回复\n${a.text}${a.commands_enabled?`\n\n回复指令：/rivule-chat ${a.receipt_id} <指令>`:''}`;
 }
 async function key(secret){if(typeof secret!=='string'||secret.length<32)fail('conversation_gateway_unavailable');return crypto.subtle.importKey('raw',enc.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign','verify']);}

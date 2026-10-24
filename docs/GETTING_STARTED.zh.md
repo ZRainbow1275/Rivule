@@ -23,7 +23,7 @@ node scripts/install-font.mjs
 node scripts/build.mjs
 ```
 
-**完成标志**：命令全部成功，`dist/owner` 与 `dist/gateway` 中生成可部署模块。这一步只准备本地部署文件，不会创建云服务。
+**完成标志**：命令全部成功，`dist/owner` 与 `dist/gateway` 中生成经过导入闭包验证的完整部署模块，`dist/sdk` 中生成来源 SDK。构建会校验固定字体 / WASM，并用全新产物替换整个 `dist/`；需要静态展示页时，再运行 `npm run build:showcase`。这一步只准备本地文件，不会创建云服务。详见[构建验证](BUILD.md)。
 
 依赖安装和字体恢复需要网络；下载失败或哈希不匹配时，按[构建排查](TROUBLESHOOTING.zh.md#build)处理。
 

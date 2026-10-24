@@ -41,9 +41,11 @@ node scripts/install-font.mjs
 node scripts/build.mjs
 ```
 
-本地检查运行 `npm run check`；离线行为回归运行 `npm test`。当前回归直接加载现行源码，覆盖未知发送结果不自动重试、运行预算默认仅提醒，以及展示页来源筛选。测试不启动 Worker、不联网、不发送通知；不能代替生产实收或浏览器视觉验收。
+本地检查运行 `npm run check`；准备好上述依赖与字体后，离线回归运行 `npm test`。行为回归直接加载现行源码，覆盖未知发送结果不自动重试、运行预算默认仅提醒，以及展示页来源筛选；构建回归在隔离目录中从零生成产物，并用独立模块链接器检查 owner、gateway 与 SDK 的导入闭包。测试不启动 Worker、不联网、不发送通知；不能代替生产实收或浏览器视觉验收。
 
-依赖与字体安装需要网络。构建在 `dist/owner` 和 `dist/gateway` 生成部署模块，不会发布服务或发送通知。接着按[部署指南](docs/OPERATIONS.md)配置自己的账户、来源与目标。
+依赖与字体安装需要网络，构建本身不联网。构建保留字体与 WASM 的固定 SHA-256 校验，从 owner / gateway 入口递归收集实际模块依赖，并包含 `src/sdk` 下的全部 SDK 入口，不再维护易遗漏的手工模块清单。产物位于 `dist/owner`、`dist/gateway` 和 `dist/sdk`；SDK 的相对依赖应随同目录结构一起分发。
+
+构建会先在全新临时目录验证完整导入闭包，再替换整个 `dist/`，不会依赖或保留旧产物；如需静态展示页，请随后运行 `npm run build:showcase`。缺失依赖、语法错误或无法静态确定的动态导入都会终止构建，不会发布服务或发送通知。完整约束与回归命令见[构建验证](docs/BUILD.md)。接着按[部署指南](docs/OPERATIONS.md)配置自己的账户、来源与目标。
 
 - owner 源码：`src/owner/worker.js`、`src/owner/qq-integration.mjs`
 - gateway 源码：`src/gateway/worker.mjs`
