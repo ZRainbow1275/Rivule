@@ -26819,6 +26819,9 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,at REAL NO
                     return { stored: true };
                 });
             }
+            sourceSummary() {
+                return this.b.sources.map((s) => ({ ...s, secret_name: void 0, last_seen: this.one("SELECT last_seen FROM source_health WHERE source_id=?", s.source_id)?.last_seen ?? null, ...this.sourceStatus(s) }));
+            }
             snapshot() {
                 return {
                     owner_id: this.b.ownerId,
@@ -26826,7 +26829,7 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,at REAL NO
                     real_pa_connections: "not_claimed",
                     delivery_enabled: this.enabled,
                     branches: this.rows("SELECT * FROM branches ORDER BY branch_key").map((r) => ({ ...JSON.parse(r.payload), branch_key: r.branch_key, state_version: r.state_version, revision: r.revision, last_confirmed_at: new Date(r.last_confirmed).toISOString(), archived: !!r.archived, stale: this.clock() - r.last_confirmed > 18e5, nodes: this.rows("SELECT phase_id,label,event_id,occurred_at FROM milestones WHERE branch_key=? ORDER BY occurred_at DESC LIMIT 3", r.branch_key).reverse() })),
-                    sources: this.b.sources.map((s) => ({ ...s, secret_name: void 0, last_seen: this.one("SELECT last_seen FROM source_health WHERE source_id=?", s.source_id)?.last_seen ?? null, ...this.sourceStatus(s) })),
+                    sources: this.sourceSummary(),
                     connected_sources: this.connectedSources(),
                     requests: this.rows("SELECT request_key,branch_key,state,version FROM requests ORDER BY request_key"),
                     outbox: this.rows("SELECT id,view_key,status,attempts,message_id,last_error FROM outbox ORDER BY id"),
@@ -27086,7 +27089,7 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,at REAL NO
                         messageId: job.message_id,
                         viewKey: job.view_key,
                         nonce: "job-" + job.id,
-                        payload: { test_only: this.synthetic, revision: job.revision, intent: job.intent, event, selection: this.selection(), components: job.intent === "overview" ? this.controls(job.revision) : [], sources: this.connectedSources(), historical_sources: this.snapshot().sources.filter((s) => s.historical_event_count > 0).map((s) => ({ source_id: s.source_id, provider: s.provider, display_name: s.display_name, enabled: s.enabled, selectable: s.selectable, connection_status: s.connection_status, evidence_kind: s.evidence_kind, last_seen: s.last_seen, last_verified_at: s.last_verified_at })), request: request ? { request_key: request.request_key, request_id: request.request_id, state: request.state, version: request.version } : void 0, overview: job.intent === "overview" ? this.snapshot().branches.filter((r) => this.canNotify(r)) : void 0, allowed_mentions: { parse: [] } }
+                        payload: { test_only: this.synthetic, revision: job.revision, intent: job.intent, event, selection: this.selection(), components: job.intent === "overview" ? this.controls(job.revision) : [], sources: this.connectedSources(), historical_sources: this.sourceSummary().filter((s) => s.historical_event_count > 0).map((s) => ({ source_id: s.source_id, provider: s.provider, display_name: s.display_name, enabled: s.enabled, selectable: s.selectable, connection_status: s.connection_status, evidence_kind: s.evidence_kind, last_seen: s.last_seen, last_verified_at: s.last_verified_at })), request: request ? { request_key: request.request_key, request_id: request.request_id, state: request.state, version: request.version } : void 0, overview: job.intent === "overview" ? this.snapshot().branches.filter((r) => this.canNotify(r)) : void 0, allowed_mentions: { parse: [] } }
                     };
                     let status = "uncertain", error = "send_result_unknown", messageId = job.message_id, nextAt = this.clock();
                     try {
@@ -28213,6 +28216,11 @@ var __productionControls = OwnerCore.prototype.controls;
 OwnerCore.prototype.controls = function (revision) { return __rivuleDisplay.decorateControls(this, __productionControls.call(this, revision), revision); };
 var prepare = createMessagePreparer(createPngRenderer({ wasmModule, fontBuffers: [font] }));
 const READONLY_SOURCE_PROOF_MAX_AGE_MS = 86400000;
+function earliestOwnerAlarmAt(...deadlines) {
+    // Missing/invalid deadlines are not epoch zero. Keep valid past deadlines
+    // so the scheduler can process due work immediately without delaying it.
+    return Math.min(...deadlines.map(at => typeof at === "number" && Number.isFinite(at) ? at : Infinity));
+}
 function readonlyRows(storage, q, ...args) { return storage.sql.exec(q, ...args).toArray(); }
 function readonlyTables(storage, phase) {
     phase?.('proof_catalog_exec');
@@ -28399,7 +28407,7 @@ var OwnerTerminal = class extends DurableObject {
                             this.messageBridge?.recordTask(event,id,{discord:mode!=='overview_only'});
                             this.qq.enqueue(event, id);
                         }, "onAccepted"),
-                        nextAlarmAt: __name(() => Math.min(this.qq.nextAlarmAt(), this.conversationQQ?.nextAlarmAt()??Infinity, this.messageBridge?.nextExpiry() ?? Infinity, this.conversationBridge?.nextExpiry()??Infinity, (readonlyTables(this.ctx.storage).has('conversation_discord_modals')?readonlyRows(this.ctx.storage,'SELECT MIN(expires) AS at FROM conversation_discord_modals')[0]?.at??Infinity:Infinity), (readonlyTables(this.ctx.storage).has('bridge_discord_modals')?readonlyRows(this.ctx.storage,'SELECT MIN(expires) AS at FROM bridge_discord_modals')[0]?.at??Infinity:Infinity)), "nextAlarmAt"),
+                        nextAlarmAt: __name(() => earliestOwnerAlarmAt(this.qq.nextAlarmAt(), this.conversationQQ?.nextAlarmAt()??Infinity, this.messageBridge?.nextExpiry() ?? Infinity, this.conversationBridge?.nextExpiry()??Infinity, (readonlyTables(this.ctx.storage).has('conversation_discord_modals')?readonlyRows(this.ctx.storage,'SELECT MIN(expires) AS at FROM conversation_discord_modals')[0]?.at??Infinity:Infinity), (readonlyTables(this.ctx.storage).has('bridge_discord_modals')?readonlyRows(this.ctx.storage,'SELECT MIN(expires) AS at FROM bridge_discord_modals')[0]?.at??Infinity:Infinity)), "nextAlarmAt"),
                         suppressBridgeJobs: () => this.suppressBridgeJobs(),
                         bridgeDispatchAllowed: job => this.bridgeDispatchAllowed(job),
                         conversationDispatchAllowed: job => this.conversationDispatchAllowed(job),
