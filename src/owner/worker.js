@@ -25120,7 +25120,7 @@ function mcpSdkDiagnosticCode(error) {
 // Operational failure category only: no request data, source IDs or exception text.
 function reportMcpFailure(enabled, stage, code, status, sink = value => console.warn(value)) {
     if (!enabled) return;
-    const stages = ['oauth_wrapper','mcp_auth','mcp_transport','sdk_cleanup','tool_call','proof_refresh','proof_context','proof_schema','proof_source','proof_catalog','proof_catalog_exec','proof_catalog_cursor','proof_catalog_shape','proof_identity','proof_columns','proof_create','proof_row_read','proof_generation_guard','proof_write','proof_transaction_start','proof_commit','proof_rpc_call','proof_rpc_result','request','response'];
+    const stages = ['oauth_wrapper','mcp_auth','mcp_transport','sdk_cleanup','tool_call','proof_refresh','proof_context','proof_schema','proof_source','proof_catalog','proof_catalog_storage','proof_catalog_exec','proof_catalog_cursor','proof_catalog_shape','proof_identity','proof_columns','proof_create','proof_row_read','proof_generation_guard','proof_write','proof_transaction_start','proof_commit','proof_rpc_call','proof_rpc_result','request','response'];
     const codes = ['proof_error','proof_range_error','proof_syntax_error','proof_abort_error','proof_timeout_error','proof_type_error','proof_reference_error','proof_other_error','proof_sql_constraint','proof_sql_missing_column','proof_sql_missing_table','proof_sql_denied','proof_sql_resource','proof_sql_unavailable','proof_storage_timeout','proof_storage_reset','proof_storage_overloaded','proof_storage_quota','proof_runtime_context','invalid_token_binding','source_not_authorized','insufficient_scope','diagnostics_not_authorized','persisted_destination_mismatch','operation_result_unknown','owner_result_unknown','request_result_unknown','source_revoked','oauth_invalid_token','oauth_invalid_grant','oauth_invalid_client','oauth_invalid_scope','oauth_invalid_request','oauth_temporarily_unavailable','oauth_service_unavailable','oauth_storage_missing','oauth_client_config_missing','oauth_client_config_invalid','binding_config_invalid','source_config_invalid','mcp_invalid_rpc_envelope','mcp_protocol_version_unsupported','mcp_accept_not_supported'];
     const record = {component:'rivule_mcp_failure',stage:stages.includes(stage)?stage:'unknown',code:codes.includes(code)?code:'unknown',http_status:Number.isInteger(status)&&(status===200||status>=400&&status<=599)?status:null};
     try { sink(record); } catch {}
@@ -28215,8 +28215,10 @@ var prepare = createMessagePreparer(createPngRenderer({ wasmModule, fontBuffers:
 const READONLY_SOURCE_PROOF_MAX_AGE_MS = 86400000;
 function readonlyRows(storage, q, ...args) { return storage.sql.exec(q, ...args).toArray(); }
 function readonlyTables(storage, phase) {
+    phase?.('proof_catalog_storage');
+    const sql=storage.sql;
     phase?.('proof_catalog_exec');
-    const cursor=storage.sql.exec("SELECT name FROM sqlite_master WHERE type='table'");
+    const cursor=sql.exec("SELECT name FROM sqlite_master WHERE type='table'");
     phase?.('proof_catalog_cursor');
     const rows=cursor.toArray();
     phase?.('proof_catalog_shape');
@@ -28290,6 +28292,26 @@ function readDiagnosticContract(storage, b, query, context, now = Date.now()) {
         currentQQ = { scope: 'current_owner_state_not_historical_event_cause', producer: { active: null, reason: 'state_unavailable', diagnostic: null }, latest_event: null };
     }
     return { ...result, current_qq_delivery: currentQQ, current_source_verifications: { scope: 'current_configuration_only_not_request_history', delivery_evidence_scope: 'source_proof_age_only_not_delivery_authorization', source_proof_max_age_ms: READONLY_SOURCE_PROOF_MAX_AGE_MS, schema_available: available, sources: proofs } };
+}
+// TEMPORARY: remove this template observer after one correlated diagnostic.
+const PROOF_TEMPLATE_WORDS=new Map('a an and are as at be been before cannot can class client closed code connection context current database did disabled do does durable enabled error exceeded execution failed failure for from has have in internal invalid is it limit mode must no not object of on only operation outside permitted query queries read readonly request reset result sql sqlite storage supported table the this timeout to too transaction unavailable unknown use using was were while with write'.split(' ').map(word=>[word,word]));
+function proofCatalogTemplate(error) {
+    let message;
+    try { for(let n=0,object=error;object && typeof object==='object' && n<4;n++,object=Object.getPrototypeOf(object)){const descriptor=Object.getOwnPropertyDescriptor(object,'message');if(descriptor){if(!('value' in descriptor))return {readability:'accessor',template:null};message=descriptor.value;break;}} } catch { return {readability:'absent',template:null}; }
+    if(typeof message!=='string')return {readability:'absent',template:null};
+    if(message.length>2048)return {readability:'oversize',template:null};
+    const words=PROOF_TEMPLATE_WORDS;
+    const masked=message.replace(/[a-z][a-z0-9+.-]*:\/\/\S+|[^\s@]+@[^\s@]+/gi,' REDACTED ').replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g,' REDACTED ').replace(/["'`][\s\S]*$/g,' REDACTED ').replace(/\S*[\/\\_\d-]\S*/g,' REDACTED ');
+    const parts=masked.trim().split(/\s+/).filter(Boolean).slice(0,32).map(token=>{const word=token.replace(/^[.,:;!?()]+|[.,:;!?()]+$/g,'').toLowerCase();return /^[a-z]+$/.test(word)?words.get(word)??'[redacted]':'[redacted]';});
+    let template='';for(const part of parts){if(template.length+part.length+(template?1:0)>256)break;template+=(template?' ':'')+part;}
+
+    return {readability:'data_string',template};
+}
+function reportProofCatalogTemplate(enabled,observation,sink=console.warn){
+    if(!enabled||!observation||!['data_string','accessor','absent','oversize'].includes(observation.readability))return;
+    const template=observation.readability==='data_string'&&typeof observation.template==='string'&&observation.template.length<=256?observation.template:null;
+    if(template!==null&&(template.split(' ').length>32||template.split(' ').some(word=>word!=='[redacted]'&&!PROOF_TEMPLATE_WORDS.has(word))))return;
+    try{sink({component:'rivule_mcp_catalog_template',readability:observation.readability,template});}catch{}
 }
 function proofFailureCode(error) {
     // Bounded prototype/cause inspection only reads data descriptors. Accessors
@@ -28365,7 +28387,7 @@ async function recordProofContract(storage, b, source, context, kind, now = Date
         phase='proof_commit';
         return { stored: true };
     });
-    } catch(error) { try { onFailure(phase,error instanceof Rejected ? error.code : proofFailureCode(error),error instanceof Rejected ? error.status : null); } catch {} throw error; }
+    } catch(error) { try { onFailure(phase,error instanceof Rejected ? error.code : proofFailureCode(error),error instanceof Rejected ? error.status : null,['proof_catalog_storage','proof_catalog_exec'].includes(phase)?proofCatalogTemplate(error):null); } catch {} throw error; }
 }
 
 var OwnerTerminal = class extends DurableObject {
@@ -28838,7 +28860,7 @@ var OwnerTerminal = class extends DurableObject {
             let context;
             try { context=await __ownerUiOverlay.sourceBindingContexts(b,this.env); }
             catch(error) { reportMcpFailure(observe,'proof_context','unknown',null); throw error; }
-            return recordProofContract(this.ctx.storage, b, source, context, method, Date.now(), (phase,code,status)=>reportMcpFailure(observe,phase,code,status));
+            return recordProofContract(this.ctx.storage, b, source, context, method, Date.now(), (phase,code,status,template)=>{reportMcpFailure(observe,phase,code,status);if(['proof_catalog_storage','proof_catalog_exec'].includes(phase))reportProofCatalogTemplate(observe,template);});
         }, false);
     }
     async overviewNavigation(interaction) {

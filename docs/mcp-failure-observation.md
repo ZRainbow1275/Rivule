@@ -43,3 +43,16 @@ version-to-OWNERS-namespace metadata has independently confirmed SQLite enabled.
 Daily row-read/write quota is a separate closed family from database-capacity
 limits. A matching category does not itself verify the current account's usage.
 Official pricing: https://developers.cloudflare.com/durable-objects/platform/pricing/ .
+
+## Temporary single-observation template
+
+This candidate temporarily reconstructs at most 32 tokens / 256 characters from
+an explicit technical-word dictionary, only at the fixed no-parameter catalog
+SQL getter/exec failure. URLs, emails, quoted text, paths, digit-bearing tokens
+and identifier-like tokens are removed first; unmatched tokens become a constant
+placeholder. No unrecognized characters, stack, cause, SQL parameters or raw
+error text are emitted. Message readability is a fixed four-state enum.
+The same existing diagnostics + reader gate applies. No database persistence is
+introduced. This template observer MUST be removed after the one correlated
+observation; normal fixed categories may remain. Template words are hints, not
+proof of root cause or authority to migrate data.
