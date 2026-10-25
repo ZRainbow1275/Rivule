@@ -25120,7 +25120,7 @@ function mcpSdkDiagnosticCode(error) {
 // Operational failure category only: no request data, source IDs or exception text.
 function reportMcpFailure(enabled, stage, code, status, sink = value => console.warn(value)) {
     if (!enabled) return;
-    const stages = ['oauth_wrapper','mcp_auth','mcp_transport','sdk_cleanup','tool_call','proof_refresh','request','response'];
+    const stages = ['oauth_wrapper','mcp_auth','mcp_transport','sdk_cleanup','tool_call','proof_refresh','proof_context','proof_schema','proof_row_read','proof_generation_guard','proof_write','proof_transaction_start','proof_commit','proof_rpc_call','proof_rpc_result','request','response'];
     const codes = ['invalid_token_binding','source_not_authorized','insufficient_scope','diagnostics_not_authorized','persisted_destination_mismatch','operation_result_unknown','owner_result_unknown','request_result_unknown','source_revoked','oauth_invalid_token','oauth_invalid_grant','oauth_invalid_client','oauth_invalid_scope','oauth_invalid_request','oauth_temporarily_unavailable','oauth_service_unavailable','oauth_storage_missing','oauth_client_config_missing','oauth_client_config_invalid','binding_config_invalid','source_config_invalid','mcp_invalid_rpc_envelope','mcp_protocol_version_unsupported','mcp_accept_not_supported'];
     const record = {component:'rivule_mcp_failure',stage:stages.includes(stage)?stage:'unknown',code:codes.includes(code)?code:'unknown',http_status:Number.isInteger(status)&&(status===200||status>=400&&status<=599)?status:null};
     try { sink(record); } catch {}
@@ -25483,7 +25483,14 @@ async function gatewayCore(request, env, ctx, trace) {
             apiHandler: { async fetch(req, e, context) {
                     const owner = getOwner(e);
                     return mcpResponse(req, context, loadOAuthConfig(e), {
-                        handshake: async (principal, method) => unwrap(await owner.recordSourceHandshake(principal, method)),
+                        handshake: async (principal, method) => {
+                            const observe=e.DIAGNOSTICS_ENABLED==='true' && typeof e.DIAGNOSTIC_READER_SOURCE_ID==='string' && e.DIAGNOSTIC_READER_SOURCE_ID.length>0;
+                            let reply;
+                            try { reply=await owner.recordSourceHandshake(principal, method); }
+                            catch(error) { reportMcpFailure(observe,'proof_rpc_call','unknown',null); throw error; }
+                            if(reply?.ok!==true)reportMcpFailure(observe,'proof_rpc_result',reply?.error,reply?.status);
+                            return unwrap(reply);
+                        },
                         publish: __name(async (principal, event, mode) => unwrap(await owner.publish(principal, event, mode)), "publish"),
                         delivery: __name(async (principal, id) => unwrap(await owner.delivery(principal, id)), "delivery"),
                         bridge: async (principal, action, args) => unwrap(await owner.bridge(principal, action, args)),
@@ -28277,7 +28284,9 @@ function readDiagnosticContract(storage, b, query, context, now = Date.now()) {
     }
     return { ...result, current_qq_delivery: currentQQ, current_source_verifications: { scope: 'current_configuration_only_not_request_history', delivery_evidence_scope: 'source_proof_age_only_not_delivery_authorization', source_proof_max_age_ms: READONLY_SOURCE_PROOF_MAX_AGE_MS, schema_available: available, sources: proofs } };
 }
-async function recordProofContract(storage, b, source, context, kind, now = Date.now()) {
+async function recordProofContract(storage, b, source, context, kind, now = Date.now(), onFailure = () => {}) {
+    let phase='proof_schema';
+    try {
     const current = readonlySource(b, source);
     if (!['read_probe', 'initialize', 'tools/list'].includes(kind))
         throw new Rejected('source_not_authorized', 403);
@@ -28290,23 +28299,31 @@ async function recordProofContract(storage, b, source, context, kind, now = Date
         if (!['source_id', 'binding', 'generation', 'evidence_kind', 'last_verified_at', 'revoked'].every(c => columns.has(c)))
             return { stored: false, reason: 'schema_unavailable' };
     }
-    return storage.transaction(async () => {
+    phase='proof_transaction_start';
+    return await storage.transaction(async () => {
+        phase='proof_schema';
         if (!tables.has('source_connections') && kind !== 'read_probe')
             storage.sql.exec('CREATE TABLE IF NOT EXISTS source_connections(source_id TEXT PRIMARY KEY,binding TEXT NOT NULL,generation INTEGER NOT NULL,evidence_kind TEXT,last_verified_at REAL,revoked INTEGER NOT NULL DEFAULT 0);');
+        phase='proof_row_read';
         const binding = canonical([b.ownerId, b.publicOrigin, current, context[current.source_id] ?? null]), old = readonlyRows(storage, 'SELECT * FROM source_connections WHERE source_id=?', source.source_id)[0];
+        phase='proof_generation_guard';
         if (old && (!Number.isSafeInteger(old.generation) || old.generation < 1 || old.binding !== binding && old.generation === Number.MAX_SAFE_INTEGER))
             throw new Rejected('operation_result_unknown', 503);
         if (old?.binding === binding && old.revoked)
             throw new Rejected('source_revoked', 403);
+        phase='proof_write';
         if (!old)
             readonlyRows(storage, 'INSERT INTO source_connections(source_id,binding,generation,evidence_kind,last_verified_at) VALUES(?,?,1,?,?)', source.source_id, binding, kind, now);
         else if (old.binding !== binding)
             readonlyRows(storage, 'UPDATE source_connections SET binding=?,generation=generation+1,evidence_kind=?,last_verified_at=?,revoked=0 WHERE source_id=?', binding, kind, now, source.source_id);
         else
             readonlyRows(storage, 'UPDATE source_connections SET evidence_kind=?,last_verified_at=? WHERE source_id=? AND binding=? AND revoked=0', kind, now, source.source_id, binding);
+        phase='proof_commit';
         return { stored: true };
     });
+    } catch(error) { try { onFailure(phase,error instanceof Rejected ? error.code : 'unknown',error instanceof Rejected ? error.status : null); } catch {} throw error; }
 }
+
 var OwnerTerminal = class extends DurableObject {
     static {
         __name(this, "OwnerTerminal");
@@ -28772,8 +28789,12 @@ var OwnerTerminal = class extends DurableObject {
     }
     async recordSourceHandshake(principal, method) {
         return this.result(async () => {
-            const b = loadBindings(this.env), source = this.source(principal), context = await __ownerUiOverlay.sourceBindingContexts(b, this.env);
-            return recordProofContract(this.ctx.storage, b, source, context, method);
+            const observe=this.env.DIAGNOSTICS_ENABLED==='true' && typeof this.env.DIAGNOSTIC_READER_SOURCE_ID==='string' && this.env.DIAGNOSTIC_READER_SOURCE_ID.length>0;
+            const b = loadBindings(this.env), source = this.source(principal);
+            let context;
+            try { context=await __ownerUiOverlay.sourceBindingContexts(b,this.env); }
+            catch(error) { reportMcpFailure(observe,'proof_context','unknown',null); throw error; }
+            return recordProofContract(this.ctx.storage, b, source, context, method, Date.now(), (phase,code,status)=>reportMcpFailure(observe,phase,code,status));
         }, false);
     }
     async overviewNavigation(interaction) {
