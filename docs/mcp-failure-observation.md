@@ -20,3 +20,11 @@ Cold initialization and a warm existing proof both succeed with generation 1 and
 no task/outbox tables. Thus unsupported transaction/pragma behavior is not an
 established explanation for the live failure. Fixed subphase observation is still
 needed to distinguish live state or storage failure, not a claimed root-cause fix.
+
+The schema phase is further split into fixed source/catalog/identity/columns/create
+labels. Unexpected exceptions are classified using built-in TypeError and
+ReferenceError checks, otherwise a closed SQL-category classifier or `proof_other_error`. The classifier
+reads at most 2048 characters from an own data `message` property without invoking
+getters. It emits only fixed constraint/missing-column/missing-table/denied/resource
+categories, never the text, SQL, property names, or arbitrary error codes. This distinguishes failure location without diagnosing
+an unproven storage fault or exposing old schema/data contents.

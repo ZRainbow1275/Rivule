@@ -25120,8 +25120,8 @@ function mcpSdkDiagnosticCode(error) {
 // Operational failure category only: no request data, source IDs or exception text.
 function reportMcpFailure(enabled, stage, code, status, sink = value => console.warn(value)) {
     if (!enabled) return;
-    const stages = ['oauth_wrapper','mcp_auth','mcp_transport','sdk_cleanup','tool_call','proof_refresh','proof_context','proof_schema','proof_row_read','proof_generation_guard','proof_write','proof_transaction_start','proof_commit','proof_rpc_call','proof_rpc_result','request','response'];
-    const codes = ['invalid_token_binding','source_not_authorized','insufficient_scope','diagnostics_not_authorized','persisted_destination_mismatch','operation_result_unknown','owner_result_unknown','request_result_unknown','source_revoked','oauth_invalid_token','oauth_invalid_grant','oauth_invalid_client','oauth_invalid_scope','oauth_invalid_request','oauth_temporarily_unavailable','oauth_service_unavailable','oauth_storage_missing','oauth_client_config_missing','oauth_client_config_invalid','binding_config_invalid','source_config_invalid','mcp_invalid_rpc_envelope','mcp_protocol_version_unsupported','mcp_accept_not_supported'];
+    const stages = ['oauth_wrapper','mcp_auth','mcp_transport','sdk_cleanup','tool_call','proof_refresh','proof_context','proof_schema','proof_source','proof_catalog','proof_identity','proof_columns','proof_create','proof_row_read','proof_generation_guard','proof_write','proof_transaction_start','proof_commit','proof_rpc_call','proof_rpc_result','request','response'];
+    const codes = ['proof_type_error','proof_reference_error','proof_other_error','proof_sql_constraint','proof_sql_missing_column','proof_sql_missing_table','proof_sql_denied','proof_sql_resource','invalid_token_binding','source_not_authorized','insufficient_scope','diagnostics_not_authorized','persisted_destination_mismatch','operation_result_unknown','owner_result_unknown','request_result_unknown','source_revoked','oauth_invalid_token','oauth_invalid_grant','oauth_invalid_client','oauth_invalid_scope','oauth_invalid_request','oauth_temporarily_unavailable','oauth_service_unavailable','oauth_storage_missing','oauth_client_config_missing','oauth_client_config_invalid','binding_config_invalid','source_config_invalid','mcp_invalid_rpc_envelope','mcp_protocol_version_unsupported','mcp_accept_not_supported'];
     const record = {component:'rivule_mcp_failure',stage:stages.includes(stage)?stage:'unknown',code:codes.includes(code)?code:'unknown',http_status:Number.isInteger(status)&&(status===200||status>=400&&status<=599)?status:null};
     try { sink(record); } catch {}
 }
@@ -28284,16 +28284,36 @@ function readDiagnosticContract(storage, b, query, context, now = Date.now()) {
     }
     return { ...result, current_qq_delivery: currentQQ, current_source_verifications: { scope: 'current_configuration_only_not_request_history', delivery_evidence_scope: 'source_proof_age_only_not_delivery_authorization', source_proof_max_age_ms: READONLY_SOURCE_PROOF_MAX_AGE_MS, schema_available: available, sources: proofs } };
 }
+function proofFailureCode(error) {
+    try {
+        if(error instanceof TypeError)return 'proof_type_error';
+        if(error instanceof ReferenceError)return 'proof_reference_error';
+    } catch { return 'proof_other_error'; }
+    // Inspect only an own data property, never invoke message/name/code getters.
+    // Text is used locally for a closed category and is never returned or logged.
+    let message;
+    try { const descriptor=error && typeof error==='object' ? Object.getOwnPropertyDescriptor(error,'message') : null; message=descriptor && 'value' in descriptor ? descriptor.value : null; } catch { return 'proof_other_error'; }
+    if(typeof message!=='string'||message.length>2048)return 'proof_other_error';
+    if(/SQLITE_CONSTRAINT|constraint failed/i.test(message))return 'proof_sql_constraint';
+    if(/no such column|has no column named/i.test(message))return 'proof_sql_missing_column';
+    if(/no such table/i.test(message))return 'proof_sql_missing_table';
+    if(/SQLITE_AUTH|SQLITE_PERM|not authorized|authorization denied|permission denied/i.test(message))return 'proof_sql_denied';
+    if(/SQLITE_FULL|SQLITE_NOMEM|database or disk is full|storage quota|out of memory/i.test(message))return 'proof_sql_resource';
+    return 'proof_other_error';
+}
 async function recordProofContract(storage, b, source, context, kind, now = Date.now(), onFailure = () => {}) {
-    let phase='proof_schema';
+    let phase='proof_source';
     try {
     const current = readonlySource(b, source);
     if (!['read_probe', 'initialize', 'tools/list'].includes(kind))
         throw new Rejected('source_not_authorized', 403);
+    phase='proof_catalog';
     const tables = readonlyTables(storage);
+    phase='proof_identity';
     readonlyIdentity(storage, b, tables);
     if (!tables.has('source_connections') && kind === 'read_probe')
         return { stored: false, reason: 'schema_unavailable' };
+    phase='proof_columns';
     if (tables.has('source_connections')) {
         const columns = new Set(readonlyRows(storage, "SELECT name FROM pragma_table_info('source_connections')").map(r => r.name));
         if (!['source_id', 'binding', 'generation', 'evidence_kind', 'last_verified_at', 'revoked'].every(c => columns.has(c)))
@@ -28301,7 +28321,7 @@ async function recordProofContract(storage, b, source, context, kind, now = Date
     }
     phase='proof_transaction_start';
     return await storage.transaction(async () => {
-        phase='proof_schema';
+        phase='proof_create';
         if (!tables.has('source_connections') && kind !== 'read_probe')
             storage.sql.exec('CREATE TABLE IF NOT EXISTS source_connections(source_id TEXT PRIMARY KEY,binding TEXT NOT NULL,generation INTEGER NOT NULL,evidence_kind TEXT,last_verified_at REAL,revoked INTEGER NOT NULL DEFAULT 0);');
         phase='proof_row_read';
@@ -28321,7 +28341,7 @@ async function recordProofContract(storage, b, source, context, kind, now = Date
         phase='proof_commit';
         return { stored: true };
     });
-    } catch(error) { try { onFailure(phase,error instanceof Rejected ? error.code : 'unknown',error instanceof Rejected ? error.status : null); } catch {} throw error; }
+    } catch(error) { try { onFailure(phase,error instanceof Rejected ? error.code : proofFailureCode(error),error instanceof Rejected ? error.status : null); } catch {} throw error; }
 }
 
 var OwnerTerminal = class extends DurableObject {
