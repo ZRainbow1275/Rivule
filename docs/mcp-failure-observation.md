@@ -22,9 +22,20 @@ established explanation for the live failure. Fixed subphase observation is stil
 needed to distinguish live state or storage failure, not a claimed root-cause fix.
 
 The schema phase is further split into fixed source/catalog/identity/columns/create
-labels. Unexpected exceptions are classified using built-in TypeError and
-ReferenceError checks, otherwise a closed SQL-category classifier or `proof_other_error`. The classifier
-reads at most 2048 characters from an own data `message` property without invoking
-getters. It emits only fixed constraint/missing-column/missing-table/denied/resource
+labels. Unexpected exceptions are classified using fixed TypeError and
+ReferenceError names, otherwise a closed SQL-category classifier or `proof_other_error`. The classifier
+reads at most 2048 characters per data `message` property without invoking
+getters, with at most four prototype levels and four non-cyclic cause nodes. It emits only fixed constraint/missing-column/missing-table/denied/resource
 categories, never the text, SQL, property names, or arbitrary error codes. This distinguishes failure location without diagnosing
 an unproven storage fault or exposing old schema/data contents.
+
+The catalog query additionally separates exec, cursor consumption and row-shape
+conversion without adding a query. Closed categories include the official runtime
+SQL-unavailable, storage-timeout/reset, overloaded and request-context families.
+The documented overload boolean is read only as a data descriptor. No raw name,
+cause, message, SQL or exception code is output. Unknown remains unknown.
+
+Official references: https://developers.cloudflare.com/durable-objects/observability/troubleshooting/
+and https://github.com/cloudflare/workerd/blob/main/src/workerd/api/actor-state.c%2B%2B .
+Local SQL-disabled reproduction demonstrates classifier coverage only; live
+version-to-OWNERS-namespace metadata has independently confirmed SQLite enabled.

@@ -25120,8 +25120,8 @@ function mcpSdkDiagnosticCode(error) {
 // Operational failure category only: no request data, source IDs or exception text.
 function reportMcpFailure(enabled, stage, code, status, sink = value => console.warn(value)) {
     if (!enabled) return;
-    const stages = ['oauth_wrapper','mcp_auth','mcp_transport','sdk_cleanup','tool_call','proof_refresh','proof_context','proof_schema','proof_source','proof_catalog','proof_identity','proof_columns','proof_create','proof_row_read','proof_generation_guard','proof_write','proof_transaction_start','proof_commit','proof_rpc_call','proof_rpc_result','request','response'];
-    const codes = ['proof_type_error','proof_reference_error','proof_other_error','proof_sql_constraint','proof_sql_missing_column','proof_sql_missing_table','proof_sql_denied','proof_sql_resource','invalid_token_binding','source_not_authorized','insufficient_scope','diagnostics_not_authorized','persisted_destination_mismatch','operation_result_unknown','owner_result_unknown','request_result_unknown','source_revoked','oauth_invalid_token','oauth_invalid_grant','oauth_invalid_client','oauth_invalid_scope','oauth_invalid_request','oauth_temporarily_unavailable','oauth_service_unavailable','oauth_storage_missing','oauth_client_config_missing','oauth_client_config_invalid','binding_config_invalid','source_config_invalid','mcp_invalid_rpc_envelope','mcp_protocol_version_unsupported','mcp_accept_not_supported'];
+    const stages = ['oauth_wrapper','mcp_auth','mcp_transport','sdk_cleanup','tool_call','proof_refresh','proof_context','proof_schema','proof_source','proof_catalog','proof_catalog_exec','proof_catalog_cursor','proof_catalog_shape','proof_identity','proof_columns','proof_create','proof_row_read','proof_generation_guard','proof_write','proof_transaction_start','proof_commit','proof_rpc_call','proof_rpc_result','request','response'];
+    const codes = ['proof_error','proof_range_error','proof_syntax_error','proof_abort_error','proof_timeout_error','proof_type_error','proof_reference_error','proof_other_error','proof_sql_constraint','proof_sql_missing_column','proof_sql_missing_table','proof_sql_denied','proof_sql_resource','proof_sql_unavailable','proof_storage_timeout','proof_storage_reset','proof_storage_overloaded','proof_runtime_context','invalid_token_binding','source_not_authorized','insufficient_scope','diagnostics_not_authorized','persisted_destination_mismatch','operation_result_unknown','owner_result_unknown','request_result_unknown','source_revoked','oauth_invalid_token','oauth_invalid_grant','oauth_invalid_client','oauth_invalid_scope','oauth_invalid_request','oauth_temporarily_unavailable','oauth_service_unavailable','oauth_storage_missing','oauth_client_config_missing','oauth_client_config_invalid','binding_config_invalid','source_config_invalid','mcp_invalid_rpc_envelope','mcp_protocol_version_unsupported','mcp_accept_not_supported'];
     const record = {component:'rivule_mcp_failure',stage:stages.includes(stage)?stage:'unknown',code:codes.includes(code)?code:'unknown',http_status:Number.isInteger(status)&&(status===200||status>=400&&status<=599)?status:null};
     try { sink(record); } catch {}
 }
@@ -28214,7 +28214,14 @@ OwnerCore.prototype.controls = function (revision) { return __rivuleDisplay.deco
 var prepare = createMessagePreparer(createPngRenderer({ wasmModule, fontBuffers: [font] }));
 const READONLY_SOURCE_PROOF_MAX_AGE_MS = 86400000;
 function readonlyRows(storage, q, ...args) { return storage.sql.exec(q, ...args).toArray(); }
-function readonlyTables(storage) { return new Set(readonlyRows(storage, "SELECT name FROM sqlite_master WHERE type='table'").map(r => r.name)); }
+function readonlyTables(storage, phase) {
+    phase?.('proof_catalog_exec');
+    const cursor=storage.sql.exec("SELECT name FROM sqlite_master WHERE type='table'");
+    phase?.('proof_catalog_cursor');
+    const rows=cursor.toArray();
+    phase?.('proof_catalog_shape');
+    return new Set(rows.map(r=>r.name));
+}
 function readonlyIdentity(storage, b, tables) {
     if (tables.has('meta')) {
         const old = readonlyRows(storage, "SELECT value FROM meta WHERE key='identity'")[0];
@@ -28285,21 +28292,37 @@ function readDiagnosticContract(storage, b, query, context, now = Date.now()) {
     return { ...result, current_qq_delivery: currentQQ, current_source_verifications: { scope: 'current_configuration_only_not_request_history', delivery_evidence_scope: 'source_proof_age_only_not_delivery_authorization', source_proof_max_age_ms: READONLY_SOURCE_PROOF_MAX_AGE_MS, schema_available: available, sources: proofs } };
 }
 function proofFailureCode(error) {
-    try {
-        if(error instanceof TypeError)return 'proof_type_error';
-        if(error instanceof ReferenceError)return 'proof_reference_error';
-    } catch { return 'proof_other_error'; }
-    // Inspect only an own data property, never invoke message/name/code getters.
-    // Text is used locally for a closed category and is never returned or logged.
-    let message;
-    try { const descriptor=error && typeof error==='object' ? Object.getOwnPropertyDescriptor(error,'message') : null; message=descriptor && 'value' in descriptor ? descriptor.value : null; } catch { return 'proof_other_error'; }
-    if(typeof message!=='string'||message.length>2048)return 'proof_other_error';
-    if(/SQLITE_CONSTRAINT|constraint failed/i.test(message))return 'proof_sql_constraint';
-    if(/no such column|has no column named/i.test(message))return 'proof_sql_missing_column';
-    if(/no such table/i.test(message))return 'proof_sql_missing_table';
-    if(/SQLITE_AUTH|SQLITE_PERM|not authorized|authorization denied|permission denied/i.test(message))return 'proof_sql_denied';
-    if(/SQLITE_FULL|SQLITE_NOMEM|database or disk is full|storage quota|out of memory/i.test(message))return 'proof_sql_resource';
-    return 'proof_other_error';
+    // Bounded prototype/cause inspection only reads data descriptors. Accessors
+    // and exotic proxies cannot leak text or affect the original rejection.
+    const data=(value,key)=>{try{for(let i=0;value && typeof value==='object' && i<4;i++,value=Object.getPrototypeOf(value)){const d=Object.getOwnPropertyDescriptor(value,key);if(d)return 'value' in d?d.value:undefined;}}catch{}return undefined;};
+    let fallback='proof_other_error';const seen=new Set();
+    for(let depth=0;error && typeof error==='object' && depth<4 && !seen.has(error);depth++) {
+        seen.add(error);
+        const name=data(error,'name');
+        if(name==='Error'&&fallback==='proof_other_error')fallback='proof_error';
+        else if(name==='RangeError')fallback='proof_range_error';
+        else if(name==='SyntaxError')fallback='proof_syntax_error';
+        else if(name==='AbortError')fallback='proof_abort_error';
+        else if(name==='TimeoutError')fallback='proof_timeout_error';
+        if(name==='TypeError')fallback='proof_type_error';
+        else if(name==='ReferenceError')fallback='proof_reference_error';
+        if(data(error,'overloaded')===true)return 'proof_storage_overloaded';
+        const message=data(error,'message');
+        if(typeof message==='string'&&message.length<=2048){
+            if(/SQL is not enabled|not backed by SQLite storage/i.test(message))return 'proof_sql_unavailable';
+            if(/storage operation.*(?:timeout|timed out)/i.test(message))return 'proof_storage_timeout';
+            if(/Durable Object.*reset|object to be reset/i.test(message))return 'proof_storage_reset';
+            if(/Durable Object is overloaded|too many concurrent storage operations|too much load on Durable Objects/i.test(message))return 'proof_storage_overloaded';
+            if(/Cannot perform I\/O|on behalf of a different request|outside.*request handler/i.test(message))return 'proof_runtime_context';
+            if(/SQLITE_CONSTRAINT|constraint failed/i.test(message))return 'proof_sql_constraint';
+            if(/no such column|has no column named/i.test(message))return 'proof_sql_missing_column';
+            if(/no such table/i.test(message))return 'proof_sql_missing_table';
+            if(/SQLITE_AUTH|SQLITE_PERM|not authorized|authorization denied|permission denied/i.test(message))return 'proof_sql_denied';
+            if(/SQLITE_FULL|SQLITE_NOMEM|database or disk is full|storage quota|out of memory|exceeded.*(?:storage|memory|CPU).*limit/i.test(message))return 'proof_sql_resource';
+        }
+        error=data(error,'cause');
+    }
+    return fallback;
 }
 async function recordProofContract(storage, b, source, context, kind, now = Date.now(), onFailure = () => {}) {
     let phase='proof_source';
@@ -28308,7 +28331,7 @@ async function recordProofContract(storage, b, source, context, kind, now = Date
     if (!['read_probe', 'initialize', 'tools/list'].includes(kind))
         throw new Rejected('source_not_authorized', 403);
     phase='proof_catalog';
-    const tables = readonlyTables(storage);
+    const tables = readonlyTables(storage, next=>{phase=next;});
     phase='proof_identity';
     readonlyIdentity(storage, b, tables);
     if (!tables.has('source_connections') && kind === 'read_probe')
