@@ -39,3 +39,7 @@ Official references: https://developers.cloudflare.com/durable-objects/observabi
 and https://github.com/cloudflare/workerd/blob/main/src/workerd/api/actor-state.c%2B%2B .
 Local SQL-disabled reproduction demonstrates classifier coverage only; live
 version-to-OWNERS-namespace metadata has independently confirmed SQLite enabled.
+
+Daily row-read/write quota is a separate closed family from database-capacity
+limits. A matching category does not itself verify the current account's usage.
+Official pricing: https://developers.cloudflare.com/durable-objects/platform/pricing/ .
