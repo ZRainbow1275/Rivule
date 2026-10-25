@@ -25117,11 +25117,21 @@ function mcpSdkDiagnosticCode(error) {
         return "mcp_unexpected_response";
     return "mcp_sdk_error";
 }
+// Operational failure category only: no request data, source IDs or exception text.
+function reportMcpFailure(enabled, stage, code, status, sink = value => console.warn(value)) {
+    if (!enabled) return;
+    const stages = ['oauth_wrapper','mcp_auth','mcp_transport','sdk_cleanup','tool_call','proof_refresh','request','response'];
+    const codes = ['invalid_token_binding','source_not_authorized','insufficient_scope','diagnostics_not_authorized','persisted_destination_mismatch','operation_result_unknown','owner_result_unknown','request_result_unknown','source_revoked','oauth_invalid_token','oauth_invalid_grant','oauth_invalid_client','oauth_invalid_scope','oauth_invalid_request','oauth_temporarily_unavailable','oauth_service_unavailable','oauth_storage_missing','oauth_client_config_missing','oauth_client_config_invalid','binding_config_invalid','source_config_invalid','mcp_invalid_rpc_envelope','mcp_protocol_version_unsupported','mcp_accept_not_supported'];
+    const record = {component:'rivule_mcp_failure',stage:stages.includes(stage)?stage:'unknown',code:codes.includes(code)?code:'unknown',http_status:Number.isInteger(status)&&(status===200||status>=400&&status<=599)?status:null};
+    try { sink(record); } catch {}
+}
 async function mcpResponse(request, ctx, config2, owner, trace) {
+    let failureStage = 'mcp_auth';
     try {
         trace?.binding(ctx.props?.source_id);
         const source = authorizeOAuthContext(request, ctx, config2);
         trace?.mark("mcp_auth");
+        failureStage = 'request';
         if (request.method !== "POST")
             return jsonResponse({ error: "stateless_post_only" }, 405);
         const body = await boundedBody(request);
@@ -25201,18 +25211,22 @@ async function mcpResponse(request, ctx, config2, owner, trace) {
             }
             catch (error2) {
                 trace?.mark("mcp_call", error2 instanceof Rejected ? error2.code : "unclassified_error", error2 instanceof Rejected ? error2.status : 503);
+                reportMcpFailure(!!config2.diagnosticReaderSourceId, 'tool_call', error2 instanceof Rejected ? error2.code : 'unknown', 200);
                 return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: error2 instanceof Rejected ? error2.code : "operation_result_unknown" }) }] };
             }
         });
         const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
+        failureStage = 'mcp_transport';
         await server.connect(transport);
         try {
+            failureStage = 'mcp_transport';
             const response2 = await transport.handleRequest(new Request(request.url, { method: "POST", headers: request.headers, body }), { parsedBody: parsed });
+            if (response2.status >= 400) reportMcpFailure(!!config2.diagnosticReaderSourceId, failureStage, 'unknown', response2.status);
             trace?.mark("mcp_transport", "http_" + response2.status, response2.status);
             if (owner.handshake && response2.ok && (parsed.method === 'initialize' || parsed.method === 'tools/list' || successfulReadProbe)) {
                 const rpc = await response2.clone().json();
                 if (rpc?.jsonrpc === '2.0' && rpc.id === parsed.id && parsed.id !== undefined && !rpc.error && rpc.result && typeof rpc.result === 'object' && rpc.result.isError !== true && (successfulReadProbe || (parsed.method === 'initialize' ? typeof rpc.result.protocolVersion === 'string' : Array.isArray(rpc.result.tools))))
-                    await owner.handshake(ctx.props, successfulReadProbe ? 'read_probe' : parsed.method);
+                    { failureStage = 'proof_refresh'; await owner.handshake(ctx.props, successfulReadProbe ? 'read_probe' : parsed.method); }
             }
             if (parsed.method === "tools/call" && parsed.params?.name === "get_task_snapshot") {
                 const headers = new Headers(response2.headers);
@@ -25222,12 +25236,14 @@ async function mcpResponse(request, ctx, config2, owner, trace) {
             return response2;
         }
         finally {
-            await transport.close();
-            await server.close();
+            // Preserve the failing phase unless cleanup itself throws.
+            try { await transport.close(); await server.close(); }
+            catch (cleanupError) { failureStage = 'sdk_cleanup'; throw cleanupError; }
         }
     }
     catch (error2) {
         const response2 = safeError(error2);
+        reportMcpFailure(!!config2.diagnosticReaderSourceId, failureStage, error2 instanceof Rejected ? error2.code : 'unknown', response2.status);
         trace?.mark("mcp_auth", error2 instanceof Rejected ? error2.code : "unclassified_error", response2.status);
         return response2;
     }
@@ -25484,14 +25500,17 @@ async function gatewayCore(request, env, ctx, trace) {
                 } },
             onError: __name((error2) => {
                 trace.mark("oauth_provider", "oauth_" + error2.code, error2.status);
+                if (url.pathname.startsWith('/mcp/')) reportMcpFailure(env.DIAGNOSTICS_ENABLED === 'true' && typeof env.DIAGNOSTIC_READER_SOURCE_ID === 'string' && env.DIAGNOSTIC_READER_SOURCE_ID.length > 0, 'oauth_wrapper', typeof error2.code === 'string' ? 'oauth_' + error2.code : 'unknown', error2.status);
             }, "onError")
         });
         const response2 = withScopeGuidance(request, await withScopePolicyMetadata(request, await provider.fetch(request, env, ctx)));
+        if (url.pathname.startsWith('/mcp/') && response2.status >= 500) reportMcpFailure(env.DIAGNOSTICS_ENABLED === 'true' && typeof env.DIAGNOSTIC_READER_SOURCE_ID === 'string' && env.DIAGNOSTIC_READER_SOURCE_ID.length > 0, 'response', 'unknown', response2.status);
         trace.mark("request_complete", "http_" + response2.status, response2.status);
         return response2;
     }
     catch (error2) {
         const response2 = safeError(error2);
+        if (new URL(request.url).pathname.startsWith('/mcp/')) reportMcpFailure(env.DIAGNOSTICS_ENABLED === 'true' && typeof env.DIAGNOSTIC_READER_SOURCE_ID === 'string' && env.DIAGNOSTIC_READER_SOURCE_ID.length > 0, 'request', error2 instanceof Rejected ? error2.code : 'unknown', response2.status);
         trace.mark("request", error2 instanceof Rejected ? error2.code : "unclassified_error", response2.status);
         return response2;
     }

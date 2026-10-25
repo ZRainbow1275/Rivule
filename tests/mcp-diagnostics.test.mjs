@@ -6,8 +6,8 @@ const headers={'content-type':'application/json',accept:'application/json, text/
 const init={jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'offline-test',version:'1'}}};
 const notification={jsonrpc:'2.0',method:'notifications/initialized'};
 const rpc=method=>({jsonrpc:'2.0',id:1,method});
-async function fixture(){
- const worker=await loadProductionWorker();
+async function fixture(options={}){
+ const worker=await loadProductionWorker(options);
  const source={source_id:'pa',provider:'dot',display_name:'PA',enabled:true,allowed_hosts:[]};
  const config={bindings:{publicOrigin:'https://owner.test',ownerId:'owner',sources:[source]},resource:'https://owner.test/mcp/pa',ownerSubject:'subject',clients:[{client_id:'client',source_id:'pa'}],allowDynamicClients:false,diagnosticReaderSourceId:'pa'};
  const ctx={auth:{audience:config.resource,userId:'subject',expiresAt:Date.now()/1000+600,clientId:'client',scope:['pa:receipt']},props:{version:1,owner_id:'owner',client_id:'client',source_id:'pa'}};
@@ -78,4 +78,23 @@ test('diagnostic annotation leaves HTTP statuses and bodies unchanged and respec
   const r=await f.call(body,custom,{suppress:true});assert.equal(r.record,null);
  }
  assert.ok(f.handshakes.includes('initialize'));assert.ok(f.handshakes.includes('tools/list'));assert.ok(f.handshakes.includes('read_probe'));
+});
+
+test('failure observations strictly whitelist fields and poisoned codes; disabled and throwing sink never affect requests',async()=>{
+ const worker=await loadProductionWorker(),records=[];const poison='Bearer private-token https://private.invalid/recipient';
+ worker.reportMcpFailure(true,poison,poison,503,r=>records.push(r));worker.reportMcpFailure(false,'proof_refresh','operation_result_unknown',503,r=>records.push(r));worker.reportMcpFailure(true,'proof_refresh','operation_result_unknown',503,()=>{throw Error(poison);});
+ assert.deepEqual(json(records),[{component:'rivule_mcp_failure',stage:'unknown',code:'unknown',http_status:503}]);assert.doesNotMatch(JSON.stringify(records),/Bearer|private|recipient/);
+});
+test('actual diagnostic failure observation preserves response semantics and skip without DB diagnostic record',async()=>{
+ const logs=[];const f=await fixture({warn:r=>{if(r?.component==='rivule_mcp_failure')logs.push(json(r));}});const call={...rpc('tools/call'),params:{name:'get_connection_diagnostics',arguments:{source_id:'pa'}}};
+ const normal=await f.call(call,{}, {suppress:true});assert.equal(normal.status,200);assert.equal(normal.record,null);assert.deepEqual(logs,[]);
+ f.owner.diagnostics=async()=>{throw Error('Bearer private-token https://private.invalid/recipient');};const rejected=await f.call(call,{}, {suppress:true});assert.equal(rejected.status,200);assert.equal(rejected.body.result.isError,true);assert.equal(rejected.record,null);assert.deepEqual(logs,[{component:'rivule_mcp_failure',stage:'tool_call',code:'unknown',http_status:200}]);
+ logs.length=0;f.owner.diagnostics=async()=>({offline:true});f.owner.handshake=async()=>{throw new f.worker.Rejected('operation_result_unknown',503);};const failed=await f.call(call,{}, {suppress:true});assert.equal(failed.status,503);assert.equal(failed.body.error,'operation_result_unknown');assert.equal(failed.record,null);assert.deepEqual(logs,[{component:'rivule_mcp_failure',stage:'proof_refresh',code:'operation_result_unknown',http_status:503}]);assert.doesNotMatch(JSON.stringify(logs),/source|token|https|recipient/);
+});
+test('actual transport rejection remains HTTP400 with only fixed category observation',async()=>{
+ const logs=[];const f=await fixture({warn:r=>{if(r?.component==='rivule_mcp_failure')logs.push(json(r));}});const r=await f.call({...notification,params:null});assert.equal(r.status,400);assert.equal(r.body.error.code,-32700);assert.deepEqual(logs,[{component:'rivule_mcp_failure',stage:'mcp_transport',code:'unknown',http_status:400}]);
+});
+
+test('unknown failure status is null rather than an invented HTTP500',async()=>{
+ const worker=await loadProductionWorker(),records=[];for(const status of [undefined,null,'private-status',{},201,NaN])worker.reportMcpFailure(true,'oauth_wrapper','unknown',status,r=>records.push(r));assert.ok(records.every(r=>r.http_status===null));
 });
