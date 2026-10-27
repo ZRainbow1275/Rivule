@@ -1,3 +1,5 @@
+import { readQQSourceConfiguration } from './qq-source-diagnostics.mjs';
+import { readDiscordDeliveryDiagnostics } from './discord-delivery-diagnostics.mjs';
 import { discordBridgeText } from './bridge-text.mjs';
 import { ConversationQQReview } from './conversation-qq-review.mjs';
 import { qqConversationReviewAuthorityResponse } from './conversation-qq-review-authority.mjs';
@@ -26685,11 +26687,15 @@ CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT,at REAL NO
                     await this.storage.deleteAlarm();
                     return;
                 }
-                const scheduledAt = Math.max(this.clock() + 1, at);
+                const now = this.clock(), scheduledAt = Math.max(now + 1, at);
                 const existing = await this.storage.getAlarm();
-                // Incoming events must not push a pending wake past QQ's rolling delay.
-                // A running alarm is consumed by the host, so the next wake retains its delay.
-                if (existing === null || existing > scheduledAt)
+                // Preserve earlier future/briefly overdue wakes: they may be pending
+                // host retries. Five minutes exceeds nominal retry backoff + failover
+                // delay, without claiming that the host has exhausted its retries.
+                // Only ordinary scheduling with finite eligible work repairs an old
+                // timestamp; no read path, quota catch or idle loop invokes recovery.
+                const stale = typeof existing === "number" && Number.isFinite(existing) && existing < now - 5 * 60 * 1000;
+                if (existing === null || existing > scheduledAt || stale)
                     await this.storage.setAlarm(scheduledAt);
             }
             enqueue(receipt, view, intent, payload, revision) {
@@ -28884,7 +28890,14 @@ var OwnerTerminal = class extends DurableObject {
             if (!isDiagnosticReader(this.source(principal), loadOAuthConfig(this.env)))
                 throw new Rejected("diagnostics_not_authorized", 403);
             const b = loadBindings(this.env), context = await __ownerUiOverlay.sourceBindingContexts(b, this.env);
-            return readDiagnosticContract(this.ctx.storage, b, query, context);
+            const result = readDiagnosticContract(this.ctx.storage, b, query, context);
+            const sourceId = query.source_id ?? this.source(principal).source_id;
+            const source = b.sources.find(s => s.source_id === sourceId && s.enabled);
+            if (source) result.current_qq_source_configuration = readQQSourceConfiguration(this.env, sourceId);
+            if (source) result.current_discord_delivery = await readDiscordDeliveryDiagnostics(this.ctx.storage, {
+                tables: readonlyTables(this.ctx.storage), sourceId, deliveryEnabled: this.env.DELIVERY_ENABLED === 'true'
+            });
+            return result;
         }, false);
     }
     async selectView(interaction) {

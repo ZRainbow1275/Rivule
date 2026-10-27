@@ -246,3 +246,38 @@ Owner 和 QQ Gateway 必须同时设置 `DASHBOARD_QQ_SETTINGS_ENABLED="true"`�
 
 网页 grant 在最终 complete 前还有 webSettingsReady 门：producer ACK 本身不会解锁投递。
 恢复后如仍希望开启，必须重新查看范围和接收人摘要并明确确认；不因恢复自动开启。
+
+## 只读 Discord 调度诊断（待部署的增量）
+
+现有授权诊断读取新增 `current_discord_delivery`，不改变诊断读取者、来源或 OAuth 权限。未指定来源时仅统计当前诊断读取者的来源；明确来源仍使用既有查询验证。该字段不代表投递成功或接收者实收，也不证明历史事件为何失败。
+
+- 仅检查 `queued`、`retry_wait`、`sending`、`uncertain`、`blocked` 五类活动状态。每类通过已有 `outbox_due` 索引读取最多 100 条加一条截断哨兵，然后按唯一回执索引关联来源；不读取任务正文、JSON payload、接收者、消息 ID 或其他来源 ID，不扫描历史已完成状态。
+- `source_queue.counts` 只统计选定来源。`has_more` 指该状态的 **owner 候选窗口被截断**，并不证明选定来源还有更多任务。任一状态截断时计数均须按下界解释；零值不是“该来源无待处理任务”。`earliest_sampled_pending_at` 仅指采样中的最早时间，缺失并不证明没有排队任务。
+- `owner_dispatch_gate` 只返回整个 owner 的固定隔离状态计数，因为其他来源的隔离任务也会暂停当前来源。截断的计数为下界；不返回其来源或任务标识。`rate_until` 是当前退避时间，不是历史错误原因。
+- `alarm` 最多调用一次只读 `getAlarm()`。`not_scheduled` 只说明读取时没有待触发 alarm；运行中的 alarm 可能已被宿主消费，不能单独据此认定调度器故障。读失败为 `unavailable`，不猜测为空。
+- 新增读取不初始化 schema、不清理记录、不刷新证明、不写入 alarm、不重试或发送。原有 MCP 握手/证明行为不因该字段改变。索引或 schema 不可用时返回有限错误类别，绝不创建索引或暴露原始异常。
+
+离线验证：`node --test tests/discord-delivery-diagnostics.test.mjs` 覆盖跨来源隔离、截断、只读操作及真实本地 workerd 的行读预算。它不是生产状态或实收证明。
+
+### QQ 来源配置与证明不是同一项检查
+
+授权诊断读取的 `current_qq_source_configuration` 只解释选定来源当前是否包含于 `QQ_ALLOWED_SOURCE_IDS`；未指定来源时使用当前诊断读取者的来源。不列出允许列表或其他来源标识，新增观察只读取这一配置字段，不增加 SQL、alarm、网关或证明读取。
+
+- `source_allowed_in_configuration: false` / `source_not_in_allowlist` 表示来源未在明确列表中；空列表或未配置列表均不允许任何来源。这能解释为何新鲜的 `initialize` 证明仍可能伴随 `source_unverified`，但当前配置不是历史事件原因的独立证明。
+- `true` / `source_in_allowlist` 只说明列表成员关系，不代表 QQ 已启用、项目允许、证明有效、当前会话已授权、权限/能力满足或通知已送达。
+- 非法配置或超过 64 KiB 的诊断解析预算返回 `null` / `configuration_unavailable`，不是确认允许或拒绝。诊断预算不改变实际准入逻辑。
+
+该字段保留原有准入行为和 `source_unverified` 回执代码；不会修改列表、重新授权、激活、刷新证明或补发。现有 `current_source_verifications` 继续负责证明新鲜度，两个字段应分开解读。
+
+## 已过期 alarm 的常规调度恢复
+
+Cloudflare [alarm 文档](https://developers.cloudflare.com/durable-objects/api/alarms/)说明：失败后按从 2 秒开始的指数退避最多重试 6 次，执行至少一次；运行中的 alarm 通常在 `getAlarm()` 中表现为 `null`。SQLite [存储文档](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/)还说明维护或故障转移可能延迟约一分钟。过去的时间戳可能代表尚未执行的重试，因此不能每次看到轻微过期就重设。
+
+常规 `schedule()` 仅在已经找到有限的、经过原有通道门控的工作期限时，将 **超过 5 分钟** 的旧 alarm 时间戳替换为当前计算的合法期限。五分钟是高于名义累计退避 126 秒加一分钟故障转移的保守容忍值，不是证明宿主已耗尽重试的 SLA；处理器耗时并无这里可依赖的上界。更早的未来 alarm 和过期不超过五分钟的 alarm 保持原样，避免持续输入推迟现有唤醒。
+
+- 原有禁用、隔离、退避和通道期限计算不变；没有工作时不创建 alarm。
+- 不在只读诊断、异常捕获或配额失败中重设，不新增无限后台重试或空转。
+- 完全相同的已接受事件仍走既有重复分支，仅调用常规调度并返回原回执；不创建事件、revision、outbox 或再次触发 QQ 准入。内容或通知模式不同仍冲突，不可用来“唤醒”调度器。
+- 只有已获准且原回执明确仍为排队、尝试次数为零时，才可按既有授权重交完全相同的事件进行恢复。未知/隔离结果不自动重发；至少一次 alarm 调用不等于允许消息重复发送。
+
+`tests/stale-alarm-recovery.test.mjs` 使用真实生产 OwnerCore 方法离线验证重复事件恢复、一次发送、未知结果隔离、未来/短过期保留、退避、禁用、空队列和只读诊断不变。
