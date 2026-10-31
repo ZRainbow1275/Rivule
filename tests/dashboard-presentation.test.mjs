@@ -35,6 +35,15 @@ test('PA canvas has native auth forms, honest preview, accessible controls and r
   assert.equal([...html.matchAll(/fetch\(/g)].length, 8); // existing scoped clients plus unbound usage-preference client
 });
 
+test('short windows give the complete card a user-scrollable viewport without shrinking its content', () => {
+  const html = ownerDashboardHtml('testnonce');
+  const shortRule = '@media(max-height:650px){.pa{overflow-y:auto;scroll-padding-block:8px}.pa>.card-body{flex:0 0 auto;overflow:visible}.pa>.work-nav{flex-shrink:0}}';
+  assert.ok(html.includes(shortRule));
+  assert.ok(html.indexOf(shortRule) > html.lastIndexOf('body[data-icon=large]'));
+  // Desktop retains its existing independently scrollable body; native fixture checks geometry and wheel reachability.
+  assert.match(html, /\.card-body\{flex:1;min-height:0;overflow:auto/);
+});
+
 test('expired session removes prior data and offers owner verification', async () => {
   const c = clientFixture(async () => ({ status: 401 }));
   c.get('items').append('old-private-snapshot'); await c.load();
