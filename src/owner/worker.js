@@ -28460,7 +28460,7 @@ var OwnerTerminal = class extends DurableObject {
                     let qq = dashboardProducerStatus(null);
                     try { proof = readDashboardSourceProof(this.ctx.storage, source, canonical([bindings.ownerId, bindings.publicOrigin, source, context[source.source_id] ?? null]), now, [source.source_id]); } catch {}
                     try { qq = dashboardProducerStatus(QQBridgeQueue.producerSnapshot(this.ctx.storage, now)); } catch {}
-                    return { source: proof, qq, observed_at: new Date(now).toISOString() };
+                    return { source: proof, qq, qq_source_configuration: readQQSourceConfiguration(this.env, source.source_id), observed_at: new Date(now).toISOString() };
                 },
                 manageConversation: async (source,action,args,admissionGuard)=>{
                     const bridge=await this.ensureConversationBridge();

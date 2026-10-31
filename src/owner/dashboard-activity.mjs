@@ -39,7 +39,7 @@ export function readDashboardActivity(storage, bindings, source, query, now = Da
     if(!statuses.has(p.source_status) || !kinds.has(p.kind) || !Number.isFinite(Date.parse(p.occurred_at))) throw Error('activity_unavailable');
     // Read only status enums from jobs for this exact receipt. Never payload/error/message IDs.
     const delivery=tables.has('outbox') ? rows('SELECT status FROM outbox WHERE receipt=? ORDER BY id DESC LIMIT 10',row.receipt).map(r=>r.status) : [];
-    const known=new Set(['pending','sending','sent','failed','uncertain','superseded','cancelled','blocked','dead_letter','coalesced','suppressed']);
+    const known=new Set(['pending','queued','retry_wait','sending','sent','failed','uncertain','superseded','cancelled','blocked','dead_letter','coalesced','suppressed']);
     base.items.push({revision:row.revision,kind:p.kind,source_status:p.source_status,summary:dashboardText(p.summary),phase_label:dashboardText(p.phase_label,100),progress:dashboardProgress(p.progress),occurred_at:p.occurred_at,received_at:new Date(row.received_at).toISOString(),projection_applied:row.decision==='applied',delivery:delivery.length? [...new Set(delivery.map(s=>s==='sending'?'uncertain':known.has(s)?s:'unknown'))]:['not_recorded']});
   }
   return base;

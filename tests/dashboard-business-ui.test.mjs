@@ -102,3 +102,15 @@ test('invalid budget focuses its associated input without a request',async()=>{
  c.get('business-budget').listeners.submit({preventDefault(){}});await flush();
  assert.equal(c.document.activeElement.id,'budget-minutes');assert.equal(c.calls.length,1);
 });
+
+test('QQ runtime values remain QQ-only and missing budgets never fabricate usage or trigger another API',async()=>{
+ for(const missing of [false,true]){
+  const data=ready();data.settings.cloudflare={usage_percent:87,remaining:1234};
+  if(missing){data.settings.budget={};data.settings.notification={};}
+  const c=setup(async()=>data);await c.open();
+  assert.equal(c.get('business-remaining').textContent,missing?'待确认':'10 分钟');
+  assert.equal(c.get('business-daily').textContent,missing?'待确认':'95 / 100');
+  assert.deepEqual(c.calls.map(x=>[x.url,x.options.method]),[['/dashboard/qq-settings','GET']]);
+  assert.doesNotMatch(qqSettingsClient.toString(),/cloudflare-usage-status|usage_percent/,'QQ client must not overwrite the separate unknown Cloudflare usage notice');
+ }
+});

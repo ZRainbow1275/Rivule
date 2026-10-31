@@ -32,7 +32,7 @@ test('PA canvas has native auth forms, honest preview, accessible controls and r
   assert.match(html, /aria-controls="settings"/); assert.match(html, /<dialog/);
   assert.match(html, /创建时间<\/dt><dd>未知/); assert.match(html, /预览 · 未连接/);
   assert.doesNotMatch(html, /innerHTML|sessionStorage|(?:src|href)="https?:\/\//);
-  assert.equal([...html.matchAll(/fetch\(/g)].length, 7); // selected reads, task picker, QQ, task/conversation management, display cancel and review
+  assert.equal([...html.matchAll(/fetch\(/g)].length, 8); // existing scoped clients plus unbound usage-preference client
 });
 
 test('expired session removes prior data and offers owner verification', async () => {
@@ -116,7 +116,7 @@ test('only fresh bounded source evidence enables full color; channel is not a PA
  const connection={source:{status:'verified',evidence_kind:'read_probe',last_verified_at:'2026-10-22T15:00:00Z',proof_max_age_ms:86400000},qq:{status:'active',scope:'owner_producer_only'},observed_at:'2026-10-22T15:01:00Z'};
  for(const [change,expected] of [[{},'active'],[{evidence_kind:'historical_task'},'unknown'],[{proof_max_age_ms:86400001},'unknown'],[{last_verified_at:'2026-10-20T00:00:00Z'},'unknown'],[{status:'stale'},'warning'],[{status:'revoked'},'warning']]) {
   const c=clientFixture(async()=>({status:200,ok:true,json:async()=>({state:'connected',items:[],connection:{...connection,source:{...connection.source,...change}}})}));
-  await c.load(); assert.equal(c.get('zot-card').attributes['data-state'],expected); assert.equal(c.get('qq-channel').textContent,'生产端已启用');
+  await c.load(); assert.equal(c.get('zot-card').attributes['data-state'],expected); assert.equal(c.get('qq-channel').textContent,'生产端已启用 · 来源许可待确认');
  }
 });
 
@@ -395,7 +395,7 @@ test('in-flight data refresh cannot wipe picker state or focus',async()=>{
  await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();const row=c.get('picker-rows').children[0];await c.load();assert.equal(c.get('task-picker').open,true);assert.equal(c.get('picker-rows').children[0],row);c.hide();await flushPicker();
 });
 test('empty real PA cards expose scoped picker buttons, not fabricated task rows',async()=>{
- const calls=[];const c=clientFixture(async(path,options)=>{calls.push([path,options]);return ok(path==='/dashboard/data'?{items:[],sources:[{source_id:'muse-main',display_name:'Muse',items:[]}]}:pickerMeta());});await c.load();const card=c.get('canvas').children.at(-1),button=card.children.at(-1).children[0];assert.equal(button.textContent,'选择已上报任务');assert.equal(card.attributes['data-palette'],'teal');assert.match(card.children[2].children[1].textContent,/不代表此 PA 没有工作/);await button.listeners.click();assert.match(c.get('picker-title').textContent,/Muse/);assert.equal(calls.at(-1)[0],'/dashboard/task-picker');c.hide();await flushPicker();
+ const calls=[];const c=clientFixture(async(path,options)=>{calls.push([path,options]);return ok(path==='/dashboard/data'?{items:[],sources:[{source_id:'muse-main',display_name:'Muse',items:[]}]}:pickerMeta());});await c.load();const card=c.get('canvas').children.at(-1),button=card.children.at(-1).children[0];assert.equal(button.textContent,'选择已上报任务');assert.equal(card.attributes['data-palette'],'teal');assert.match(card.children[2].children.find(n=>n.className==='empty').textContent,/不代表此 PA 没有工作/);await button.listeners.click();assert.match(c.get('picker-title').textContent,/Muse/);assert.equal(calls.at(-1)[0],'/dashboard/task-picker');c.hide();await flushPicker();
 });
 test('picker grants use fresh random request IDs and cancellation cannot target a later dialog',async()=>{
  const calls=[];const c=clientFixture(async(path,options)=>{calls.push([path,options]);return ok(path==='/dashboard/task-picker'?pickerMeta():path.endsWith('/cancel')?{state:'cancelled'}:pickerPage());});
@@ -430,4 +430,182 @@ test('background session check preserves open chooser but immediately clears it 
  await c.load();await c.get('choose-tasks').listeners.click({});await c.get('picker-access').listeners.click();const row=c.get('picker-rows').children[0];
  [...timers.values()].find(t=>t.ms===30000).fn();await flushPicker();assert.equal(dataReads,2);assert.equal(c.get('task-picker').open,true);assert.equal(c.get('picker-rows').children[0],row);
  revoked=true;[...timers.values()].find(t=>t.ms===30000).fn();await flushPicker();assert.equal(dataReads,3);assert.equal(c.get('task-picker').open,false);assert.equal(c.get('picker-rows').children.length,0);assert.equal(c.get('controls').hidden,true);c.hide();
+});
+
+ test('QQ producer readiness never substitutes for selected-source configuration or actual delivery',async()=>{
+ const proof={status:'verified',evidence_kind:'read_probe',last_verified_at:'2026-10-22T15:00:00Z',proof_max_age_ms:86400000};
+ const config={scope:'current_source_allowlist_only_not_delivery_authorization_or_historical_cause',source_id:'zot-main',source_allowed_in_configuration:false};
+ for(const [patch,label] of [[{},'此来源不在允许名单'],[{source_allowed_in_configuration:true},'来源在允许名单'],[{source_allowed_in_configuration:null},'来源许可待确认'],[{source_allowed_in_configuration:'true'},'来源许可待确认'],[{source_id:'other'},'来源许可待确认'],[{scope:'all_authorized'},'来源许可待确认']]){
+  const c=clientFixture(async()=>({status:200,ok:true,json:async()=>({items:[],connection:{source:proof,qq:{status:'active',scope:'owner_producer_only'},qq_source_configuration:{...config,...patch},observed_at:'2026-10-22T15:01:00Z'}})}));
+  await c.load();assert.equal(c.get('zot-card').attributes['data-state'],'active','proof remains independent');assert.equal(c.get('qq-channel').textContent,'生产端已启用 · '+label);
+  const opener=c.get('capability-list').children[2].children[0];opener.listeners.click({preventDefault(){}});assert.equal(c.get('detail-content').children[0].textContent,'生产端已启用 · '+label);assert.match(c.get('detail-content').children[1].textContent,/实际投递见回执/);
+  assert.doesNotMatch(c.get('qq-channel').textContent,/已送达|可发送|已授权/);
+ }
+});
+ test('QQ allowed configuration does not hide paused producer and is cleared on session loss',async()=>{
+ let authorized=true;const c=clientFixture(async()=>authorized?{status:200,ok:true,json:async()=>({items:[],connection:{qq:{status:'paused',scope:'owner_producer_only'},qq_source_configuration:{scope:'current_source_allowlist_only_not_delivery_authorization_or_historical_cause',source_id:'zot-main',source_allowed_in_configuration:true}}})}:{status:401});
+ await c.load();assert.equal(c.get('qq-channel').textContent,'生产端已暂停 · 来源在允许名单');authorized=false;await c.load();assert.equal(c.get('qq-channel').textContent,'尚未读取');
+ });
+
+ test('secondary source cards use only their own allowlist observation',async()=>{
+ const scope='current_source_allowlist_only_not_delivery_authorization_or_historical_cause',qq={status:'active',scope:'owner_producer_only'};
+ const sources=[{source_id:'muse-main',items:[],connection:{qq,qq_source_configuration:{scope,source_id:'muse-main',source_allowed_in_configuration:false}}},{source_id:'other',items:[],connection:{qq,qq_source_configuration:{scope,source_id:'zot-main',source_allowed_in_configuration:true}}}];
+ const c=clientFixture(async()=>({status:200,ok:true,json:async()=>({items:[],sources})}));await c.load();
+ const cards=c.get('canvas').children.slice(-2);assert.equal(cards[0].children[2].children[1].textContent,'QQ · 生产端已启用 · 此来源不在允许名单');assert.equal(cards[1].children[2].children[1].textContent,'QQ · 生产端已启用 · 来源许可待确认');
+ });
+
+test('activity details distinguish queued, retry wait and unknown without claiming delivery or retrying', async()=>{
+ let reads=0;const c=clientFixture(async()=>{reads++;return {status:200,ok:true,json:async()=>({items:[{state:'available',task_name:'Selected task',activity:{state:'available',items:[{kind:'progress',source_status:'running',summary:'Selected event',delivery:['queued','retry_wait','uncertain','unknown']}]}}]})};});
+ await c.load();const button=c.get('items').children[0].children.find(n=>n.className==='detail-launch');button.listeners.click();
+ const detail=c.get('detail-content').children.map(n=>n.textContent).join('\n');
+ assert.match(detail,/Discord 投递 · 排队中 \/ 等待重试 \/ 结果未知 \/ 未知/);
+ assert.match(detail,/不代表 QQ 投递或接收人已读/);assert.doesNotMatch(detail,/服务端已发送|发送成功/);assert.equal(reads,1);
+});
+
+test('QQ budget metrics explicitly distinguish local attempt/runtime budgets from unknown Cloudflare usage',()=>{
+ const html=ownerDashboardHtml();
+ assert.match(html,/<h3 id="business-title">QQ 任务与通知<\/h3>/);
+ assert.match(html,/<small>QQ 今日剩余通知尝试<\/small>/);
+ assert.match(html,/<small>QQ 连接运行时长剩余<\/small>/);
+ const notice=html.match(/<p id="cloudflare-usage-status">([^<]+)<\/p>/)?.[1];
+ assert.equal(notice,'Cloudflare 实际用量：未知（未接入用量读取）。以下仅为 QQ 通知尝试次数与连接运行时长，不代表 Cloudflare 剩余额度或账单。');
+ assert.doesNotMatch(notice,/%|已使用|剩余[0-9]|已开启提醒/);
+ assert.ok(html.indexOf('id="cloudflare-usage-status"')<html.indexOf('id="business-ready" hidden'),'unknown-usage notice does not depend on QQ management access');
+});
+
+test('successful background reads during a modal never leave a false loading announcement',async()=>{
+ for(const modal of ['detail-dialog','settings','task-picker']){
+  const timers=new Map();let tid=0,reads=0,resolveRead;
+  const c=clientFixture(async()=>{reads++;if(reads===2)return new Promise(resolve=>{resolveRead=resolve;});return ok({items:[{task_name:'Retained task'}]});},undefined,{setTimeout(fn,ms){timers.set(++tid,{fn,ms});return tid;},clearTimeout(id){timers.delete(id);}});
+  await c.load();const previous=c.get('status').textContent;
+  [...timers.values()].find(t=>t.ms===30000).fn();
+  c.get(modal).showModal();resolveRead(ok({items:[{task_name:'New snapshot deferred while modal is open'}]}));await flushPicker();
+  assert.equal(reads,2);assert.equal(c.get(modal).open,true);
+  assert.equal(c.get('refresh').disabled,false,'network request has completed');
+  assert.equal(c.get('status').textContent,previous,'a completed deferred render must not announce an ongoing read');
+  c.hide();
+ }
+});
+
+test('foreground refresh deferred by chooser restores rendered status through cancel until next poll',async()=>{
+ const timers=new Map();let tid=0,reads=0,resolveRead;
+ const c=clientFixture(async()=>{reads++;if(reads===2)return new Promise(resolve=>{resolveRead=resolve;});return ok({items:[{task_name:reads===1?'Old rendered task':'Next rendered task'}]});},undefined,{setTimeout(fn,ms){timers.set(++tid,{fn,ms});return tid;},clearTimeout(id){timers.delete(id);}});
+ await c.load();const previous=c.get('status').textContent;
+ const read=c.load();assert.equal(c.get('status').textContent,'正在读取所选任务快照…');
+ c.get('task-picker').showModal();resolveRead(ok({items:[{task_name:'Deferred task not rendered'}]}));await read;
+ assert.equal(c.get('refresh').disabled,false);assert.equal(c.get('status').textContent,previous);
+ assert.equal(c.get('items').children[0].children[1].textContent,'Old rendered task');
+ c.get('picker-cancel').listeners.click();assert.equal(c.get('status').textContent,previous);
+ [...timers.values()].find(t=>t.ms===30000).fn();await flushPicker();
+ assert.equal(c.get('items').children[0].children[1].textContent,'Next rendered task');c.hide();
+});
+
+test('initial read deferred by chooser does not claim a snapshot was displayed',async()=>{
+ let resolveRead;
+ const c=clientFixture(()=>new Promise(resolve=>{resolveRead=resolve;}));
+ const read=c.load();c.get('task-picker').showModal();resolveRead(ok({items:[{task_name:'Never rendered'}]}));await read;
+ assert.equal(c.get('refresh').disabled,false);assert.equal(c.get('items').children.length,0);
+ assert.equal(c.get('status').textContent,'尚未显示任务快照 · 关闭选择后请重新读取');
+ c.get('picker-cancel').listeners.click();assert.doesNotMatch(c.get('status').textContent,/正在读取|已更新/);c.hide();
+});
+
+test('deferred success preserves newer picker cancellation uncertainty',async()=>{
+ for(const background of [true,false]){
+ const timers=new Map();let tid=0,reads=0,resolveRead;
+ const c=clientFixture(async path=>{
+ if(path==='/dashboard/data'){if(++reads===2)return new Promise(r=>resolveRead=r);return ok({items:[{task_name:'old'}]});}
+ if(path.endsWith('/cancel'))throw Error('offline');
+ return ok({state:'access_required',csrf:'csrf-picker',sources:[{source_id:'zot-main',display_name:'Zot'}],scope:'local_reported_catalog',expires_at:new Date(Date.now()+60000).toISOString(),selected_count:1,limit:20});
+ },undefined,{setTimeout(fn,ms){timers.set(++tid,{fn,ms});return tid;},clearTimeout(id){timers.delete(id);}});
+ await c.load();await c.get('choose-tasks').listeners.click({});
+ const read=background?[...timers.values()].find(t=>t.ms===30000).fn():c.load();
+ c.get('picker-cancel').listeners.click();await flushPicker();assert.match(c.get('status').textContent,/撤销访问结果未确认/);
+ if(background)c.get('settings-toggle').listeners.click();else await c.get('choose-tasks').listeners.click({});resolveRead(ok({items:[{task_name:'new'}]}));await flushPicker();
+ assert.match(c.get('status').textContent,/撤销访问结果未确认/,'must preserve newer cancellation uncertainty');c.hide();
+ }
+});
+
+test('first successful read does not replace a newer explicit view navigation', async () => {
+  for (const view of ['activity','capabilities']) {
+    let resolve;
+    const c=clientFixture(()=>new Promise(r=>{resolve=r;}));
+    const pending=c.load();
+    c.get('view-'+view).listeners.click();
+    resolve({status:200,ok:true,json:async()=>({state:'ready',items:[{state:'available',task_name:'Selected task'}]})});
+    await pending;
+    assert.equal(c.get(view+'-view').hidden,false,'late initial response must preserve '+view);
+    assert.equal(c.get('view-'+view).attributes['aria-pressed'],'true');
+    c.hide();
+  }
+});
+
+test('newer view navigation survives initial failure, retry and repeated refresh', async () => {
+  let reject,mode='pending',reads=0;
+  const c=clientFixture(()=>{reads++;return mode==='pending'?new Promise((_,r)=>{reject=r;}):Promise.resolve(ok({items:[{state:'available',task_name:'Recovered'}]}));});
+  const pending=c.load();c.get('view-activity').listeners.click();await c.load();
+  assert.equal(reads,1);reject(Error('offline'));await pending;
+  assert.equal(c.get('activity-view').hidden,false);assert.match(c.get('status').textContent,/读取失败/);
+  mode='ready';await c.load();await c.load();
+  assert.equal(c.get('activity-view').hidden,false);assert.equal(reads,3);c.hide();
+});
+
+test('authentication and scope invalidation still reset explicit navigation before recovery', async () => {
+  for(const invalid of [401,409]){
+    let mode=200;
+    const c=clientFixture(async path=>path==='/dashboard/task-picker'?ok(pickerMeta()):mode===200?ok({items:[{state:'available',task_name:'Recovered'}]}):{status:mode});
+    await c.load();c.get('view-activity').listeners.click();mode=invalid;await c.load();
+    assert.equal(c.get('capabilities-view').hidden,false);mode=200;await c.load();
+    assert.equal(c.get('tasks-view').hidden,false);c.hide();
+  }
+});
+
+test('changing the preferred view during first read supersedes earlier explicit navigation', async () => {
+  let resolve;const c=clientFixture(()=>new Promise(r=>{resolve=r;}));
+  const pending=c.load();c.get('view-capabilities').listeners.click();
+  c.get('pref-view').listeners.change({target:{value:'activity'}});
+  resolve(ok({items:[{state:'available',task_name:'Selected'}]}));await pending;
+  assert.equal(c.get('activity-view').hidden,false);c.hide();
+});
+
+test('explicit Tasks remains selected when a late initial response has no tasks',async()=>{
+ let resolve;const c=clientFixture(()=>new Promise(r=>{resolve=r;}));const reading=c.load();c.get('view-tasks').listeners.click();resolve(ok({items:[]}));await reading;
+ assert.equal(c.get('tasks-view').hidden,false);assert.equal(c.get('items').children[0].textContent,'还没有已选任务');c.hide();
+});
+
+test('pagehide and visibility interruption preserve newer navigation across initial recovery',async()=>{
+ for(const lifecycle of ['pagehide','visibility']){
+  let resolve,calls=0;const c=clientFixture(()=>++calls===1?new Promise(r=>{resolve=r;}):Promise.resolve(ok({items:[{task_name:'Current'}]})));
+  const reading=c.load();c.get('view-activity').listeners.click();
+  if(lifecycle==='pagehide')c.hide();else c.visible(false);await reading;
+  if(lifecycle==='pagehide')await c.load();else {c.visible(true);await flushPicker();}
+  resolve(ok({items:[{task_name:'Obsolete'}]}));await flushPicker();
+  assert.equal(c.get('activity-view').hidden,false);assert.equal(c.get('items').children[0].children[1].textContent,'Current');assert.equal(calls,2);c.hide();
+ }
+});
+
+test('session expiry resets navigation and cancelled reads cannot restore prior view or private data',async()=>{
+ const timers=new Map();let next=0,mode='initial',release;
+ const c=clientFixture(()=>mode==='pending'?new Promise(r=>{release=r;}):Promise.resolve(ok({items:[{task_name:'Current'}],...(mode==='initial'?{session_expires_at:new Date(Date.now()+5000).toISOString()}: {})})),undefined,{setTimeout(fn,ms){timers.set(++next,{fn,ms});return next;},clearTimeout(id){timers.delete(id);}});
+ await c.load();c.get('view-activity').listeners.click();mode='pending';const reading=c.load();
+ [...timers.values()].find(t=>t.ms>0&&t.ms<=5000).fn();await reading;
+ release(ok({items:[{task_name:'Obsolete'}]}));await flushPicker();
+ assert.equal(c.get('capabilities-view').hidden,false);assert.equal(c.get('items').children.length,0);
+ mode='recovered';await c.load();assert.equal(c.get('tasks-view').hidden,false);c.hide();
+});
+
+test('picker401 clears explicit navigation ownership and stale read cannot restore work',async()=>{
+ let release,mode='pending';const c=clientFixture(async path=>path==='/dashboard/data'?(mode==='pending'?new Promise(r=>{release=r;}):ok({items:[{task_name:'Recovered'}]})):path.endsWith('/access')?{status:401,ok:false}:ok(pickerMeta()));
+ await c.get('choose-tasks').listeners.click({});const reading=c.load();c.get('view-activity').listeners.click();
+ await c.get('picker-access').listeners.click();await reading;release(ok({items:[{task_name:'Obsolete'}]}));await flushPicker();
+ assert.equal(c.get('items').children.length,0);assert.equal(c.get('controls').hidden,true);
+ mode='recovered';await c.load();assert.equal(c.get('tasks-view').hidden,false);c.hide();
+});
+
+test('preference reset and subsequent explicit navigation honor the latest action',async()=>{
+ for(const chooseAfterReset of [false,true]){
+  let release;const c=clientFixture(()=>new Promise(r=>{release=r;}));const reading=c.load();c.get('view-activity').listeners.click();c.get('settings-reset').listeners.click();
+  if(chooseAfterReset)c.get('view-capabilities').listeners.click();
+  release(ok({items:[{task_name:'Selected'}]}));await reading;
+  assert.equal(c.get((chooseAfterReset?'capabilities':'tasks')+'-view').hidden,false);c.hide();
+ }
 });

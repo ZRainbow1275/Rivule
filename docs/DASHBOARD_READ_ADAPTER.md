@@ -72,3 +72,11 @@ Authorization binds owner, application, user, DM, public origin, project allowli
 The read adapter uses SELECT-only SQL with strict persisted identity checks, 25 rows plus one sentinel, stable branch-key pagination and at most 250 scanned branches per traversal. References are never silently evicted: catalog state is capped at 64 KiB and the session at 96 KiB; exceeding capacity returns an explicit error. Opaque request IDs protect cancellation/reopen races, cancellation tombstones are bounded, and logout serializes against session mutations. The UI clears private task data on expiry, revoked selection, logout or visibility loss; polling does not replace an open chooser.
 
 Endpoints: GET `/dashboard/task-picker` (scope only), same-origin JSON POST `/access`, `/page`, `/apply`, `/cancel` under that prefix. Mutations require session CSRF, exact source and opaque request ID; access additionally requires `confirm: true`. Catalog and selection state is stored only inside bounded owner-session records, never in task or outbox tables.
+
+## QQ producer state versus selected-source configuration
+
+The existing authenticated `readConnection` projection now includes `qq_source_configuration`, using the same pure allowlist observer as connection diagnostics. It reads only `QQ_ALLOWED_SOURCE_IDS`, with no added SQL, proof refresh, gateway call, activation, permission or scheduling action. The normal owner identity/source gates run first.
+
+The source-proof badge and color remain about proof freshness only. QQ capability/settings text and secondary source cards separately show producer activation and the exact source's allowlist membership. Exclusion says “此来源不在允许名单”; inclusion says only “来源在允许名单”, not permission to send. Missing, malformed or differently scoped/source-bound data says “来源许可待确认”. Capability detail directs users to receipts for actual delivery; the existing Discord event-log/QQ/read-confirmation distinctions are unchanged. Session loss clears these observations with the existing private workbench data.
+
+Offline tests cover active producer with excluded source and fresh proof, paused producer with included source, unknown/malformed/cross-source projections, existing owner auth gates, zero added SQL and expiry cleanup.

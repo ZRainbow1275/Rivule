@@ -13,3 +13,19 @@ test('cold or missing proof reads do not initialize storage or schedule alarms',
  const storage={put(){throw Error('write forbidden');},setAlarm(){throw Error('alarm forbidden');},sql:{exec(sql){calls++;assert.match(sql,/^SELECT /);return {toArray:()=>sql.includes('sqlite_master')?[{name:'source_connections'}]:sql.includes('pragma_table_info')?columns.map(name=>({name})):[]};}}};
  assert.equal(readDashboardSourceProof(storage,source,'binding',now).status,'unknown');assert.equal(calls,3);
 });
+
+import {readFileSync} from 'node:fs';
+import {readQQSourceConfiguration} from '../src/owner/qq-source-diagnostics.mjs';
+test('actual dashboard readConnection adds source membership behind identity gates with no extra SQL',async()=>{
+ const text=readFileSync(new URL('../src/owner/worker.js',import.meta.url),'utf8'),a=text.lastIndexOf('                readConnection: async source => {'),b=text.indexOf('\n                manageConversation:',a);
+ const callback=text.slice(a,b).trim().replace(/^readConnection: /,'').replace(/,$/,'');
+ const f=fixture();let configReads=0,identityChecks=0;
+ const env=new Proxy({}, {get(_t,k){assert.equal(k,'QQ_ALLOWED_SOURCE_IDS');configReads++;return '[]';}});
+ const source={source_id:'zot-main',enabled:true},bindings={sources:[source]};
+ const owner={env,ctx:{storage:f.storage}};
+ const read=new Function('readonlySource','readonlyIdentity','readonlyTables','bindings','__ownerUiOverlay','canonical','dashboardProducerStatus','readDashboardSourceProof','QQBridgeQueue','readQQSourceConfiguration','return ('+callback+');').call(owner,
+  (_b,s)=>{if(s.source_id!=='zot-main')throw Error('not authorized');},()=>{identityChecks++;},()=>new Set(),bindings,{sourceBindingContexts:async()=>({})},()=> 'expected-private-binding',dashboardProducerStatus,
+  (storage,s,binding,_now,authorized)=>readDashboardSourceProof(storage,s,binding,now,authorized),{producerSnapshot:()=>({active:true})},readQQSourceConfiguration);
+ const value=await read(source);assert.equal(value.source.status,'verified');assert.equal(value.qq.status,'active');assert.equal(value.qq_source_configuration.source_allowed_in_configuration,false);assert.equal(value.qq_source_configuration.reason,'source_not_in_allowlist');assert.equal(f.calls.length,3);assert.equal(configReads,1);assert.equal(identityChecks,1);
+ await assert.rejects(read({source_id:'other',enabled:true}));assert.equal(configReads,1);assert.equal(f.calls.length,3);assert.doesNotMatch(JSON.stringify(value),/private-binding/);
+});

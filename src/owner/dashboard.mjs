@@ -1,3 +1,4 @@
+import {dashboardUsagePreference,isUsagePreferencePath} from './dashboard-usage-preference.mjs';
 import { dashboardConversation, isConversationSettingsPath } from './conversation-controller.mjs';
 import { dashboardBridge, isBridgeSettingsPath } from './bridge-controller.mjs';
 import { TASK_PICKER_VERSION, isTaskPickerPath, dashboardTaskPicker, dashboardDynamicSelections } from './dashboard-task-picker.mjs';
@@ -128,12 +129,13 @@ export async function dashboardResponse(request, { env, bindings, storage, ident
     h.set('location', '/dashboard');h.append('set-cookie', cookie(SESSION_COOKIE, token, SESSION_TTL / 1000, 'Strict'));
     return new Response(null, { status: 303, headers: h });
   }
-  if (!['/dashboard/data', '/dashboard/logout'].includes(url.pathname) && !isQQSettingsPath(url.pathname) && !isTaskPickerPath(url.pathname) && !isBridgeSettingsPath(url.pathname) && !isConversationSettingsPath(url.pathname)) return json('not_found', 404);
+  if (!['/dashboard/data', '/dashboard/logout'].includes(url.pathname) && !isQQSettingsPath(url.pathname) && !isTaskPickerPath(url.pathname) && !isBridgeSettingsPath(url.pathname) && !isConversationSettingsPath(url.pathname) && !isUsagePreferencePath(url.pathname)) return json('not_found', 404);
   if (url.pathname === '/dashboard/data' && request.method !== 'GET' || url.pathname === '/dashboard/logout' && request.method !== 'POST') return json('method_not_allowed', 405);
-  if ((url.pathname === '/dashboard/data' || isQQSettingsPath(url.pathname) || isTaskPickerPath(url.pathname) || isBridgeSettingsPath(url.pathname) || isConversationSettingsPath(url.pathname)) && (request.headers.get('sec-fetch-site') !== 'same-origin' || request.headers.has('origin') && !sameOrigin)) return json('origin_not_accepted', 403);
+  if ((url.pathname === '/dashboard/data' || isQQSettingsPath(url.pathname) || isTaskPickerPath(url.pathname) || isBridgeSettingsPath(url.pathname) || isConversationSettingsPath(url.pathname) || isUsagePreferencePath(url.pathname)) && (request.headers.get('sec-fetch-site') !== 'same-origin' || request.headers.has('origin') && !sameOrigin)) return json('origin_not_accepted', 403);
   const token = readCookie(request, SESSION_COOKIE), sessionKey = token ? 'dashboard:session:' + await digest(token) : null;
   const session = sessionKey && await storage.get(sessionKey);
   if (!session || session.expires <= now() || session.binding !== binding) return json('dashboard_login_required', 401);
+  if (isUsagePreferencePath(url.pathname)) return dashboardUsagePreference(request,{storage,session,sessionKey,binding,ownerBinding:await digest(String(bindings.ownerId)),now,headers});
   if (isConversationSettingsPath(url.pathname)) return dashboardConversation(request,{session,sessionKey,storage,config,now,manageConversation,headers});
   if (isBridgeSettingsPath(url.pathname)) return dashboardBridge(request, {session,sessionKey,storage,config,now,manageBridge,headers});
   if (isTaskPickerPath(url.pathname)) return dashboardTaskPicker(request, {storage,sessionKey,binding,config,now,headers,readCatalog,readSelection,readTestReceipt});

@@ -33,3 +33,10 @@ test('progress preserves real counts, unknown total, rejects manufactured invali
  assert.deepEqual(dashboardProgress({done:4,total:null,unit:'tests'}),{done:4,total:null,unit:'tests'});
  for(const p of [null,{done:2,total:1,unit:'x'},{done:-1,total:null,unit:'x'},{done:1,total:0,unit:'x'},{done:1,total:null,unit:''}])assert.equal(dashboardProgress(p),null);
 });
+
+test('actual queued and retry-wait outbox states stay distinct from unknown outcomes',()=>{
+ const f=fixture();f.delivery([{status:'queued'},{status:'retry_wait'},{status:'queued'},{status:'sending'},{status:'unexpected'}]);
+ const r=f.read();assert.deepEqual(r.items[0].delivery,['queued','retry_wait','uncertain','unknown']);
+ assert.deepEqual(f.calls[3],['SELECT status FROM outbox WHERE receipt=? ORDER BY id DESC LIMIT 10',[f.row.receipt]]);
+ assert.equal(r.delivery_scope,'discord_outbox_not_recipient_confirmation');
+});
