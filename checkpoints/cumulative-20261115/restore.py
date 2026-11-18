@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+from workbench_ui_port import apply_ui
 
 HERE = Path(__file__).resolve().parent
 PUBLIC_COMMIT = "cf7c77fff10906c1a509a5e9db681ba2a13056de"
@@ -67,6 +68,24 @@ PUBLIC_DONORS = {
     "tests/qq-bridge-responses.test.mjs": "e3b0ad1ec2b46c06032576ed3b42a2b8433d98c7ff6bc6a7a3614b8d2b61e1f4",
     "src/owner/notification-policy.mjs": "7419be772a95081af2168787d1303f4ba51e04ae9a74e3c450dd79e57ab66b28",
 }
+
+PUBLIC_UI_TESTS = {
+    "tests/workbench-ui/activity-focus.mjs": "965ae8736d700c2ffa15dad0ea5aa1c198892718ff99eeb9b51815a35e6902a5",
+    "tests/workbench-ui/capability-boundaries.mjs": "30ee4997b796b414ef7aece5782a88bd87d5f9aaa4d76d75fc44385f3fc4ce14",
+    "tests/workbench-ui/expand-focus-tests.mjs": "844cd96dae264b10c04cdc3e8aeefce5a3977468701e12d672576831b9619abb",
+    "tests/workbench-ui/initial-settings.mjs": "e929adb6fcb96c48d4ffb653f33210404c855802c6c269948bd566b9111e6cf4",
+    "tests/workbench-ui/late-dialog-boundaries.mjs": "c728034c1764b16091f651a2e708b146b02229365b6c9e5cb7088b248144a83a",
+    "tests/workbench-ui/pending-focus-boundaries.mjs": "febcc71f202f9f4959b8699b380354ee625e1ab06aecf1c0f15fff0a7e816c99",
+    "tests/workbench-ui/pending-focus-tests.mjs": "c4e8df1d87db759870800098d8b5e53e673e08009134367d2a67ecf6b0a4d6de",
+    "tests/workbench-ui/picker-recovery.mjs": "bb9aba9afa91a054e5d167c9c5fba4dca7bc7e3d2c0308083cad98f5c6e0db5b",
+    "tests/workbench-ui/reading-tests.mjs": "460eb25851662fb18ad3585be7b267a0dabd2ee11a8242b271069173fd16f8b5",
+    "tests/workbench-ui/secondary-details.mjs": "1c41317510e3847d9c338a28407ae761980639661f61c87caf015ce423982e6b",
+    "tests/workbench-ui/secondary-selector.mjs": "73e095a1047b0dcccca405dfc5a2ebe45cfe194355db983beddbbad742309d6a",
+    "tests/workbench-ui/source-state-mixed.mjs": "13b86292bb207ac000f2ee0f850edea1cafe8d1ac7c56f48f1746c86b775bd32",
+    "tests/workbench-ui/source-state.mjs": "57532b596e12b4e52abe32320e32d5007ec150aa3508d332efc42e01c4f9ab2e",
+    "tests/workbench-ui/summary-focus-tests.mjs": "5ea9397b1ed3a317724c9def62e5d7e429634bbaf7feeb0440b270803700956f"
+}
+PUBLIC_DONORS.update(PUBLIC_UI_TESTS)
 
 def public_bytes(root, name):
     expected = PUBLIC_DONORS[name]
@@ -134,6 +153,16 @@ def integrate(work, donor):
     if public_tests.count(anchor) != 1 or anchor in text:
         raise ValueError("Unexpected response identity fixture.")
     path.write_text(text.rstrip() + "\n\n" + public_tests[public_tests.index(anchor):])
+
+    path = work / "src/owner/presentation.mjs"
+    path.write_text(apply_ui(path.read_text(), one))
+
+    for name in PUBLIC_UI_TESTS:
+        output = work / name
+        if output.exists():
+            raise ValueError("A cumulative test already uses this path: " + name)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(public_bytes(donor, name))
 
     shutil.rmtree(work / ".git")
 
