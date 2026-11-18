@@ -307,6 +307,10 @@ export function dashboardClient(brandImages = {}) {
     readingNodes.clear();
     items.replaceChildren();
     if(!model.visible.length) empty(selectedItems.length ? '没有匹配的任务' : '还没有已选任务');
+    if(!model.visible.length && selectedItems.length && (el('task-filter').value!=='all' || el('task-search').value.trim())) {
+      const reset=make('button','清除筛选，查看全部已选任务','detail-launch');reset.setAttribute('type','button');
+      reset.addEventListener('click',()=>{el('task-filter').value='all';el('task-search').value='';renderWorkbench();el('task-search').focus();});items.append(reset);
+    }
     for (const item of model.visible) {
       const card = document.createElement('article'), tag = document.createElement('span'), title = document.createElement('h3'), summary = document.createElement('p'), detail = document.createElement('small');
       card.className = 'task'; tag.className = 'task-tag'; tag.textContent = item.selection_kind === 'verified_test' ? '测试任务' : '所选任务';
@@ -329,7 +333,7 @@ export function dashboardClient(brandImages = {}) {
   }
   for(const name of ['tasks','activity','capabilities']) el('view-'+name).addEventListener('click',()=>switchView(name));
   el('task-search').addEventListener('input',renderWorkbench);el('task-filter').addEventListener('change',renderWorkbench);
-  for(const name of ['running','attention','completed']) el('quick-'+name).addEventListener('click',()=>{el('task-filter').value=name;switchView('tasks');renderWorkbench();el('task-filter').focus();});
+  for(const name of ['running','attention','completed']) el('quick-'+name).addEventListener('click',()=>{el('task-filter').value=name;el('task-search').value='';switchView('tasks');renderWorkbench();el('task-filter').focus();});
   clearWorkbench(); switchView('capabilities');
 
   async function load(background = false) {
