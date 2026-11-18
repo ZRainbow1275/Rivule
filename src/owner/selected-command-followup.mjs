@@ -14,7 +14,7 @@ export function selectedCommandFollowup(sources,query='',stage='all',channel='al
       const log=item.commands;
       if(log?.state!=='available'||!Array.isArray(log.items)){partial=true;continue;}
       if(log.truncated||log.items.length>30)truncated=true;
-      const fields=[name,item.task_name,item.project_name,item.branch_name].map(normalize);
+      const fields=[name,source.source_id,item.task_name,item.project_name,item.branch_name].map(normalize);
       if(!terms.every(t=>fields.some(f=>f.includes(t))))continue;
       const matches=[];
       for(const c of log.items.slice(0,30)){
