@@ -36,7 +36,7 @@ export function selectedTaskDirectory(sources,query='',filter='all',order='recen
       if(filter==='waiting' && !(fresh && (item.source_status==='needs_input'||(Number.isSafeInteger(item.pending_action_count)&&item.pending_action_count>0))))continue;
       if(['running','completed'].includes(filter) && item.source_status!==filter)continue;
       const update=latest(item,source.source_id);
-      const fields=[name,item.task_name,item.project_name,item.branch_name,update.text].map(norm);
+      const fields=[name,source.source_id,item.task_name,item.project_name,item.branch_name,update.text].map(norm);
       if(!terms.every(term=>fields.some(field=>field.includes(term))))continue;
       rows.push({item,name,source_id:source.source_id,peers,update});
     }
