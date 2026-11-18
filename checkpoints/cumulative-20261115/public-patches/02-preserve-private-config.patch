@@ -1,0 +1,253 @@
+diff --git a/docs/AI_HANDOFF.zh.md b/docs/AI_HANDOFF.zh.md
+index 11181ba..aec1fb4 100644
+--- a/docs/AI_HANDOFF.zh.md
++++ b/docs/AI_HANDOFF.zh.md
+@@ -12,7 +12,8 @@ npm ci --ignore-scripts
+ node scripts/install-font.mjs
+ node scripts/build.mjs
+ 
+-使用 config 中的模板，部署 dist/owner 和 dist/gateway 的完整模块与资源。
++新安装或需要补齐配置时运行 node scripts/init-private-config.mjs。看到“已保留”时，先对照模板，只补缺项，不要用模板覆盖已有私人文件。
++确认这次需要部署后，部署 dist/owner 和 dist/gateway 的完整模块与资源。
+ owner 源码在 src/owner，gateway 源码在 src/gateway。
+ 请列出缺少的非敏感配置及由谁完成；账户登录、授权与密钥使用平台的安全入口。
+ 在部署、创建持久访问或发送通知前，按已有授权及平台确认要求执行。
+diff --git a/docs/GETTING_STARTED.zh.md b/docs/GETTING_STARTED.zh.md
+index 980772e..f5d1841 100644
+--- a/docs/GETTING_STARTED.zh.md
++++ b/docs/GETTING_STARTED.zh.md
+@@ -32,7 +32,7 @@ node scripts/build.mjs
+ 
+ 跟着[部署清单](OPERATIONS.md#owner-setup)逐项完成：
+ 
+-1. 从两个配置模板建立私人配置，填入自己的 Worker 名称、服务域名、Cloudflare KV 和 Discord 目标信息
++1. 在源码根目录运行 `node scripts/init-private-config.mjs`，它只建立缺少的私人配置。在新文件填写自己的 Worker 名称、服务域名、Cloudflare KV 和 Discord 目标信息；已有私人文件会原样保留，更新时对照模板补缺项
+ 2. 确认 owner 的 `OwnerTerminal`、gateway 的 `QQGatewayObject`、跨 Worker 的 `QQ_GATEWAY` 绑定和迁移；已有安装保留原命名空间及迁移历史
+ 3. 配置一个来源与允许的项目，选定 MCP OAuth、Muse API 或 HMAC 接入方式。使用服务提供的安全设置入口配置凭据
+ 4. 用构建生成的 owner / gateway 模块完成部署检查；按照[部署与回滚](OPERATIONS.md#release-check)执行发布与回读
+diff --git a/docs/OPERATIONS.md b/docs/OPERATIONS.md
+index 347f8f7..ab4ee9f 100644
+--- a/docs/OPERATIONS.md
++++ b/docs/OPERATIONS.md
+@@ -5,12 +5,15 @@
+ <a id="owner-setup"></a>
+ ## 1. 建立私人配置
+ 
++在源码根目录运行。首次安装会从模板建立两份私人配置；以前配置过的文件会原样保留，缺哪一份才补哪一份。
++
+ ```sh
+-cp config/wrangler.owner.example.json config/wrangler.owner.private.json
+-cp config/wrangler.qq.example.json config/wrangler.qq.private.json
++node scripts/init-private-config.mjs
+ ```
+ 
+-填写自己的 Worker 名称、实际 HTTPS 服务域名、KV 命名空间、Discord 应用公钥、所有者和目标 DM。`PUBLIC_ORIGIN` 不带尾部 `/` 或子路径。配置 `SOURCES_JSON` 和 `ALLOWED_PROJECT_IDS_JSON`，先允许一个来源与一个项目；按[接入方式](INTEGRATIONS.md#connect)准备 OAuth、Muse API 或 HMAC。
++输出「已建立」时，再在新文件中填写自己的 Worker 名称、实际 HTTPS 服务域名、KV 命名空间、Discord 应用公钥、所有者和目标 DM。输出「已保留」时，对照对应模板，仅补本次更新需要的字段，不要用模板覆盖私人文件。此命令只处理本地文件，不登录或部署。若提示无法独占建立或路径不是普通文件，请先核对路径与本地文件系统，不要改用强制复制。
++
++`PUBLIC_ORIGIN` 不带尾部 `/` 或子路径。配置 `SOURCES_JSON` 和 `ALLOWED_PROJECT_IDS_JSON`，先允许一个来源与一个项目；按[接入方式](INTEGRATIONS.md#connect)准备 OAuth、Muse API 或 HMAC。
+ 
+ 私人配置不得提交。公开模板的发送与可选功能开关默认关闭，空允许名单和身份占位值不可直接使用。
+ 
+diff --git a/docs/showcase/start.html b/docs/showcase/start.html
+index 62f18aa..30e6f0f 100644
+--- a/docs/showcase/start.html
++++ b/docs/showcase/start.html
+@@ -41,9 +41,9 @@ node scripts/build.mjs</code></pre></div>
+       </section>
+       <section id="owner" class="guide-step">
+         <div class="step-heading"><span class="step-number">02</span><div><span class="step-owner">服务所有者</span><h2>配置自己的通知入口</h2></div></div>
+-        <p>准备 Cloudflare 账号、自己的 Discord 应用和 bot，以及一个准备接入的助手。先复制模板，再填写你自己的配置。</p>
+-        <div class="command-block"><div class="command-bar"><span>建立私人配置</span><button type="button" data-copy="config-commands" data-label="复制模板命令">复制模板命令</button></div><pre id="config-commands"><code>cp config/wrangler.owner.example.json config/wrangler.owner.private.json
+-cp config/wrangler.qq.example.json config/wrangler.qq.private.json</code></pre></div>
++        <p>准备 Cloudflare 账号、自己的 Discord 应用和 bot，以及一个准备接入的助手。在源码根目录运行下面的命令。它只建立缺少的本地配置，不会部署。</p>
++        <div class="command-block"><div class="command-bar"><span>建立本地私人配置</span><button type="button" data-copy="config-commands" data-label="复制初始化命令">复制初始化命令</button></div><pre id="config-commands"><code>node scripts/init-private-config.mjs</code></pre></div>
++        <p>看到「已建立」再填写新文件；「已保留」表示原配置没有改动。更新已有服务时请对照模板补缺项，不要用模板覆盖原文件。</p>
+         <ol class="guide-checklist">
+           <li><strong>确定账户与目标</strong><span>填入 Worker 名称、实际服务域名、KV 和 Discord 的应用 / 用户 / DM 信息</span></li>
+           <li><strong>配置来源与项目</strong><span>先选一个来源和一个允许的项目，决定使用 MCP OAuth 还是 HTTP 接入</span></li>
+diff --git a/scripts/init-private-config.mjs b/scripts/init-private-config.mjs
+new file mode 100644
+index 0000000..a3ba866
+--- /dev/null
++++ b/scripts/init-private-config.mjs
+@@ -0,0 +1,70 @@
++// Initialize local Rivule configs. Never read, replace or chmod an existing config.
++import { linkSync, lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
++import { join } from 'node:path';
++import { fileURLToPath } from 'node:url';
++
++const config = fileURLToPath(new URL('../config/', import.meta.url));
++const names = ['owner', 'qq'];
++
++function alreadyPresent(path, label) {
++  const current = lstatSync(path, { throwIfNoEntry: false });
++  if (!current) return false;
++  if (!current.isFile()) throw new Error(`${label} 已存在但不是普通文件；保持原样，请自行核对。`);
++  return true;
++}
++
++function prepare(name) {
++  const label = `config/wrangler.${name}.private.json`;
++  const path = join(config, `wrangler.${name}.private.json`);
++  if (alreadyPresent(path, label)) return { path, label, present: true };
++  const example = `wrangler.${name}.example.json`;
++  if (!lstatSync(join(config, example), { throwIfNoEntry: false })?.isFile()) {
++    throw new Error(`找不到普通模板文件 config/${example}；未建立任何文件。`);
++  }
++  const bytes = readFileSync(join(config, example));
++  try { JSON.parse(bytes.toString('utf8')); } catch {
++    throw new Error(`模板 config/${example} 不是有效 JSON；未建立任何文件。`);
++  }
++  return { path, label, bytes, present: false };
++}
++
++function main() {
++  if (process.argv.length > 2) {
++    if (process.argv.length === 3 && ['--help', '-h'].includes(process.argv[2])) {
++      console.log('用法：node scripts/init-private-config.mjs\n只在缺少 owner 或 QQ 私人配置时建立本地文件，保留已有文件。不部署。');
++      return;
++    }
++    throw new Error('不支持此参数；未建立任何文件。使用 --help 查看用法。');
++  }
++  // Check both destinations and all needed inputs before publishing either file.
++  const plans = names.map(prepare);
++  let stage;
++  try {
++    if (plans.some(plan => !plan.present)) stage = mkdtempSync(join(config, '.rivule-init-'));
++    for (const [i, plan] of plans.entries()) {
++      if (!plan.present) {
++        const ready = join(stage, String(i));
++        writeFileSync(ready, plan.bytes, { flag: 'wx', mode: 0o600 });
++        try {
++          // Publish a complete file without replacing an existing directory entry.
++          // Staging under config/ keeps both paths on the same filesystem.
++          linkSync(ready, plan.path);
++        } catch (error) {
++          if (error.code !== 'EEXIST' || !alreadyPresent(plan.path, plan.label)) {
++            const code = error.code || 'I/O';
++            throw new Error(`无法独占建立 ${plan.label}（${code}）。请检查本地目录及文件系统支持，不要覆盖现有文件。`);
++          }
++          plan.present = true; // Another initializer finished this file first.
++        }
++      }
++      console.log(`${plan.present ? '已保留' : '已建立'} ${plan.label}`);
++    }
++  } finally {
++    if (stage) rmSync(stage, { recursive: true, force: true });
++  }
++}
++
++try { main(); } catch (error) {
++  console.error(`私人配置初始化未完成：${error.message}`);
++  process.exitCode = 1;
++}
+diff --git a/tests/init-private-config.test.mjs b/tests/init-private-config.test.mjs
+new file mode 100644
+index 0000000..f5a7881
+--- /dev/null
++++ b/tests/init-private-config.test.mjs
+@@ -0,0 +1,104 @@
++// Test the actual copyable command printed on each page, in disposable synthetic installs.
++// No account, network, real private configuration, deployment or third-party packages.
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {spawn, spawnSync} from 'node:child_process';
++import {chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync} from 'node:fs';
++import {fileURLToPath} from 'node:url';
++import {join} from 'node:path';
++import {tmpdir} from 'node:os';
++
++const root=fileURLToPath(new URL('../',import.meta.url));
++const init='scripts/init-private-config.mjs', suffixes=['owner','qq'];
++const file=(key,kind)=>'config/wrangler.'+key+'.'+kind+'.json';
++const text=(dir,rel)=>readFileSync(join(dir,rel),'utf8');
++function instructions(channel) {
++  if(channel==='web') return text(root,'docs/showcase/start.html').match(/<pre id="config-commands"><code>([\s\S]*?)<\/code><\/pre>/)[1].trim();
++  return text(root,'docs/OPERATIONS.md').split('<a id="owner-setup"></a>')[1].match(/```sh\n([\s\S]*?)\n```/)[1].trim();
++}
++function run(dir,channel,extra=[]) {
++  const command=instructions(channel);
++  if (command==='node '+init) return spawnSync(process.execPath,[init,...extra],{cwd:dir,encoding:'utf8'});
++  // The two EXACT predecessor copy commands may run only inside the synthetic fixture.
++  const base=suffixes.map(key=>'cp '+file(key,'example')+' '+file(key,'private'));
++  assert.deepEqual(command.split('\n'),base,'unexpected guide command; must review before execution');
++  assert.deepEqual(extra,[]);
++  const runs=suffixes.map(key=>spawnSync('cp',[file(key,'example'),file(key,'private')],{cwd:dir,encoding:'utf8'}));
++  return {status:runs.at(-1).status,stdout:runs.map(x=>x.stdout).join(''),stderr:runs.map(x=>x.stderr).join('')};
++}
++function fixture(t) {
++  const dir=mkdtempSync(join(tmpdir(),'Rivule config QA '));t.after(()=>rmSync(dir,{recursive:true,force:true}));
++  for(const path of ['scripts','config'])mkdirSync(join(dir,path));
++  for(const key of suffixes)cpSync(join(root,file(key,'example')),join(dir,file(key,'example')));
++  if(existsSync(join(root,init)))cpSync(join(root,init),join(dir,init));
++  return dir;
++}
++const synthetic=key=>JSON.stringify({test_fixture:'PRESERVE_ME_'+key,custom:true})+'\n';
++function setExisting(dir,key) {
++  const p=join(dir,file(key,'private'));writeFileSync(p,synthetic(key));
++  // Stable timestamps & distinctive POSIX mode establish that even an identical rewrite wasn't made.
++  if(process.platform!=='win32')chmodSync(p,0o640);
++  utimesSync(p,new Date('2010-01-01T00:00:00Z'),new Date('2010-01-01T00:00:00Z'));
++  const s=statSync(p);return {text:text(dir,file(key,'private')),mode:s.mode,mtimeMs:s.mtimeMs};
++}
++function checkExisting(dir,key,a) {
++  const s=statSync(join(dir,file(key,'private')));
++  assert.deepEqual({text:text(dir,file(key,'private')),mode:s.mode,mtimeMs:s.mtimeMs},a,'must preserve '+key+' bytes, mode and mtime');
++}
++const ok=r=>assert.equal(r.status,0,r.stderr);
++const expectedFiles=suffixes.flatMap(k=>['example','private'].map(kind=>file(k,kind).split('/')[1])).sort();
++const nonzero=r=>assert.notEqual(r.status,0,'expected non-zero exit');
++for(const channel of ['web','operations']){
++  test(channel+': first install generates exact packaged template bytes without changing the templates',t=>{
++    const d=fixture(t),before=suffixes.map(k=>readFileSync(join(d,file(k,'example'))));ok(run(d,channel));
++    suffixes.forEach((k,i)=>{assert.deepEqual(readFileSync(join(d,file(k,'private'))),before[i]);assert.deepEqual(readFileSync(join(d,file(k,'example'))),before[i]);});
++    assert.deepEqual(readdirSync(join(d,'config')).sort(),expectedFiles);
++  });
++  test(channel+': repeating the pasted command preserves two customized files byte-for-byte and metadata',t=>{
++    const d=fixture(t);ok(run(d,channel));const existing=suffixes.map(k=>setExisting(d,k));
++    const r=run(d,channel);ok(r);suffixes.forEach((k,i)=>checkExisting(d,k,existing[i]));
++    assert.doesNotMatch(r.stdout+r.stderr,/PRESERVE_ME_/);
++  });
++  for(const keep of suffixes)test(channel+': previous '+keep+' configuration stays intact; only its missing peer is created',t=>{
++    const d=fixture(t),saved=setExisting(d,keep),missing=suffixes.find(k=>k!==keep);const r=run(d,channel);ok(r);
++    checkExisting(d,keep,saved);assert.equal(text(d,file(missing,'private')),text(d,file(missing,'example')));
++    assert.match(r.stdout,new RegExp('已保留.*'+keep));assert.match(r.stdout,new RegExp('已建立.*'+missing));
++  });
++}
++test('all four instructions teach one guarded operation; the web copy button targets that exact command',()=>{
++  const web=text(root,'docs/showcase/start.html');assert.match(web,/data-copy="config-commands"/);assert.equal(instructions('web'),'node '+init);
++  assert.equal(instructions('operations'),instructions('web'));
++  for(const p of ['docs/AI_HANDOFF.zh.md','docs/GETTING_STARTED.zh.md']){assert.ok(text(root,p).includes('node '+init),p);assert.match(text(root,p),/保留/,p);}
++});
++test('fresh private files are owner-only on POSIX; existing modes are never adjusted',t=>{
++  if(process.platform==='win32')return t.skip('POSIX modes not available');
++  const d=fixture(t);ok(run(d,'operations'));for(const k of suffixes)assert.equal(statSync(join(d,file(k,'private'))).mode & 0o077,0);
++});
++test('a directory in place of a private file is preserved and reported before creating its missing peer',t=>{
++  const d=fixture(t),bad=join(d,file('qq','private'));mkdirSync(bad);writeFileSync(join(bad,'existing.txt'),'keep');
++  const r=run(d,'operations');nonzero(r);assert.match(r.stderr,/不是普通文件/);assert.equal(existsSync(join(d,file('owner','private'))),false);assert.deepEqual(readdirSync(bad),['existing.txt']);
++});
++for(const state of ['missing','invalid'])test('second template '+state+': reports it before creating the first private file',t=>{
++  const d=fixture(t),bad=join(d,file('qq','example'));
++  if(state==='missing')unlinkSync(bad);else writeFileSync(bad,'not JSON — SENTINEL_CONTENT');
++  const r=run(d,'web');nonzero(r);for(const k of suffixes)assert.equal(existsSync(join(d,file(k,'private'))),false);
++  assert.doesNotMatch(r.stderr,/SENTINEL_CONTENT/);
++});
++test('a rerun with both files present does not need template contents and only reports file paths',t=>{
++  const d=fixture(t),saved=suffixes.map(k=>setExisting(d,k));for(const k of suffixes)unlinkSync(join(d,file(k,'example')));
++  const r=run(d,'web');ok(r);suffixes.forEach((k,i)=>checkExisting(d,k,saved[i]));assert.doesNotMatch(r.stdout+r.stderr,/PRESERVE_ME_/);
++});
++test('a second invocation in another process cannot replace a config during concurrent initialization',async t=>{
++  const d=fixture(t),owner=setExisting(d,'owner');assert.ok(existsSync(join(d,init)),'no guarded initializer on this revision');
++  const results=await Promise.all(Array.from({length:6},()=>new Promise((resolve,reject)=>{
++    const c=spawn(process.execPath,[init],{cwd:d,stdio:['ignore','pipe','pipe']});let out='',err='';
++    c.stdout.on('data',b=>out+=b);c.stderr.on('data',b=>err+=b);c.on('error',reject);c.on('close',code=>resolve({code,out,err}));})));
++  for(const r of results)assert.equal(r.code,0,r.err);
++  assert.equal(results.filter(r=>/已建立 config\/wrangler\.qq\.private\.json/.test(r.out)).length,1);
++  checkExisting(d,'owner',owner);assert.equal(text(d,file('qq','private')),text(d,file('qq','example')));assert.deepEqual(readdirSync(join(d,'config')).sort(),expectedFiles);
++});
++test('--help and an unrecognized option write nothing',t=>{
++  const d=fixture(t);assert.ok(existsSync(join(d,init)),'no guarded initializer on this revision');
++  for(const f of ['--help','--other']){const r=spawnSync(process.execPath,[init,f],{cwd:d,encoding:'utf8'});if(f==='--help')ok(r);else nonzero(r);}
++  assert.deepEqual(readdirSync(join(d,'config')).sort(),suffixes.map(k=>file(k,'example').split('/')[1]).sort());
++});

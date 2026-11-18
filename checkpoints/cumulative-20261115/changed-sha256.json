@@ -1,0 +1,19 @@
+{
+  "docs/AI_HANDOFF.zh.md": "f7af150c1db00bcc03d150743bf5d638841d1c307feac657bb25adb5d42a1970",
+  "docs/GETTING_STARTED.zh.md": "c51e29e5b6339ddc57629f69dae0ba4e767b5578762721b5769e770f639746aa",
+  "docs/OPERATIONS.md": "905cb765a857322dbc139603adeafa97596035e720ec2f819ca375820e1944b6",
+  "docs/showcase/start.html": "85b449ab84b706539b1c91605b02a4b3b4af882c28766793074e5933b88956b4",
+  "scripts/build-showcase.mjs": "f519ee6a357946dc83ba877eed145049f02d66170bfd8c63debc31b117921b8c",
+  "scripts/init-private-config.mjs": "7cc86be46726fe63775661355143f59a3e287a502ddde27bb1c9228c3579f652",
+  "src/owner/dashboard-activity.mjs": "b8247effb1f08163a93636f20cc49761ecbe9bae2da7a3f572256f1968e0043c",
+  "src/owner/notification-policy.mjs": "5c01ec7b3e0ba69e4255a1a05fdaaaec34a3d26baa73a33e343ecea8f85a0409",
+  "src/owner/presentation.mjs": "beb68bd34662720a4177fc7ab8fec0e4b28fd9e3282c9ce67366bbb3a6213ee6",
+  "src/owner/qq-command-adapter.mjs": "d40b37ad33e9665de34bea0e44635094ca720cb5416422fa91270d87da22ffa6",
+  "src/owner/qq-integration.mjs": "086e9d69c0bdd58f3f6c5165b389f0d8d5b1685b79ed80d4a30b7cd20cc171ab",
+  "tests/dashboard-presentation.test.mjs": "b1be22584edb73e5c15b2871403a3bb735666a11553940290514c579524eca22",
+  "tests/dashboard-text-boundaries.test.mjs": "a4b643febdfcef15ee68c76fd96688c36bda7db4c54f0274bab31222b85f048b",
+  "tests/init-private-config.test.mjs": "d813866bc0869030c124f1e418b37bd22f466b70b706491ca003f3cb01940315",
+  "tests/qq-bridge-responses.test.mjs": "5851d6441b6936dc6c6af75fc4a45414b9b40455bbc41e4bc0519617d027edef",
+  "tests/qq-command-adapter.test.mjs": "4cf575d91214486bc1a7b5ad5a3f857b12b67517eb5eff8de9e3426cb9d6f67c",
+  "tests/showcase-provenance.test.mjs": "839bf47c7034bd10e5279e96747138d0dfeb153898abaf815e4bddeeb7aad2b3"
+}
