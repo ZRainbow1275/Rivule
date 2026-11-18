@@ -61,10 +61,11 @@ export function selectedWorkbench(items, filter = 'all', query = '') {
   const all = Array.isArray(items) ? items : [];
   const attention = item => item.stale === true || ['needs_input','failed'].includes(item.source_status) || (Number.isSafeInteger(item.pending_action_count) && item.pending_action_count > 0);
   const matches = item => filter === 'attention' ? attention(item) : filter === 'running' ? item.state === 'available' && item.source_status === 'running' : filter === 'completed' ? item.state === 'available' && item.source_status === 'completed' : true;
-  const term = String(query || '').slice(0,120).trim().toLocaleLowerCase();
+  const searchText = value => value.normalize('NFKC').toLowerCase();
+  const term = searchText(String(query || '').slice(0,120).trim());
   return {
     counts: {running:all.filter(item => item.state === 'available' && item.source_status === 'running').length, attention:all.filter(attention).length, completed:all.filter(item => item.state === 'available' && item.source_status === 'completed').length},
-    visible: all.filter(item => matches(item) && (!term || [item.task_name,item.project_name,item.branch_name].some(value => typeof value === 'string' && value.toLocaleLowerCase().includes(term)))),
+    visible: all.filter(item => matches(item) && (!term || [item.task_name,item.project_name,item.branch_name].some(value => typeof value === 'string' && searchText(value).includes(term)))),
     recent: all.filter(item => item.state === 'available' && Number.isFinite(Date.parse(item.last_confirmed_at))).slice().sort((a,b) => Date.parse(b.last_confirmed_at)-Date.parse(a.last_confirmed_at))
   };
 }
