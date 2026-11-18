@@ -102,6 +102,9 @@ export function dashboardClient(brandImages = {}) {
     }
   } catch {}
 
+  let readingNodes = new Map();
+  const activityButtons = new Map();
+  const readingKey = item => ['source_id','project_id','task_id','run_id','branch_id'].every(key=>typeof item[key]==='string' && item[key]) ? JSON.stringify([item.source_id,item.project_id,item.task_id,item.run_id,item.branch_id]) : null;
   let selectedItems = null, hasReadSession = false,workExpiryTimer=null;
   const statusNames = {proposed:'待开始',running:'进行中',needs_input:'待决定',completed:'已完成',failed:'遇到问题',cancelled:'已取消'};
   const make = (tag, text, cls) => { const node=document.createElement(tag); if (text !== undefined) node.textContent=text; if(cls) node.className=cls; return node; };
@@ -227,35 +230,45 @@ export function dashboardClient(brandImages = {}) {
   function closeDetail(){el('detail-dialog').close();el('detail-content').replaceChildren();el('detail-title').textContent='';detailOpener?.focus();detailOpener=null;}
   el('detail-close').addEventListener('click',closeDetail);
   el('detail-dialog').addEventListener('cancel',event=>{event.preventDefault();closeDetail();});
-  function renderCapabilities(source,read,qq,lastVerified) {
+  const capabilityHeadings=new Map();
+  function renderCapabilities(source,read,qq,lastVerified,preserveFocus=false) {
+    const focused=preserveFocus && !document.hidden && !el('capabilities-view').hidden ? [...capabilityHeadings].find(([,heading])=>heading===document.activeElement)?.[0] : null;
+    capabilityHeadings.clear();
     const box=el('capability-list');box.replaceChildren();
     for(const [icon,title,note,state] of [['source','来源验证',Number.isFinite(Date.parse(lastVerified)) ? '最近验证 · '+new Date(lastVerified).toLocaleString('zh-CN') : '尚无验证时间',source],['tasks','任务快照','仅所选任务',read],['channel','QQ 通道','生产端状态',qq],['tools','任务操作','当前入口为只读','未开放']]) {
-      const row=make('details',undefined,'capability-detail'),heading=make('summary',undefined,'capability'),text=make('div',undefined,'capability-text');text.append(make('strong',title));heading.addEventListener('click',event=>{event.preventDefault();openDetail(title,[state,note],heading);});heading.append(capabilityIcon(icon),text,make('span',state+' ›','capability-status'));row.append(heading,make('p',note,'capability-note'));box.append(row);
+      const row=make('details',undefined,'capability-detail'),heading=make('summary',undefined,'capability'),text=make('div',undefined,'capability-text');text.append(make('strong',title));heading.addEventListener('click',event=>{event.preventDefault();openDetail(title,[state,note],heading);});heading.append(capabilityIcon(icon),text,make('span',state+' ›','capability-status'));row.append(heading,make('p',note,'capability-note'));box.append(row);capabilityHeadings.set(icon,heading);if(icon===focused)heading.focus();
     }
   }
-  const deliveryNames={pending:'排队中',sending:'发送中',sent:'服务端已发送（未确认阅读）',failed:'发送失败',uncertain:'结果未知',superseded:'已被替代',cancelled:'已取消',blocked:'已阻止',dead_letter:'发送终止',coalesced:'已合并（非单条送达）',suppressed:'已抑制',unknown:'未知',not_recorded:'无对应投递记录'};
+  const deliveryNames={pending:'排队中',queued:'排队中（尚未发送）',retry_wait:'等待重试（尚未确认送达）',sending:'发送中',sent:'服务端已发送（未确认阅读）',failed:'发送失败',uncertain:'结果未知',superseded:'已被替代',cancelled:'已取消',blocked:'已阻止',dead_letter:'发送终止',coalesced:'已合并（非单条送达）',suppressed:'已抑制',unknown:'未知',not_recorded:'无对应投递记录'};
   const kindNames={registered:'登记',started:'开始',progress:'进展',needs_input:'待确认',completed:'完成',failed:'失败',cancelled:'取消',heartbeat:'状态确认',correction:'修正'};
   function progressText(item){const p=item.progress;return p ? '来源上报进度 · '+p.done+(p.total===null?'':' / '+p.total)+' '+p.unit : '尚未上报量化进度';}
   function workDetails(item){return [item.summary,item.source_id && '来源 · '+item.source_id,'项目 / 任务 / 运行 / 分支 · '+[item.project_id,item.task_id,item.run_id,item.branch_id].join(' / '),item.stale && '快照已过期',item.archived && '已归档',item.phase_label && '阶段 · '+item.phase_label,progressText(item),item.blocker && '阻塞 · '+item.blocker,'任务状态 · '+(statusNames[item.source_status] || labels[item.state] || '未知'),item.last_confirmed_at && '来源最近确认 · '+item.last_confirmed_at,item.observed_at && '快照读取 · '+item.observed_at,...activityDetails(item)];}
   function activityDetails(item){const log=item.activity;if(log?.state!=='available')return ['日志暂不可用；不能视为没有活动'];return ['业务事件日志 · 仅展示普通事件；已过滤受限内容','投递状态仅表示 Discord 队列记录，不代表 QQ 投递或接收人已读',log.observed_at && '日志读取 · '+log.observed_at,log.truncated && '仅显示最近 30 条事件',log.withheld_count>0 && log.withheld_count+' 条敏感事件未展示',...(log.items?.length ? log.items.map(e=>[e.received_at,kindNames[e.kind] || '更新',statusNames[e.source_status] || '状态未知',e.projection_applied?'已更新快照':'未替换任务快照',e.summary,e.phase_label,progressText(e),'Discord 投递 · '+(e.delivery || ['unknown']).map(v=>deliveryNames[v] || '未知').join(' / '),'来源发生时间 · '+e.occurred_at].filter(Boolean).join(' · ')) : ['暂无可展示的普通业务事件'])];}
-  let sourceCards=[],sourceWarnings=[],sourceIdentities=[];const sourceButtons=new Map([['zot-main',el('choose-tasks')]]);
+  let sourceCards=[],sourceWarnings=[],sourceIdentities=[];const sourceButtons=new Map([['zot-main',el('choose-tasks')]]),sourceTaskButtons=new Map();
   let pollTimer=null,pollEnabled=false,pollFailures=0,resumeRead=false;
   function schedulePoll(){clearTimeout(pollTimer);if(!pollEnabled || document.hidden)return;pollTimer=setTimeout(()=>{if(el('detail-dialog').open || el('settings').open){schedulePoll();return;}load(true);},Math.min(300000,30000*2**pollFailures));pollTimer?.unref?.();}
-  function clearSourceCards(){for(const card of sourceCards)card.remove();sourceCards=[];sourceWarnings=[];sourceButtons.clear();sourceButtons.set('zot-main',el('choose-tasks'));}
+  function clearSourceCards(){for(const card of sourceCards)card.remove();sourceCards=[];sourceWarnings=[];sourceButtons.clear();sourceTaskButtons.clear();sourceButtons.set('zot-main',el('choose-tasks'));}
   function sourceVerified(connection){const proof=connection?.source,age=Date.parse(connection?.observed_at)-Date.parse(proof?.last_verified_at);return proof?.status==='verified' && ['initialize','tools/list','read_probe','accepted_event'].includes(proof.evidence_kind) && Number.isFinite(age) && age>=0 && Number.isFinite(proof.proof_max_age_ms) && proof.proof_max_age_ms>0 && proof.proof_max_age_ms<=86400000 && age<proof.proof_max_age_ms;}
   function renderSourceCards(sources){
+    const focusedTask=[...sourceTaskButtons].find(([key,node])=>node===document.activeElement)?.[0];
+    const focusedSource=[...sourceButtons].find(([id,node])=>id!=='zot-main' && node===document.activeElement)?.[0];
     clearSourceCards();sourceIdentities=(Array.isArray(sources)?sources:[]).map(({source_id,display_name,provider})=>({source_id,display_name,provider}));
     for(const source of (Array.isArray(sources)?sources:[])){
-      const card=make('section',undefined,'pa source-card');card.setAttribute('data-state',source.state==='error'?'warning':'unknown');
+      const proofStatus=source.connection?.source?.status,verified=sourceVerified(source.connection);
+      const sourceWarning=['stale','revoked','disabled'].includes(proofStatus) || source.state==='error' || source.items.some(item=>item.stale || ['needs_input','failed'].includes(item.source_status));
+      const proofLabel=proofStatus==='revoked'?'来源授权已撤销':proofStatus==='disabled'?'来源已停用':proofStatus==='stale'?'来源验证已过期':verified?'来源已验证':'来源待验证';
+      const card=make('section',undefined,'pa source-card');card.setAttribute('data-state',sourceWarning?'warning':verified?'active':'unknown');
       const top=make('header',undefined,'pa-top'),number=make('div',undefined,'pa-number'),name=source.display_name || source.source_id;
-      number.append(make('span',source.source_id,'provider'),make('span',sourceVerified(source.connection)?'来源已验证':'来源待验证','badge'));
+      number.append(make('span',source.source_id,'provider'),make('span',proofLabel,'badge'));
       const emblem=make('div','✳','emblem');if(source.provider && Object.hasOwn(brandImages,source.provider)){const image=make('img');image.src=brandImages[source.provider];image.alt=source.provider+' 官方图标';emblem.replaceChildren(image);}const nameBox=make('div',undefined,'pa-name');nameBox.append(make('h2',name));top.append(number,emblem,nameBox);
       const body=make('div',undefined,'card-body');body.append(make('p','所选任务 '+source.items.length+' · 只读快照','view-heading'));
       if(!source.items.length)body.append(make('p',source.presentation_reset?'旧工作信息已清除，请重新选择已上报任务。':'尚未配置所选任务；不代表此 PA 没有工作。未读取未上报的运行时活动。','empty'));
-      for(const item of source.items){const task=make('article',undefined,'task');task.append(make('span',statusNames[item.source_status] || labels[item.state] || '状态未知','task-state'),make('h3',item.task_name || '所选任务'),make('p',item.summary || labels[item.state]),make('small',[item.project_name,item.branch_name,item.stale?'快照已过期':'',item.archived?'已归档':''].filter(Boolean).join(' · ')),make('small',progressText(item)),make('small',item.last_confirmed_at ? '最近确认 · '+item.last_confirmed_at : '暂无确认时间'));const button=make('button','工作详情与日志','detail-launch');button.setAttribute('type','button');button.addEventListener('click',()=>openDetail(name+' · '+(item.task_name || '所选任务'),workDetails(item),button));task.append(button);body.append(task);}
+      for(const item of source.items){const task=make('article',undefined,'task');task.append(make('span',statusNames[item.source_status] || labels[item.state] || '状态未知','task-state'),make('h3',item.task_name || '所选任务'),make('p',item.summary || labels[item.state]),make('small',[item.project_name,item.branch_name,item.stale?'快照已过期':'',item.archived?'已归档':''].filter(Boolean).join(' · ')),make('small',progressText(item)),make('small',item.last_confirmed_at ? '最近确认 · '+item.last_confirmed_at : '暂无确认时间'));const button=make('button','工作详情与日志','detail-launch');button.setAttribute('type','button');button.addEventListener('click',()=>openDetail(name+' · '+(item.task_name || '所选任务'),workDetails(item),button));task.append(button);body.append(task);const taskKey=readingKey({...item,source_id:source.source_id});if(taskKey)sourceTaskButtons.set(taskKey,button);}
       const actions=make('footer',undefined,'pa-actions'),choose=make('button','选择已上报任务');choose.type='button';choose.setAttribute('aria-haspopup','dialog');choose.addEventListener('click',()=>openPicker(source.source_id,choose));actions.append(choose);sourceButtons.set(source.source_id,choose);
       const warning=make('p','上次快照可能已过期 · 本次更新失败','snapshot-warning');warning.hidden=true;sourceWarnings.push(warning);card.setAttribute('data-palette',sourceCards.length%2===0?'teal':'rose');card.append(top,warning,body,actions);el('canvas').insertBefore(card,el('add-column'));sourceCards.push(card);
     }
+    if(focusedSource)sourceButtons.get(focusedSource)?.focus();
+    else if(focusedTask)sourceTaskButtons.get(focusedTask)?.focus();
   }
   function expireWorkbench(){
     document.dispatchEvent?.(new Event('rivule-session-expired'));el('settings').close();el('settings-toggle').setAttribute('aria-expanded','false');
@@ -266,6 +279,7 @@ export function dashboardClient(brandImages = {}) {
     if(expires<=Date.now()){expireWorkbench();return false;}workExpiryTimer=setTimeout(expireWorkbench,Math.min(2147483647,expires-Date.now()));workExpiryTimer?.unref?.();return true;
   }
   function clearWorkbench() {
+    readingNodes.clear();activityButtons.clear();
     clearTimeout(workExpiryTimer);workExpiryTimer=null;
     if(el('detail-dialog').open)closeDetail();
     clearSourceCards();sourceIdentities=[]; items.replaceChildren(); selectedItems=null; el('task-metrics').hidden=true; el('task-toolbar').hidden=true; el('task-distribution').hidden=true; el('activity-list').replaceChildren(make('p','等待读取所选任务','empty'));
@@ -278,6 +292,8 @@ export function dashboardClient(brandImages = {}) {
     if(selectedItems.length<=1) {el('task-filter').value='all';el('task-search').value='';}
     const model=selectedWorkbench(selectedItems,el('task-filter').value || 'all',el('task-search').value || '');
     for(const key of ['running','attention','completed']) el(key+'-count').textContent=String(model.counts[key]);
+    const reading = new Map([...readingNodes].map(([key,node])=>[key,{open:node.facts.open,focused:document.activeElement===node.summary?'summary':document.activeElement===node.expand?'expand':node.pendingButton && document.activeElement===node.pendingButton?'pendingButton':null}]));
+    readingNodes.clear();
     items.replaceChildren();
     if(!model.visible.length) empty(selectedItems.length ? '没有匹配的任务' : '还没有已选任务');
     for (const item of model.visible) {
@@ -289,14 +305,16 @@ export function dashboardClient(brandImages = {}) {
       const state=make('span',statusNames[item.source_status] || labels[item.state] || '状态未知','task-state');state.setAttribute('data-kind',item.source_status || 'unknown');if(selectedItems.length>1 || !['needs_input','failed'].includes(item.source_status))card.append(state);let pendingButton=null;if(Number.isSafeInteger(item.pending_action_count) && item.pending_action_count>0){pendingButton=make('button',item.pending_action_count+' 项待确认 · 查看详情','pending-callout');pendingButton.setAttribute('type','button');pendingButton.setAttribute('aria-expanded','false');card.append(pendingButton);}
       const step=['proposed','running','completed'].indexOf(item.source_status);
       if(step>=0 && item.state==='available') { const rail=make('div',undefined,'state-track');rail.setAttribute('aria-label','当前阶段：'+statusNames[item.source_status]);for(let i=0;i<3;i++)rail.append(make('span',undefined,i===step?'current':''));card.append(rail); }
-      const facts=make('details',undefined,'task-facts');facts.append(make('summary','查看完整内容'));if(item.summary)facts.append(make('p',item.summary,'full-summary'));
+      const facts=make('details',undefined,'task-facts'),factsSummary=make('summary','查看完整内容'),readKey=readingKey(item);facts.append(factsSummary);if(readKey && reading.has(readKey))facts.open=reading.get(readKey).open;if(item.summary)facts.append(make('p',item.summary,'full-summary'));
       for(const [label,value] of [['分支',item.branch_name],['来源确认',item.last_confirmed_at],['读取时间',item.observed_at]]) if(value)facts.append(make('p',label+' · '+value));
       if(pendingButton){pendingButton.addEventListener('click',()=>{facts.open=!facts.open;pendingButton.setAttribute('aria-expanded',String(facts.open));openDetail(item.task_name || '任务详情',workDetails(item),pendingButton);});facts.addEventListener('toggle',()=>pendingButton.setAttribute('aria-expanded',String(facts.open)));}
-      const expand=make('button','打开详情','detail-launch');expand.setAttribute('type','button');expand.addEventListener('click',()=>openDetail(item.task_name || '任务详情',workDetails(item),expand));card.append(facts,expand);items.append(card);
+      const expand=make('button','打开详情','detail-launch');expand.setAttribute('type','button');expand.addEventListener('click',()=>openDetail(item.task_name || '任务详情',workDetails(item),expand));card.append(facts,expand);items.append(card);if(readKey){const readNode={facts,summary:factsSummary,expand,pendingButton};readingNodes.set(readKey,readNode);const focusTarget=reading.get(readKey)?.focused;if(focusTarget && readNode[focusTarget])readNode[focusTarget].focus();}if(pendingButton)pendingButton.setAttribute('aria-expanded',String(facts.open));
     }
+    const focusedActivity=!document.hidden && !el('activity-view').hidden && [...activityButtons].find(([,button])=>button===document.activeElement)?.[0];
+    activityButtons.clear();
     const activity=el('activity-list');activity.replaceChildren();
     if(!model.recent.length) activity.append(make('p','暂无确认时间','empty'));
-    for(const item of model.recent) {const row=make('article',undefined,'activity-row');row.append(make('time',new Date(item.last_confirmed_at).toLocaleString('zh-CN')),make('h3',item.task_name || '所选任务'),make('p',[statusNames[item.source_status] || '状态未知',item.project_name,item.stale?'快照已过期':''].filter(Boolean).join(' · ')));const logs=make('button','查看日志','detail-launch');logs.setAttribute('type','button');logs.addEventListener('click',()=>openDetail(item.task_name || '业务事件日志',activityDetails(item),logs));row.append(make('p',item.activity?.items?.[0]?.summary || '尚无可展示的最新事件'),make('p',item.activity?.state==='available' ? String(item.activity.items.length)+' 条可展示事件'+(item.activity.truncated?' · 最近 30 条':'') : '日志暂不可用'),logs);activity.append(row);}
+    for(const item of model.recent) {const row=make('article',undefined,'activity-row');row.append(make('time',new Date(item.last_confirmed_at).toLocaleString('zh-CN')),make('h3',item.task_name || '所选任务'),make('p',[statusNames[item.source_status] || '状态未知',item.project_name,item.stale?'快照已过期':''].filter(Boolean).join(' · ')));const logs=make('button','查看日志','detail-launch');logs.setAttribute('type','button');logs.addEventListener('click',()=>openDetail(item.task_name || '业务事件日志',activityDetails(item),logs));row.append(make('p',item.activity?.items?.[0]?.summary || '尚无可展示的最新事件'),make('p',item.activity?.state==='available' ? String(item.activity.items.length)+' 条可展示事件'+(item.activity.truncated?' · 最近 30 条':'') : '日志暂不可用'),logs);activity.append(row);const key=readingKey(item);if(key){activityButtons.set(key,logs);if(key===focusedActivity)logs.focus();}}
   }
   for(const name of ['tasks','activity','capabilities']) el('view-'+name).addEventListener('click',()=>switchView(name));
   el('task-search').addEventListener('input',renderWorkbench);el('task-filter').addEventListener('change',renderWorkbench);
@@ -329,9 +347,10 @@ export function dashboardClient(brandImages = {}) {
       if (id !== requestId) return;
       if (!Array.isArray(data.items)) throw Error('invalid');
       if(armWorkbenchExpiry(data.session_expires_at)===false)return;
-      if(pickerDialog.open || (background===true && (el('detail-dialog').open || el('settings').open)))return;
+      if(pickerDialog.open){pollEnabled=true;return;}
+      if(el('detail-dialog').open || el('settings').open){pollEnabled=true;return;}
       const allSources=[data,...(Array.isArray(data.sources)?data.sources:[])],allItems=allSources.flatMap(s=>s.items || []),anyError=allSources.some(s=>s.state==='error' || s.items?.some(i=>i.activity?.state==='unavailable'));
-      pollEnabled=true; pollFailures=anyError?Math.min(4,pollFailures+1):0; login.hidden = true; controls.hidden = false; items.replaceChildren();
+      pollEnabled=true; pollFailures=anyError?Math.min(4,pollFailures+1):0; login.hidden = true; controls.hidden = false;
       const proof = data.connection?.source;
       const proofAge = Date.parse(data.connection?.observed_at) - Date.parse(proof?.last_verified_at);
       const verified = proof?.status === 'verified' && ['initialize','tools/list','read_probe','accepted_event'].includes(proof.evidence_kind) && Number.isFinite(proofAge) && proofAge >= 0 && Number.isFinite(proof.proof_max_age_ms) && proof.proof_max_age_ms > 0 && proof.proof_max_age_ms <= 86400000 && proofAge < proof.proof_max_age_ms;
@@ -346,7 +365,7 @@ export function dashboardClient(brandImages = {}) {
       status.textContent = anyError ? '部分工作信息读取失败 · 自动重试' : allItems.length ? '工作信息已更新 · 30 秒自动刷新' : '尚未配置所选任务 · 30 秒自动刷新';
       if (!data.items.length) empty('还没有已选任务');
       if(!hasReadSession) switchView(preferences.view==='auto' ? (data.items.length ? 'tasks' : 'capabilities') : preferences.view); hasReadSession=true;
-      selectedItems = data.items; renderWorkbench(); renderSourceCards(data.sources); renderCapabilities(verified ? '已验证' : '待验证', readable ? '可读取' : '尚无可读快照', el('qq-channel').textContent, proof?.last_verified_at);
+      selectedItems = data.items; renderWorkbench(); renderSourceCards(data.sources); renderCapabilities(verified ? '已验证' : '待验证', readable ? '可读取' : '尚无可读快照', el('qq-channel').textContent, proof?.last_verified_at,true);
     } catch {
       if (id !== requestId) return;
       pollEnabled=true; pollFailures=Math.min(4,pollFailures+1);

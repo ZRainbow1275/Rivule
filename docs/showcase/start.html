@@ -41,9 +41,9 @@ node scripts/build.mjs</code></pre></div>
       </section>
       <section id="owner" class="guide-step">
         <div class="step-heading"><span class="step-number">02</span><div><span class="step-owner">服务所有者</span><h2>配置自己的通知入口</h2></div></div>
-        <p>准备 Cloudflare 账号、自己的 Discord 应用和 bot，以及一个准备接入的助手。先复制模板，再填写你自己的配置。</p>
-        <div class="command-block"><div class="command-bar"><span>建立私人配置</span><button type="button" data-copy="config-commands" data-label="复制模板命令">复制模板命令</button></div><pre id="config-commands"><code>cp config/wrangler.owner.example.json config/wrangler.owner.private.json
-cp config/wrangler.qq.example.json config/wrangler.qq.private.json</code></pre></div>
+        <p>准备 Cloudflare 账号、自己的 Discord 应用和 bot，以及一个准备接入的助手。在源码根目录运行下面的命令。它只建立缺少的本地配置，不会部署。</p>
+        <div class="command-block"><div class="command-bar"><span>建立本地私人配置</span><button type="button" data-copy="config-commands" data-label="复制初始化命令">复制初始化命令</button></div><pre id="config-commands"><code>node scripts/init-private-config.mjs</code></pre></div>
+        <p>看到「已建立」再填写新文件；「已保留」表示原配置没有改动。更新已有服务时请对照模板补缺项，不要用模板覆盖原文件。</p>
         <ol class="guide-checklist">
           <li><strong>确定账户与目标</strong><span>填入 Worker 名称、实际服务域名、KV 和 Discord 的应用 / 用户 / DM 信息</span></li>
           <li><strong>配置来源与项目</strong><span>先选一个来源和一个允许的项目，决定使用 MCP OAuth 还是 HTTP 接入</span></li>

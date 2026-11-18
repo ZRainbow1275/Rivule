@@ -1,3 +1,4 @@
+import { sourceBrand } from "./brand-identity.mjs";
 import { isRoutineProgress, sameNotificationBranch, routineDueAt, formatQQNotification } from "./notification-policy.mjs";
 // Rivule — AGPL-3.0. Third-party notices: ../../third-party-licenses/
 var Rejected = class extends Error {
@@ -838,7 +839,7 @@ QQBridgeQueue = class extends QQBridgeQueueV1 {
             throw Error('projection_changed');
         const taskContext = !response ? this.messageBridge?.taskAuthority(source, row.receipt) : null;
         const correlation = response ?? taskContext;
-        const content = response ? `${source.name ?? source.source_id} · PA 回复\n${event.summary}${this.messageBridge.preference(source).commands_enabled ? `\n\n回复指令：/rivule ${response.context_ref} <指令>` : ''}` : formatQQNotification(event, source, this.now()) + (taskContext ? `\n\n回复指令：/rivule ${taskContext.context_ref} <指令>` : '');
+        const content = response ? `${sourceBrand(source).name} · PA 回复\n${event.summary}${this.messageBridge.preference(source).commands_enabled ? `\n\n回复指令：/rivule ${response.context_ref} <指令>` : ''}` : formatQQNotification(event, source, this.now(), { replyContextRef: taskContext?.context_ref });
         const sourceBindingDigest = await hash(proof.binding), payloadHash = await hash(content);
         const current = this.readAuthority?.(row.source_id);
         if (current?.selectable !== true || current.connection_generation !== proof.connection_generation || current.binding !== proof.binding)

@@ -5,12 +5,15 @@
 <a id="owner-setup"></a>
 ## 1. 建立私人配置
 
+在源码根目录运行。首次安装会从模板建立两份私人配置；以前配置过的文件会原样保留，缺哪一份才补哪一份。
+
 ```sh
-cp config/wrangler.owner.example.json config/wrangler.owner.private.json
-cp config/wrangler.qq.example.json config/wrangler.qq.private.json
+node scripts/init-private-config.mjs
 ```
 
-填写自己的 Worker 名称、实际 HTTPS 服务域名、KV 命名空间、Discord 应用公钥、所有者和目标 DM。`PUBLIC_ORIGIN` 不带尾部 `/` 或子路径。配置 `SOURCES_JSON` 和 `ALLOWED_PROJECT_IDS_JSON`，先允许一个来源与一个项目；按[接入方式](INTEGRATIONS.md#connect)准备 OAuth、Muse API 或 HMAC。
+输出「已建立」时，再在新文件中填写自己的 Worker 名称、实际 HTTPS 服务域名、KV 命名空间、Discord 应用公钥、所有者和目标 DM。输出「已保留」时，对照对应模板，仅补本次更新需要的字段，不要用模板覆盖私人文件。此命令只处理本地文件，不登录或部署。若提示无法独占建立或路径不是普通文件，请先核对路径与本地文件系统，不要改用强制复制。
+
+`PUBLIC_ORIGIN` 不带尾部 `/` 或子路径。配置 `SOURCES_JSON` 和 `ALLOWED_PROJECT_IDS_JSON`，先允许一个来源与一个项目；按[接入方式](INTEGRATIONS.md#connect)准备 OAuth、Muse API 或 HMAC。
 
 私人配置不得提交。公开模板的发送与可选功能开关默认关闭，空允许名单和身份占位值不可直接使用。
 

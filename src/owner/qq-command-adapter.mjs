@@ -31,7 +31,10 @@ export class QQCommandAdapter {
     // Keep original inbox dedupe/lifecycle gates; retry duplicates after a crash.
     const status=await this.inbox.enqueueOnce(event);
     if(status==='conflict'||status==='full')return status;
-    if(event.type!=='message'||!event.content?.trim().startsWith('/rivule'))return status;
+    // A longer word such as "/rivulet" is ordinary inbox text. Reserve only
+    // complete verbs. When no conversation adapter handles /rivule-chat, keep
+    // its existing rejection here; acceptVerified only accepts the task grammar.
+    if(event.type!=='message'||typeof event.content!=='string'||!/^\/rivule(?:-chat)?(?=\s|$)/u.test(event.content.trimStart()))return status;
     await this.acceptVerified(event);
     return status;
   }

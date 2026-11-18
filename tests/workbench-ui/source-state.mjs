@@ -1,0 +1,13 @@
+import {dashboardClient,selectedWorkbench} from '../../src/owner/presentation.mjs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+for (const mode of ['revoked','disabled','stale','verified','unknown','badProof','expiredProof','futureProof','error','needs_input','failed','staleItem']) {
+class E {constructor(tag=''){this.tag=tag;this.children=[];this.listeners={};this.open=false;this.textContent='';this.classList={toggle(){}};}addEventListener(k,f){this.listeners[k]=f;}replaceChildren(...c){this.children=c;}append(...c){this.children.push(...c);}insertBefore(c){this.children.push(c);c.parent=this;}remove(){this.parent?.children.splice(this.parent.children.indexOf(this),1);}setAttribute(k,v){(this.attrs??={})[k]=v;}focus(){doc.activeElement=this;}showModal(){this.open=true;}close(){this.open=false;}}
+const doc=new E(),win=new E(),els=new Map(),timers=new Map();let counter=0,revision=1,reads=0;
+doc.getElementById=k=>{if(!els.has(k))els.set(k,new E());return els.get(k);};doc.createElement=k=>new E(k);doc.createElementNS=(_,k)=>new E(k);doc.body=new E();
+vm.runInNewContext('('+dashboardClient.toString()+')()',{document:doc,window:win,selectedWorkbench,Date,crypto,localStorage:{getItem(){}},AbortController,setTimeout:(f,ms)=>{timers.set(++counter,{f,ms});return counter;},clearTimeout:id=>timers.delete(id),fetch:async()=>{const valid=['verified','badProof','expiredProof','futureProof','needs_input','failed','staleItem'].includes(mode);const connection={observed_at:'2026-11-17T08:00:00Z',source:{status:valid?'verified':mode,evidence_kind:mode==='badProof'?'unsupported':'accepted_event',last_verified_at:mode==='expiredProof'?'2026-11-15T08:00:00Z':mode==='futureProof'?'2026-11-18T08:00:00Z':'2026-11-17T07:59:00Z',proof_max_age_ms:86400000}};return {ok:true,status:200,json:async()=>({items:[],sources:[{source_id:'muse-main',display_name:'Muse',state:mode==='error'?'error':'connected',connection,items:[{source_id:'muse-main',project_id:'p',task_id:'t',run_id:'r',branch_id:'b',state:'available',source_status:['needs_input','failed'].includes(mode)?mode:'running',stale:mode==='staleItem'}]}]})};}});
+await win.listeners.pageshow();const card=doc.getElementById('canvas').children.find(c=>c.className==='pa source-card');
+const expectedLabel=({revoked:'来源授权已撤销',disabled:'来源已停用',stale:'来源验证已过期',verified:'来源已验证',needs_input:'来源已验证',failed:'来源已验证',staleItem:'来源已验证'})[mode] || '来源待验证';
+assert.equal(card.children[0].children[0].children[1].textContent,expectedLabel,mode+' badge');
+assert.equal(card.attrs['data-state'],['revoked','disabled','stale','error','needs_input','failed','staleItem'].includes(mode)?'warning':mode==='verified'?'active':'unknown',mode+' card state');console.log('PASS source-state',mode);
+}

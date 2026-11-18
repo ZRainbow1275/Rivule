@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {QQBridgeQueue} from '../src/owner/qq-integration.mjs';
-function fixture(t){
+function fixture(t, identity={}){
  const db=new DatabaseSync(':memory:');t.after(()=>db.close());
  const storage={sql:{exec(sql,...a){if(sql.split(';').filter(x=>x.trim()).length>1){db.exec(sql);return {toArray:()=>[]};}return {toArray:()=>db.prepare(sql).all(...a)};}},transaction:async fn=>fn(),transactionSync:fn=>fn(),sync:async()=>{}};
  db.exec('CREATE TABLE events(revision INTEGER,receipt TEXT,source_id TEXT,payload TEXT,decision TEXT)');
- const now=1800000000000,source={source_id:'pa',enabled:true,allowed_hosts:[]},ref='12345678-1234-1234-1234-123456789abc';
+ const now=1800000000000,source={source_id:'pa',enabled:true,allowed_hosts:[],...identity},ref='12345678-1234-1234-1234-123456789abc';
  const env={QQ_ENABLED:'true',QQ_OWNER_ID:'owner',QQ_APP_ID:'123',QQ_DELIVERY_ENABLED:'true',QQ_ALLOWED_SOURCE_IDS:'["pa"]',QQ_ALLOWED_PROJECT_IDS:'["project"]'};
  const queue=new QQBridgeQueue(storage,env,'owner',[source],()=>{throw Error('no network');},()=>now);
  const proof={selectable:true,binding:'source-binding',connection_generation:1,last_verified_at:now};queue.attachAuthority(()=>proof);
@@ -46,3 +46,19 @@ test('ordinary task updates retain task protocol and add only registered command
  assert.equal(job.job.contentKind,'task_update');assert.equal(job.job.acceptedRevision,3);assert.equal(job.job.responseRevision,undefined);assert.equal(job.source.applied,true);assert.match(job.job.content,/\/rivule/);
  authority=null;const revoked=await f.queue.currentJob(row,f.queue.activation());assert.equal(revoked.job.contentKind,undefined);assert.ok(!revoked.job.content.includes('/rivule'));assert.notEqual(job.job.payloadHash,revoked.job.payloadHash,'precommit job comparison rejects a changed consent/rendered payload');
 });
+
+for (const [label,identity,expected] of [
+ ['configured display name',{display_name:'工作助手',name:'legacy-id'},'工作助手'],
+ ['legacy name',{name:'旧助手'},'旧助手'],
+ ['known provider',{provider:'muse'},'Muse'],
+ ['generic fallback',{},'PA']]) {
+ test('response identity: '+label,async t=>{
+ const f=fixture(t,identity);await activate(f);assert.equal(f.queue.enqueueResponse(f.source,f.receipt),true);
+ const row=f.queue.rows('SELECT * FROM qq_continuous_outbox')[0];
+ const result=await f.queue.currentJob(row,f.queue.activation());
+ assert.equal(result.job.content.split('\n')[0],expected+' · PA 回复');
+ assert.ok(result.job.content.includes(f.event.summary));
+ assert.equal(result.job.sourceId,'pa'); assert.equal(result.job.contextRef,f.authority.context_ref);
+ assert.equal(f.db.prepare('SELECT COUNT(*) n FROM events').get().n,1);
+ });
+}

@@ -2,14 +2,30 @@
 const fields = ['project_id','task_id','run_id','branch_id'];
 const statuses = new Set(['proposed','running','needs_input','completed','failed','cancelled']);
 const kinds = new Set(['registered','started','progress','needs_input','completed','failed','cancelled','heartbeat','correction']);
+let dashboardGraphemes;
 export function dashboardText(value, limit = 1200) {
   if (typeof value !== 'string') return '';
   if (/(?:-----BEGIN[\s\S]*PRIVATE KEY|(?:token|password|secret|api[_-]?key|authorization|recipient[_-]?id|user[_-]?id|chat[_-]?id|dm[_-]?id)[\"']?\s*[:=])/i.test(value)) return '[包含私密字段，内容已隐藏]';
-  return value.replace(/\bBearer\s+\S+/gi,'[已隐藏凭证]')
+  const clean = value.replace(/\bBearer\s+\S+/gi,'[已隐藏凭证]')
     .replace(/\b(?:sk-|gh[pousr]_|github_pat_)[A-Za-z0-9_-]{8,}/g,'[已隐藏凭证]')
     .replace(/\b(?:token|password|secret|api[_-]?key|authorization|recipient[_-]?id|user[_-]?id|chat[_-]?id|dm[_-]?id)\s*[:=]\s*["']?[^\s,"';]+/gi,'[已隐藏私密字段]')
     .replace(/<@!?\d+>/g,'[已隐藏接收人]').replace(/\b\d{15,25}\b/g,'[已隐藏标识]')
-    .replace(/https?:\/\/[^\s]+/gi,'[链接已省略]').slice(0,limit);
+    .replace(/https?:\/\/[^\s]+/gi,'[链接已省略]');
+  if (clean.length <= limit) return clean;
+  const budget = Math.max(0, Math.trunc(limit));
+  if (typeof Intl.Segmenter !== 'function') {
+    const plain = /^[\t\n -~\u3400-\u4dbf\u4e00-\u9fff]$/;
+    let end = budget;
+    while (end > 0 && !(plain.test(clean[end - 1]) && plain.test(clean[end]))) end--;
+    return clean.slice(0,end);
+  }
+  dashboardGraphemes ??= new Intl.Segmenter('und', {granularity:'grapheme'});
+  let end = 0;
+  for (const part of dashboardGraphemes.segment(clean)) {
+    if (part.index + part.segment.length > budget) break;
+    end = part.index + part.segment.length;
+  }
+  return clean.slice(0,end);
 }
 export function dashboardProgress(value) {
   if (!value || !Number.isFinite(value.done) || value.done < 0 ||
@@ -39,7 +55,7 @@ export function readDashboardActivity(storage, bindings, source, query, now = Da
     if(!statuses.has(p.source_status) || !kinds.has(p.kind) || !Number.isFinite(Date.parse(p.occurred_at))) throw Error('activity_unavailable');
     // Read only status enums from jobs for this exact receipt. Never payload/error/message IDs.
     const delivery=tables.has('outbox') ? rows('SELECT status FROM outbox WHERE receipt=? ORDER BY id DESC LIMIT 10',row.receipt).map(r=>r.status) : [];
-    const known=new Set(['pending','sending','sent','failed','uncertain','superseded','cancelled','blocked','dead_letter','coalesced','suppressed']);
+    const known=new Set(['pending','queued','retry_wait','sending','sent','failed','uncertain','superseded','cancelled','blocked','dead_letter','coalesced','suppressed']);
     base.items.push({revision:row.revision,kind:p.kind,source_status:p.source_status,summary:dashboardText(p.summary),phase_label:dashboardText(p.phase_label,100),progress:dashboardProgress(p.progress),occurred_at:p.occurred_at,received_at:new Date(row.received_at).toISOString(),projection_applied:row.decision==='applied',delivery:delivery.length? [...new Set(delivery.map(s=>s==='sending'?'uncertain':known.has(s)?s:'unknown'))]:['not_recorded']});
   }
   return base;

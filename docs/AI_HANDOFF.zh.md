@@ -12,7 +12,8 @@ npm ci --ignore-scripts
 node scripts/install-font.mjs
 node scripts/build.mjs
 
-使用 config 中的模板，部署 dist/owner 和 dist/gateway 的完整模块与资源。
+新安装或需要补齐配置时运行 node scripts/init-private-config.mjs。看到“已保留”时，先对照模板，只补缺项，不要用模板覆盖已有私人文件。
+确认这次需要部署后，部署 dist/owner 和 dist/gateway 的完整模块与资源。
 owner 源码在 src/owner，gateway 源码在 src/gateway。
 请列出缺少的非敏感配置及由谁完成；账户登录、授权与密钥使用平台的安全入口。
 在部署、创建持久访问或发送通知前，按已有授权及平台确认要求执行。

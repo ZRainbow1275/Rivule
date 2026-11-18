@@ -32,7 +32,7 @@ node scripts/build.mjs
 
 跟着[部署清单](OPERATIONS.md#owner-setup)逐项完成：
 
-1. 从两个配置模板建立私人配置，填入自己的 Worker 名称、服务域名、Cloudflare KV 和 Discord 目标信息
+1. 在源码根目录运行 `node scripts/init-private-config.mjs`，它只建立缺少的私人配置。在新文件填写自己的 Worker 名称、服务域名、Cloudflare KV 和 Discord 目标信息；已有私人文件会原样保留，更新时对照模板补缺项
 2. 确认 owner 的 `OwnerTerminal`、gateway 的 `QQGatewayObject`、跨 Worker 的 `QQ_GATEWAY` 绑定和迁移；已有安装保留原命名空间及迁移历史
 3. 配置一个来源与允许的项目，选定 MCP OAuth、Muse API 或 HMAC 接入方式。使用服务提供的安全设置入口配置凭据
 4. 用构建生成的 owner / gateway 模块完成部署检查；按照[部署与回滚](OPERATIONS.md#release-check)执行发布与回读
