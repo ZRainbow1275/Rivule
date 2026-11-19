@@ -1,3 +1,4 @@
+import {selectedRelationPeers} from './selected-relation-peers.mjs';
 /** Group only the visible direct-task command statuses projected to the workbench. */
 export function selectedCommandFollowup(sources,query='',stage='all',channel='all'){
   const normalize=v=>typeof v==='string'?v.normalize('NFKC').toLowerCase():'';
@@ -8,9 +9,9 @@ export function selectedCommandFollowup(sources,query='',stage='all',channel='al
   for(const source of Array.isArray(sources)?sources:[]){
     if(!source||!Array.isArray(source.items)){partial=true;continue;}
     if(['error','unconfigured'].includes(source.state)||(!source.items.length&&!['connected','ready'].includes(source.state)))partial=true;
-    const peers=source.items.filter(i=>i?.state==='available'),name=source.display_name||source.source_id||'来源';
-    if(peers.length!==source.items.length)partial=true;
-    for(const item of peers){
+    const peers=selectedRelationPeers(source),name=source.display_name||source.source_id||'来源';
+    for(const item of source.items){
+      if(item?.state!=='available'){partial=true;continue;}
       const log=item.commands;
       if(log?.state!=='available'||!Array.isArray(log.items)){partial=true;continue;}
       if(log.truncated||log.items.length>30)truncated=true;

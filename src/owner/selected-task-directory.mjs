@@ -1,3 +1,4 @@
+import {selectedRelationPeers} from './selected-relation-peers.mjs';
 /** Presentation-only query over the selected snapshot supplied by the caller. */
 export function selectedTaskDirectory(sources,query='',filter='all',order='recent'){
   const norm=v=>typeof v==='string'?v.normalize('NFKC').toLowerCase():'';
@@ -28,7 +29,7 @@ export function selectedTaskDirectory(sources,query='',filter='all',order='recen
     if(!source||!Array.isArray(source.items)){partial=true;continue;}
     const name=source.display_name||source.source_id||'来源';
     if(['error','unconfigured'].includes(source.state)||(!source.items.length && !['connected','ready'].includes(source.state)))partial=true;
-    const peers=source.items.filter(item=>item && item.state==='available');
+    const peers=selectedRelationPeers(source);
     for(const item of source.items){
       if(!item || item.state!=='available'){partial=true;continue;}
       readable++;
