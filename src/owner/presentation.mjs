@@ -619,8 +619,12 @@ export function dashboardClient(brandImages = {}) {
     pin.setAttribute('aria-label','暂存阅读：'+readingLabel(item));updateReadingPin(pin,key);
     pin.addEventListener('click',()=>{if(!document.hidden && buttons.get(key)===pin)toggleTaskReading(key);});buttons.set(key,pin);return pin;
   }
-  function renderTaskList() {
+  function renderTaskList(recoverFocus=false) {
     if(!selectedItems) return;
+    const pane=el('tasks-view'),toolbar=el('task-toolbar'),partialClear=el('task-clear-partial');
+    const previousFocus=recoverFocus===true&&!document.hidden&&!pane.hidden?document.activeElement:null;
+    const hadListFocus=!!previousFocus&&items.contains?.(previousFocus);
+    const toolbarWasVisible=!toolbar.hidden,partialClearWasVisible=!partialClear.hidden&&!el('task-filter-feedback').hidden;
     showTaskPaneState('');
     el('task-metrics').hidden=selectedItems.length<=1; el('task-toolbar').hidden=selectedItems.length<=1; el('task-distribution').hidden=selectedItems.length<=1;
     if(selectedItems.length<=1) {el('task-filter').value='all';el('task-search').value='';}
@@ -633,8 +637,9 @@ export function dashboardClient(brandImages = {}) {
     readingNodes.clear();
     cardPinButtons.clear();items.replaceChildren();
     if(!model.visible.length) empty(selectedItems.length ? '没有匹配的任务' : emptyReadText(taskReadState)||'还没有已选任务');
+    let reset=null;
     if(!model.visible.length && active) {
-      const reset=make('button','清除筛选，查看全部已选任务','detail-launch');reset.setAttribute('type','button');
+      reset=make('button','清除筛选，查看全部已选任务','detail-launch');reset.setAttribute('type','button');
       reset.addEventListener('click',resetTaskFilters);items.append(reset);
     }
     for (const item of model.visible) {
@@ -654,11 +659,17 @@ export function dashboardClient(brandImages = {}) {
       if(pendingButton){pendingButton.addEventListener('click',()=>{facts.open=!facts.open;pendingButton.setAttribute('aria-expanded',String(facts.open));openWorkDetail(item,item.task_name || '任务详情',pendingButton,true);});facts.addEventListener('toggle',()=>pendingButton.setAttribute('aria-expanded',String(facts.open)));}
       const expand=make('button','打开详情','detail-launch');expand.setAttribute('type','button');expand.addEventListener('click',()=>openWorkDetail(item,item.task_name || '任务详情',expand,true));const pin=taskReadingButton(item,readKey);card.append(facts,expand);if(pin)card.append(pin);items.append(card);if(readKey){const readNode={facts,summary:factsSummary,expand,pendingButton,pin};readingNodes.set(readKey,readNode);const focusTarget=reading.get(readKey)?.focused;if(focusTarget)(readNode[focusTarget] || readNode.expand).focus();}if(pendingButton)pendingButton.setAttribute('aria-expanded',String(facts.open));
     }
+    if(previousFocus){
+      const toolbarDisappeared=toolbarWasVisible&&toolbar.hidden&&(previousFocus===el('task-search')||previousFocus===el('task-filter'));
+      const partialClearDisappeared=partialClearWasVisible&&previousFocus===partialClear&&(partialClear.hidden||el('task-filter-feedback').hidden);
+      if(toolbarDisappeared||partialClearDisappeared||(hadListFocus&&!items.contains?.(document.activeElement)))
+        (reset||(!toolbar.hidden?el('task-filter'):pane)).focus();
+    }
     return model;
   }
 
   function renderAcceptedSnapshot(){
-    const model=renderTaskList();
+    const model=renderTaskList(true);
     renderReadingQueue();
     activityItems=model.recent;
     activityEmptyMessage=taskReadState==='available'?(selectedItems.length?'暂无确认时间':'还没有已选任务，选择任务后可查看动态与日志。'):emptyReadText(taskReadState)+'日志状态也待确认。';
