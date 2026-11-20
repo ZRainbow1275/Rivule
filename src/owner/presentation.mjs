@@ -127,7 +127,7 @@ export function dashboardClient(brandImages = {}) {
   const readingKey = item => ['source_id','project_id','task_id','run_id','branch_id'].every(key=>typeof item[key]==='string' && item[key]) ? JSON.stringify([item.source_id,item.project_id,item.task_id,item.run_id,item.branch_id]) : null;
   let lastTaskReadAt='';
   let selectedItems = null, taskReadState='unknown', hasReadSession = false,workExpiryTimer=null;
-  let initialViewChosen=false;
+  let viewChosen=false;
   const statusNames = {proposed:'待开始',running:'进行中',needs_input:'待决定',completed:'已完成',failed:'遇到问题',cancelled:'已取消'};
   const make = (tag, text, cls) => { const node=document.createElement(tag); if (text !== undefined) node.textContent=text; if(cls) node.className=cls; return node; };
   const showTaskPaneState=text=>{const hint=el('task-pane-state');hint.textContent=text;hint.hidden=!text;};
@@ -166,7 +166,7 @@ export function dashboardClient(brandImages = {}) {
     if(revoke && csrf && source_id){const closedGeneration=pickerGeneration;void pickerRequest('/cancel',{csrf,source_id,request_id},{revoke:true}).catch(error=>{if(error.status!==401 && closedGeneration===pickerGeneration && !document.hidden)status.textContent='已关闭任务目录；撤销访问结果未确认，未自动重试';});}
   }
   function pickerError(error){
-    if(error.status===401){document.dispatchEvent?.(new Event('rivule-session-expired'));closePicker(true,false);pollEnabled=false;clearTimeout(pollTimer);++requestId;cancelRead?.();cancelRead=null;loading=false;refresh.disabled=false;clearWorkbench('验证本人后显示动态与日志','login');hasReadSession=false;login.hidden=false;controls.hidden=true;status.textContent='会话已失效，请重新验证本人';return;}
+    if(error.status===401){document.dispatchEvent?.(new Event('rivule-session-expired'));closePicker(true,false);pollEnabled=false;clearTimeout(pollTimer);++requestId;cancelRead?.();cancelRead=null;loading=false;refresh.disabled=false;clearWorkbench('验证本人后显示动态与日志','login');hasReadSession=false;viewChosen=false;login.hidden=false;controls.hidden=true;status.textContent='会话已失效，请重新验证本人';return;}
     if(error.status===403 || error.status===409){closePicker();status.textContent='任务选择授权已失效或目录已变化，请重新打开';return;}
     // Do not retry mutations: a lost response does not establish whether apply succeeded.
     closePicker();status.textContent='任务选择操作结果未确认，请重新打开核对；未自动重试';
@@ -269,6 +269,8 @@ export function dashboardClient(brandImages = {}) {
       });
     }
   }
+  // An explicit selection wins over late reads and their retries.
+  function chooseView(view){viewChosen=true;switchView(view);}
   function capabilityIcon(kind) {
     const box=make('span',undefined,'capability-icon');
     const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -374,7 +376,7 @@ export function dashboardClient(brandImages = {}) {
   }
   function expireWorkbench(){
     document.dispatchEvent?.(new Event('rivule-session-expired'));el('settings').close();el('settings-toggle').setAttribute('aria-expanded','false');
-    pollEnabled=false;clearTimeout(pollTimer);++requestId;cancelRead?.();cancelRead=null;loading=false;refresh.disabled=false;closePicker(true,false);clearWorkbench('验证本人后显示动态与日志','login');hasReadSession=false;switchView('capabilities');login.hidden=false;controls.hidden=true;el('item-count').textContent='—';el('read-time').textContent='会话已到期';el('connection').textContent='等待本人验证';el('qq-channel').textContent='尚未读取';status.textContent='会话已到期，已清除工作信息，请重新验证本人';
+    pollEnabled=false;clearTimeout(pollTimer);++requestId;cancelRead?.();cancelRead=null;loading=false;refresh.disabled=false;closePicker(true,false);clearWorkbench('验证本人后显示动态与日志','login');hasReadSession=false;viewChosen=false;switchView('capabilities');login.hidden=false;controls.hidden=true;el('item-count').textContent='—';el('read-time').textContent='会话已到期';el('connection').textContent='等待本人验证';el('qq-channel').textContent='尚未读取';status.textContent='会话已到期，已清除工作信息，请重新验证本人';
   }
   function armWorkbenchExpiry(value){
     if(value===undefined)return;const expires=Date.parse(value);if(!Number.isFinite(expires))throw Error('invalid');clearTimeout(workExpiryTimer);
@@ -689,10 +691,10 @@ export function dashboardClient(brandImages = {}) {
     if(!activityItems.length)return;
     el('activity-search').value='';el('activity-filter').value='all';renderActivity();el('activity-search').focus();
   });
-  wireViewTabs(name=>{if(!hasReadSession)initialViewChosen=true;switchView(name);});
+  wireViewTabs(chooseView);
   el('task-clear-partial').addEventListener('click',resetTaskFilters);
   el('task-search').addEventListener('input',renderTaskList);el('task-filter').addEventListener('change',renderTaskList);
-  for(const name of ['running','attention','completed']) el('quick-'+name).addEventListener('click',()=>{el('task-filter').value=name;el('task-search').value='';switchView('tasks');renderTaskList();el('task-filter').focus();});
+  for(const name of ['running','attention','completed']) el('quick-'+name).addEventListener('click',()=>{el('task-filter').value=name;el('task-search').value='';chooseView('tasks');renderTaskList();el('task-filter').focus();});
   clearWorkbench(); switchView('capabilities');
 
   async function load(background = false) {
@@ -711,14 +713,14 @@ export function dashboardClient(brandImages = {}) {
       if (id !== requestId) return;
       if (response.status === 401) {
         document.dispatchEvent?.(new Event('rivule-session-expired'));
-        const retainInitialView=!hasReadSession && initialViewChosen;
-        pollEnabled=false; closePicker(true,false); clearWorkbench('验证本人后显示动态与日志','login'); hasReadSession=false;initialViewChosen=false;
+        const retainInitialView=!hasReadSession && viewChosen;
+        pollEnabled=false; closePicker(true,false); clearWorkbench('验证本人后显示动态与日志','login'); hasReadSession=false;viewChosen=false;
         if(!retainInitialView)switchView('capabilities');
         login.hidden = false; controls.hidden = true; el('item-count').textContent = '—'; el('read-time').textContent = '尚未读取';
         el('qq-channel').textContent = '尚未读取'; el('connection').textContent = '等待本人验证'; el('zot-card').setAttribute('data-state','disconnected'); status.textContent = '等待本人验证';
         empty('验证本人后显示任务'); return;
       }
-      if(response.status===409){const identities=sourceIdentities;closePicker(true,false);clearWorkbench('任务范围已变化，请重新选择任务后查看动态与日志。','selection');renderSourceCards(identities.map(source=>({...source,items:[],presentation_reset:true})));hasReadSession=false;switchView('capabilities');pollEnabled=false;el('item-count').textContent='—';el('read-time').textContent='任务访问范围已变化';el('connection').textContent='所选任务需重新核对';status.textContent='所选任务已不可用或访问范围变化，已清除旧内容；请重新选择已上报任务';controls.hidden=false;if(!identities.length){try{const scope=await pickerRequest('');if(id===requestId && !pickerDialog.open && Array.isArray(scope.sources))renderSourceCards(scope.sources.filter(source=>source.source_id!=='zot-main').map(source=>({...source,items:[],presentation_reset:true})));}catch{}}return;}
+      if(response.status===409){const identities=sourceIdentities;closePicker(true,false);clearWorkbench('任务范围已变化，请重新选择任务后查看动态与日志。','selection');renderSourceCards(identities.map(source=>({...source,items:[],presentation_reset:true})));hasReadSession=false;viewChosen=false;switchView('capabilities');pollEnabled=false;el('item-count').textContent='—';el('read-time').textContent='任务访问范围已变化';el('connection').textContent='所选任务需重新核对';status.textContent='所选任务已不可用或访问范围变化，已清除旧内容；请重新选择已上报任务';controls.hidden=false;if(!identities.length){try{const scope=await pickerRequest('');if(id===requestId && !pickerDialog.open && Array.isArray(scope.sources))renderSourceCards(scope.sources.filter(source=>source.source_id!=='zot-main').map(source=>({...source,items:[],presentation_reset:true})));}catch{}}return;}
       if (!response.ok) throw Error('unavailable');
       const data = await Promise.race([response.json(), deadline]);
       if (id !== requestId) return;
@@ -745,7 +747,7 @@ export function dashboardClient(brandImages = {}) {
       taskReadState=emptyReadState(data);showTaskReadTime(taskReadState);
       el('item-count').textContent=taskReadState==='available'?String(data.items.length).padStart(2,'0'):'—';
       status.textContent=anyError?'部分工作信息读取失败 · 自动重试':allSources.some(source=>source.state==='unconfigured')?'部分任务服务尚未接入 · 未读取未连接数据':allSources.some(source=>emptyReadState(source)==='unknown')?'任务读取状态待确认 · 数量未知':allItems.length?'工作信息已更新 · 30 秒自动刷新':'尚未配置所选任务 · 30 秒自动刷新';
-      if(!hasReadSession) switchView(preferences.view==='auto' ? (data.items.length ? 'tasks' : 'capabilities') : preferences.view); hasReadSession=true;initialViewChosen=false;
+      if(!hasReadSession&&!viewChosen) switchView(preferences.view==='auto' ? (data.items.length ? 'tasks' : 'capabilities') : preferences.view); hasReadSession=true;
       el('primary-snapshot-warning').hidden=true;
       selectedItems = data.items; renderAcceptedSnapshot();recordTaskChanges(data); renderSourceCards(data.sources); renderCapabilities(verified ? '已验证' : '待验证', readable?'可读取':taskReadState==='unavailable'?'读取失败 · 数量待确认':taskReadState==='unconfigured'?'任务服务未接入':taskReadState==='unknown'?'任务读取状态待确认':'尚无可读快照', el('qq-channel').textContent, proof?.last_verified_at,true);
     } catch {
@@ -755,7 +757,7 @@ export function dashboardClient(brandImages = {}) {
       for(const warning of sourceWarnings)warning.hidden=false;
       showTaskChanges([]);
       if(selectedItems){el('primary-snapshot-warning').hidden=false;updateDetailSnapshotWarning();el('zot-card').setAttribute('data-state','warning');status.textContent='更新中断 · 保留上次快照（可能已过期）· 自动重试';el('read-time').textContent=lastTaskReadAt?'上次成功读取：'+lastTaskReadAt+' · 本次更新失败':'本次任务读取失败';return;}
-      hasReadSession=false; switchView('capabilities');
+      hasReadSession=false; if(!viewChosen)switchView('capabilities');
       el('qq-channel').textContent = '状态待确认'; el('zot-card').setAttribute('data-state','warning'); el('connection').textContent = '读取中断 · 可重试'; status.textContent = '读取失败 · 可重试（自动退避）';
       items.replaceChildren(); el('item-count').textContent = '—'; el('read-time').textContent = '本次读取失败';
       empty('读取失败，请重试。');
@@ -778,8 +780,8 @@ export function dashboardClient(brandImages = {}) {
   toggle.addEventListener('click',()=>{settings.showModal();toggle.setAttribute('aria-expanded','true');el('settings-close').focus();});
   el('settings-close').addEventListener('click',closeSettings);
   settings.addEventListener('cancel',event=>{event.preventDefault();closeSettings();});
-  for(const key of Object.keys(allowed))el('pref-'+key).addEventListener('change',event=>{if(!allowed[key].includes(event.target.value))return;preferences[key]=event.target.value;applyPreferences();if(key==='view' && hasReadSession)switchView(preferences.view==='auto'?(selectedItems?.length?'tasks':'capabilities'):preferences.view);savePreferences();});
-  el('settings-reset').addEventListener('click',()=>{preferences={...defaults};applyPreferences();switchView(hasReadSession && selectedItems?.length?'tasks':'capabilities');const saved=savePreferences();el('settings-feedback').textContent=saved.includes('无法保存')?'已恢复默认 · 无法保存':'已恢复默认';});
+  for(const key of Object.keys(allowed))el('pref-'+key).addEventListener('change',event=>{if(!allowed[key].includes(event.target.value))return;preferences[key]=event.target.value;applyPreferences();if(key==='view'){viewChosen=false;if(hasReadSession)switchView(preferences.view==='auto'?(selectedItems?.length?'tasks':'capabilities'):preferences.view);}savePreferences();});
+  el('settings-reset').addEventListener('click',()=>{preferences={...defaults};viewChosen=false;applyPreferences();switchView(hasReadSession && selectedItems?.length?'tasks':'capabilities');const saved=savePreferences();el('settings-feedback').textContent=saved.includes('无法保存')?'已恢复默认 · 无法保存':'已恢复默认';});
   el('rename-zot').addEventListener('click', () => { el('display-name').value = el('zot-name').textContent; el('name-dialog').showModal(); });
   el('name-cancel').addEventListener('click', () => el('name-dialog').close());
   el('name-form').addEventListener('submit', event => { event.preventDefault(); const name = appearanceText(el('display-name').value,32); if (!name) return; el('zot-name').textContent = name; appearance.name = name; saveAppearance(); el('zot-emblem').setAttribute('aria-label','编辑 ' + name + ' 图标'); el('rename-zot').setAttribute('aria-label','修改 ' + name + ' 的显示名称'); el('name-dialog').close(); });
