@@ -188,7 +188,8 @@ export function dashboardClient(brandImages = {}) {
       if(item.selected && !item.configured && !pickerInitial.has(item.ref)){pickerInitial.add(item.ref);pickerSelected.add(item.ref);}
       const label=make('label',undefined,'picker-row'),input=make('input'),text=make('span',undefined,'picker-row-text');
       input.type='checkbox';input.checked=item.configured || pickerSelected.has(item.ref);input.disabled=item.configured;
-      input.setAttribute('aria-label',(item.task_name || '已上报任务')+(item.configured?' · 配置固定选择':''));
+      const accessibleName=[item.task_name || '已上报任务',item.project_name?'项目：'+item.project_name:'',item.branch_name?'分支：'+item.branch_name:'',item.configured?'配置固定选择':''].filter(Boolean).join(' · ');
+      input.setAttribute('aria-label',accessibleName);
       text.append(make('strong',item.task_name || '已上报任务'),make('small',[item.project_name,item.branch_name].filter(Boolean).join(' · ')),make('small',[(statusNames[item.source_status] || '状态未知'),item.stale?'快照已过期':'',item.archived?'已归档':'',item.last_confirmed_at?'最近确认 · '+item.last_confirmed_at:'暂无确认时间',item.configured?'配置固定 · 不可在此移除':''].filter(Boolean).join(' · ')));
       input.addEventListener('change',()=>{if(input.checked){if(pickerCount()>=pickerLimit){input.checked=false;el('picker-feedback').textContent='最多选择 '+pickerLimit+' 个任务（含所有 PA 的固定选择）';return;}pickerSelected.add(item.ref);}else pickerSelected.delete(item.ref);pickerControls();});
       label.append(input,text);el('picker-rows').append(label);pickerRows.set(item.ref,{input,configured:item.configured});
