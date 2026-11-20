@@ -338,7 +338,7 @@ export function dashboardClient(brandImages = {}) {
       card.className = 'task'; tag.className = 'task-tag'; tag.textContent = item.selection_kind === 'verified_test' ? '测试任务' : '所选任务';
       summary.className = 'task-preview-summary';
       title.textContent = item.task_name || labels[item.state] || '任务状态未知'; summary.textContent = item.summary || labels[item.state] || '';
-      detail.textContent = [item.project_name, item.stale ? '快照已过期' : '', item.archived ? '已归档' : ''].filter(Boolean).join(' · ');
+      detail.textContent = [item.project_name, item.branch_name ? '分支：'+item.branch_name : '', item.stale ? '快照已过期' : '', item.archived ? '已归档' : ''].filter(Boolean).join(' · ');
       card.append(tag,title,summary,detail,make('small',item.phase_label ? '阶段 · '+item.phase_label : '阶段未上报'),make('small',progressText(item)));
       const state=make('span',statusNames[item.source_status] || labels[item.state] || '状态未知','task-state');state.setAttribute('data-kind',item.source_status || 'unknown');if(selectedItems.length>1 || !['needs_input','failed'].includes(item.source_status))card.append(state);let pendingButton=null;if(Number.isSafeInteger(item.pending_action_count) && item.pending_action_count>0){pendingButton=make('button',item.pending_action_count+' 项待确认 · 查看详情','pending-callout');pendingButton.setAttribute('type','button');pendingButton.setAttribute('aria-expanded','false');card.append(pendingButton);}
       const step=['proposed','running','completed'].indexOf(item.source_status);
