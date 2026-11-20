@@ -28,6 +28,7 @@ body[data-motion="reduced"] .capability-detail:focus-within,body[data-motion="of
 .business-metrics,.budget-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.business-metrics article,.budget-fields label,.business-status dd{min-width:0}.business-metrics strong{overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.business-status dt{flex-shrink:0}.business-status{padding:4px 12px;background:#f3edf9;border-radius:13px}#business-budget{padding:14px;border:1px solid #ddcff2;border-radius:15px;background:linear-gradient(125deg,#fff,#f2eafb)}#business-budget h4{font-size:13px;margin:0 0 3px;color:#624398}#business-warning{padding:12px 14px;border:1px solid #dec085;border-left:4px solid #bd8733;border-radius:12px;background:#fff0cc;color:#684a20;font-size:12px;line-height:1.6}#business-blocker:empty{display:none}.business-actions,#enable-dialog .buttons{flex-wrap:wrap}.business-actions button,#enable-dialog .buttons button{flex:1 1 160px;min-width:0;white-space:normal;overflow-wrap:anywhere}#settings button,#enable-dialog button{max-width:100%}.business-policy, #business-feedback{overflow-wrap:anywhere}#enable-dialog h2{padding-right:0}#enable-dialog .buttons{position:relative}#business-budget input,#business-budget select{min-width:0;max-width:100%}@media(max-width:420px){.business-metrics,.budget-fields{grid-template-columns:minmax(0,1fr)}.business-status>div{flex-direction:column;gap:4px}.business-status dd{text-align:left}.business-metrics strong{font-size:22px}#settings,#enable-dialog{padding:18px}.business-actions button,#enable-dialog .buttons button{flex-basis:100%}}
 .canvas:has(.source-card) .pa{flex-basis:clamp(310px,30vw,390px);margin-left:0;margin-right:0}.canvas:has(.source-card) .pa:first-child{margin-left:auto}.snapshot-warning{margin:0;padding:9px 16px;background:#fff0ce;color:#76571c;font-size:11px;line-height:1.5;flex-shrink:0}.source-card .emblem{display:grid;place-items:center}.source-card .card-body .task small{overflow-wrap:anywhere}.source-card .pa-name h2{font-size:32px}#detail-content p{white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:700px){.canvas:has(.source-card) .pa{flex-basis:min(380px,calc(100vw - 32px));margin-left:0}}
 #task-picker{width:min(650px,calc(100vw - 28px));border-top:7px solid #a58be9}#picker-scope p{overflow-wrap:anywhere}.picker-row{display:flex;align-items:start;gap:12px;padding:13px;background:#f0eafa;border:1px solid #dfd2ee;border-radius:12px}.picker-row input{width:18px;height:18px;flex:0 0 18px;margin:2px 0;accent-color:#7053e8}.picker-row-text{min-width:0;overflow-wrap:anywhere}.picker-row strong,.picker-row small{display:block}.picker-row small{font-size:11px;line-height:1.7;color:#766284;margin-top:4px}#task-picker .buttons{flex-wrap:wrap}#picker-feedback,#picker-count{font-size:12px}#picker-rows{max-height:42dvh;overflow:auto}
+.event-timeline{min-width:0;margin-block:12px;overflow-wrap:anywhere}.event-timeline>summary{padding-block:9px;cursor:pointer;font-weight:700}.event-timeline h3{margin:0 0 8px}.event-log-scope,.event-log-meta{font-size:.875em}.event-log-scope p{margin:4px 0}.event-log-list{margin:12px 0 8px;padding-inline-start:1.4em}.event-log-entry{padding:10px 0;border-block-start:1px solid currentColor}.event-log-heading,.event-log-signals,.event-log-meta{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 12px}.event-log-heading time{font-size:.875em}.event-log-entry .event-log-summary{margin:4px 0;font-weight:530;white-space:pre-wrap}.event-log-signals{margin-block:4px;font-size:.875em;font-weight:650}.event-timeline>summary:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 </style></head><body>
 <header class="masthead"><div class="brand"><img class="rivule-logo" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHRpdGxlPlJpdnVsZTwvdGl0bGU+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTkiIGZpbGw9IiMyNDRiNTAiLz48ZyBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iNC41Ij48cGF0aCBkPSJNMTYgMTd2OWMwIDEwIDIzIDUgMjMgMTh2NCIgc3Ryb2tlPSIjZjhmM2U5Ii8+PHBhdGggZD0iTTMyIDE2djhjMCA2LTkgOS05IDE1djlNNDggMTd2OWMwIDEwLTkgMTAtOSAxOCIgc3Ryb2tlPSIjZDdhYTdkIi8+PC9nPjwvc3ZnPgo=" alt="" width="34" height="34"><span class="brand-name">rivule</span></div></header>
 <main class="canvas" id="canvas" aria-label="PA 竖列工作台">
@@ -266,8 +267,46 @@ export function dashboardClient(brandImages = {}) {
   const deliveryNames={pending:'排队中',queued:'排队中（尚未发送）',retry_wait:'等待重试（尚未确认送达）',sending:'发送中',sent:'服务端已发送（未确认阅读）',failed:'发送失败',uncertain:'结果未知',superseded:'已被替代',cancelled:'已取消',blocked:'已阻止',dead_letter:'发送终止',coalesced:'已合并（非单条送达）',suppressed:'已抑制',unknown:'未知',not_recorded:'无对应投递记录'};
   const kindNames={registered:'登记',started:'开始',progress:'进展',needs_input:'待确认',completed:'完成',failed:'失败',cancelled:'取消',heartbeat:'状态确认',correction:'修正'};
   function progressText(item){const p=item.progress;return p ? '来源上报进度 · '+p.done+(p.total===null?'':' / '+p.total)+' '+p.unit : '尚未上报量化进度';}
-  function workDetails(item){return [item.summary,item.source_id && '来源 · '+item.source_id,'项目 / 任务 / 运行 / 分支 · '+[item.project_id,item.task_id,item.run_id,item.branch_id].join(' / '),item.stale && '快照已过期',item.archived && '已归档',item.phase_label && '阶段 · '+item.phase_label,progressText(item),item.blocker && '阻塞 · '+item.blocker,'任务状态 · '+(statusNames[item.source_status] || labels[item.state] || '未知'),item.last_confirmed_at && '来源最近确认 · '+item.last_confirmed_at,item.observed_at && '快照读取 · '+item.observed_at,...activityDetails(item)];}
-  function activityDetails(item){const log=item.activity;if(log?.state!=='available')return ['日志暂不可用；不能视为没有活动'];return ['业务事件日志 · 仅展示普通事件；已过滤受限内容','投递状态仅表示 Discord 队列记录，不代表 QQ 投递或接收人已读',log.observed_at && '日志读取 · '+log.observed_at,log.truncated && '仅显示最近 30 条事件',log.withheld_count>0 && log.withheld_count+' 条敏感事件未展示',...(log.items?.length ? log.items.map(e=>[e.received_at,kindNames[e.kind] || '更新',statusNames[e.source_status] || '状态未知',e.projection_applied?'已更新快照':'未替换任务快照',e.summary,e.phase_label,progressText(e),'Discord 投递 · '+(e.delivery || ['unknown']).map(v=>deliveryNames[v] || '未知').join(' / '),'来源发生时间 · '+e.occurred_at].filter(Boolean).join(' · ')) : ['暂无可展示的普通业务事件'])];}
+  function workDetails(item){return [item.summary,item.source_id && '来源 · '+item.source_id,'项目 / 任务 / 运行 / 分支 · '+[item.project_id,item.task_id,item.run_id,item.branch_id].join(' / '),item.stale && '快照已过期',item.archived && '已归档',item.phase_label && '阶段 · '+item.phase_label,progressText(item),item.blocker && '阻塞 · '+item.blocker,'任务状态 · '+(statusNames[item.source_status] || labels[item.state] || '未知'),item.last_confirmed_at && '来源最近确认 · '+item.last_confirmed_at,item.observed_at && '快照读取 · '+item.observed_at];}
+  function activityTimeline(item,collapsed=false){
+    const log=item.activity,section=make(collapsed?'details':'section',undefined,'event-timeline');
+    const available=item.state==='available' && log?.state==='available';
+    const rows=available && Array.isArray(log.items)?log.items:[];
+    const title='业务事件日志'+(collapsed?(available?' · '+rows.length+' 条可展示事件':' · 暂不可用'):'');
+    section.append(make(collapsed?'summary':'h3',title));
+    if(!available){section.append(make('p','日志暂不可用；不能视为没有活动','event-log-scope'));return section;}
+    const time=(label,value)=>{
+      const clock=make('time',label+' · '+value);clock.setAttribute('datetime',value);return clock;
+    };
+    const scope=make('div',undefined,'event-log-scope');
+    scope.append(make('p','仅展示普通事件；已过滤受限内容'));
+    if(log.observed_at)scope.append(time('日志读取',log.observed_at));
+    if(log.truncated)scope.append(make('p','仅显示最近 30 条事件'));
+    if(log.withheld_count>0)scope.append(make('p',log.withheld_count+' 条敏感事件未展示'));
+    section.append(scope);
+    if(!rows.length){section.append(make('p','暂无可展示的普通业务事件'));return section;}
+    const list=make('ol',undefined,'event-log-list');
+    for(const e of rows){
+      const row=make('li',undefined,'event-log-entry'),heading=make('div',undefined,'event-log-heading');
+      heading.append(make('strong',kindNames[e.kind] || '更新'));
+      if(e.received_at)heading.append(time('Rivule 收到',e.received_at));
+      row.append(heading);
+      if(e.summary)row.append(make('p',e.summary,'event-log-summary'));
+      const signal=make('div',undefined,'event-log-signals');
+      signal.append(make('span',statusNames[e.source_status] || '状态未知'),make('span',e.projection_applied?'已更新快照':'未替换任务快照'));
+      if(e.phase_label)signal.append(make('span','阶段 · '+e.phase_label));
+      signal.append(make('span',progressText(e)));row.append(signal);
+      const meta=make('div',undefined,'event-log-meta');
+      if(e.occurred_at)meta.append(time('来源发生',e.occurred_at));
+      meta.append(make('span','Discord 投递 · '+(e.delivery || ['unknown']).map(v=>deliveryNames[v] || '未知').join(' / ')));row.append(meta);list.append(row);
+    }
+    section.append(list,make('p','投递状态仅表示 Discord 队列记录，不代表 QQ 投递或接收人已读','event-log-scope'));
+    return section;
+  }
+  function openWorkDetail(item,title,opener,showsSnapshot=false){
+    openDetail(title,workDetails(item),opener,showsSnapshot);
+    el('detail-content').append(activityTimeline(item,true));
+  }
   let sourceCards=[],sourceWarnings=[],sourceIdentities=[];const sourceButtons=new Map([['zot-main',el('choose-tasks')]]),sourceTaskButtons=new Map();
   let pollTimer=null,pollEnabled=false,pollFailures=0,resumeRead=false;
   function schedulePoll(){clearTimeout(pollTimer);if(!pollEnabled || document.hidden)return;pollTimer=setTimeout(()=>{if(el('detail-dialog').open || el('settings').open){schedulePoll();return;}load(true);},Math.min(300000,30000*2**pollFailures));pollTimer?.unref?.();}
@@ -287,7 +326,7 @@ export function dashboardClient(brandImages = {}) {
       const emblem=make('div','✳','emblem');if(source.provider && Object.hasOwn(brandImages,source.provider)){const image=make('img');image.src=brandImages[source.provider];image.alt=source.provider+' 官方图标';emblem.replaceChildren(image);}const nameBox=make('div',undefined,'pa-name');nameBox.append(make('h2',name));top.append(number,emblem,nameBox);
       const body=make('div',undefined,'card-body');body.append(make('p','所选任务 '+source.items.length+' · 只读快照','view-heading'));
       if(!source.items.length)body.append(make('p',source.presentation_reset?'旧工作信息已清除，请重新选择已上报任务。':'尚未配置所选任务；不代表此 PA 没有工作。未读取未上报的运行时活动。','empty'));
-      for(const item of source.items){const task=make('article',undefined,'task');task.append(make('span',statusNames[item.source_status] || labels[item.state] || '状态未知','task-state'),make('h3',item.task_name || '所选任务'),make('p',item.summary || labels[item.state],'task-preview-summary'),make('small',[item.project_name,item.branch_name,item.stale?'快照已过期':'',item.archived?'已归档':''].filter(Boolean).join(' · ')),make('small',progressText(item)),make('small',item.last_confirmed_at ? '最近确认 · '+item.last_confirmed_at : '暂无确认时间'));const button=make('button','工作详情与日志','detail-launch');button.setAttribute('type','button');button.addEventListener('click',()=>openDetail(name+' · '+(item.task_name || '所选任务'),workDetails(item),button));task.append(button);body.append(task);const taskKey=readingKey({...item,source_id:source.source_id});if(taskKey)sourceTaskButtons.set(taskKey,button);}
+      for(const item of source.items){const task=make('article',undefined,'task');task.append(make('span',statusNames[item.source_status] || labels[item.state] || '状态未知','task-state'),make('h3',item.task_name || '所选任务'),make('p',item.summary || labels[item.state],'task-preview-summary'),make('small',[item.project_name,item.branch_name,item.stale?'快照已过期':'',item.archived?'已归档':''].filter(Boolean).join(' · ')),make('small',progressText(item)),make('small',item.last_confirmed_at ? '最近确认 · '+item.last_confirmed_at : '暂无确认时间'));const button=make('button','工作详情与日志','detail-launch');button.setAttribute('type','button');button.addEventListener('click',()=>openWorkDetail(item,name+' · '+(item.task_name || '所选任务'),button));task.append(button);body.append(task);const taskKey=readingKey({...item,source_id:source.source_id});if(taskKey)sourceTaskButtons.set(taskKey,button);}
       const actions=make('footer',undefined,'pa-actions'),choose=make('button','选择已上报任务');choose.type='button';choose.setAttribute('aria-haspopup','dialog');choose.addEventListener('click',()=>openPicker(source.source_id,choose));actions.append(choose);sourceButtons.set(source.source_id,choose);
       const warning=make('p','上次快照可能已过期 · 本次更新失败','snapshot-warning');warning.hidden=true;sourceWarnings.push(warning);card.setAttribute('data-palette',sourceCards.length%2===0?'teal':'rose');card.append(top,warning,body,actions);el('canvas').insertBefore(card,el('add-column'));sourceCards.push(card);
     }
@@ -365,7 +404,7 @@ export function dashboardClient(brandImages = {}) {
       button.addEventListener('click',()=>{
         if(document.hidden || changeButtons.get(key)!==button)return;
         const current=selectedItems?.find(value=>value.state==='available' && !value.stale && readingKey(value)===key);
-        if(current)openDetail(current.task_name || '任务详情',workDetails(current),button,true);
+        if(current)openWorkDetail(current,current.task_name || '任务详情',button,true);
       });
       row.append(button,make('small',messages.join('；')));
       const pin=taskReadingButton(item,key,changePinButtons);if(pin)row.append(pin);
@@ -409,7 +448,7 @@ export function dashboardClient(brandImages = {}) {
     if(document.hidden)return;
     const queue=currentReadableQueue(),index=queue.findIndex(entry=>entry.key===key);if(index<0)return;
     const {current,opener}=queue[index];
-    openDetail(current.task_name || '任务详情',workDetails(current),opener,true);
+    openWorkDetail(current,current.task_name || '任务详情',opener,true);
     queueDetailKey=key;
     if(queue.length<2)return;
     const nav=el('queue-detail-nav'),position=el('queue-detail-position');
@@ -511,8 +550,8 @@ export function dashboardClient(brandImages = {}) {
       if(step>=0 && item.state==='available') { const rail=make('div',undefined,'state-track');rail.setAttribute('aria-label','当前阶段：'+statusNames[item.source_status]);for(let i=0;i<3;i++)rail.append(make('span',undefined,i===step?'current':''));card.append(rail); }
       const facts=make('details',undefined,'task-facts'),factsSummary=make('summary','查看完整内容'),readKey=readingKey(item);facts.append(factsSummary);if(readKey && reading.has(readKey))facts.open=reading.get(readKey).open;if(item.summary)facts.append(make('p',item.summary,'full-summary'));
       for(const [label,value] of [['分支',item.branch_name],['来源确认',item.last_confirmed_at],['读取时间',item.observed_at]]) if(value)facts.append(make('p',label+' · '+value));
-      if(pendingButton){pendingButton.addEventListener('click',()=>{facts.open=!facts.open;pendingButton.setAttribute('aria-expanded',String(facts.open));openDetail(item.task_name || '任务详情',workDetails(item),pendingButton,true);});facts.addEventListener('toggle',()=>pendingButton.setAttribute('aria-expanded',String(facts.open)));}
-      const expand=make('button','打开详情','detail-launch');expand.setAttribute('type','button');expand.addEventListener('click',()=>openDetail(item.task_name || '任务详情',workDetails(item),expand,true));const pin=taskReadingButton(item,readKey);card.append(facts,expand);if(pin)card.append(pin);items.append(card);if(readKey){const readNode={facts,summary:factsSummary,expand,pendingButton,pin};readingNodes.set(readKey,readNode);const focusTarget=reading.get(readKey)?.focused;if(focusTarget)(readNode[focusTarget] || readNode.expand).focus();}if(pendingButton)pendingButton.setAttribute('aria-expanded',String(facts.open));
+      if(pendingButton){pendingButton.addEventListener('click',()=>{facts.open=!facts.open;pendingButton.setAttribute('aria-expanded',String(facts.open));openWorkDetail(item,item.task_name || '任务详情',pendingButton,true);});facts.addEventListener('toggle',()=>pendingButton.setAttribute('aria-expanded',String(facts.open)));}
+      const expand=make('button','打开详情','detail-launch');expand.setAttribute('type','button');expand.addEventListener('click',()=>openWorkDetail(item,item.task_name || '任务详情',expand,true));const pin=taskReadingButton(item,readKey);card.append(facts,expand);if(pin)card.append(pin);items.append(card);if(readKey){const readNode={facts,summary:factsSummary,expand,pendingButton,pin};readingNodes.set(readKey,readNode);const focusTarget=reading.get(readKey)?.focused;if(focusTarget)(readNode[focusTarget] || readNode.expand).focus();}if(pendingButton)pendingButton.setAttribute('aria-expanded',String(facts.open));
     }
     renderReadingQueue();
     activityItems=model.recent;
@@ -537,7 +576,7 @@ export function dashboardClient(brandImages = {}) {
     for(const item of visible) {
       const row=make('article',undefined,'activity-row');
       const branch=item.branch_name?'分支：'+item.branch_name:'',context=[item.task_name||'业务事件日志',item.project_name,branch].filter(Boolean).join(' · ');
-      row.append(make('time',new Date(item.last_confirmed_at).toLocaleString('zh-CN')),make('h3',item.task_name || '所选任务'),make('p',[statusNames[item.source_status] || '状态未知',item.project_name,branch,item.stale?'快照已过期':''].filter(Boolean).join(' · ')));const logs=make('button','查看日志','detail-launch');logs.setAttribute('type','button');logs.setAttribute('aria-label','查看日志：'+context);logs.addEventListener('click',()=>openDetail(context,activityDetails(item),logs,true));row.append(make('p',item.activity?.state==='available'?(item.activity.items?.[0]?.summary || '尚无可展示的最新事件'):'日志暂不可用；不能视为没有活动'),make('p',item.activity?.state==='available' ? String(item.activity.items.length)+' 条可展示事件'+(item.activity.truncated?' · 最近 30 条':'') : '日志暂不可用'),logs);activity.append(row);const key=readingKey(item);if(key){activityButtons.set(key,logs);if(key===focusedActivity)logs.focus();}}
+      row.append(make('time',new Date(item.last_confirmed_at).toLocaleString('zh-CN')),make('h3',item.task_name || '所选任务'),make('p',[statusNames[item.source_status] || '状态未知',item.project_name,branch,item.stale?'快照已过期':''].filter(Boolean).join(' · ')));const logs=make('button','查看日志','detail-launch');logs.setAttribute('type','button');logs.setAttribute('aria-label','查看日志：'+context);logs.addEventListener('click',()=>{openDetail(context,[],logs,true);el('detail-content').append(activityTimeline(item));});row.append(make('p',item.activity?.state==='available'?(item.activity.items?.[0]?.summary || '尚无可展示的最新事件'):'日志暂不可用；不能视为没有活动'),make('p',item.activity?.state==='available' ? String(item.activity.items.length)+' 条可展示事件'+(item.activity.truncated?' · 最近 30 条':'') : '日志暂不可用'),logs);activity.append(row);const key=readingKey(item);if(key){activityButtons.set(key,logs);if(key===focusedActivity)logs.focus();}}
     if(focusedActivity && !activityButtons.has(focusedActivity))(activityItems.length?el('activity-search'):el('view-activity')).focus();
   }
   el('activity-search').addEventListener('input',()=>{if(selectedItems)renderActivity();});
