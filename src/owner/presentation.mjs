@@ -32,6 +32,7 @@ body[data-motion="reduced"] .capability-detail:focus-within,body[data-motion="of
 .reading-queue-actions{display:flex;align-items:flex-start;flex-wrap:wrap;gap:6px;margin-top:5px}.reading-compare{min-width:0;overflow-wrap:anywhere}.reading-compare .compare-note{font-size:.875em;margin:0 0 8px}.compare-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px}.compare-choices{margin-bottom:6px}.compare-choices label{display:block;min-width:0;font-weight:650}.compare-select{display:block;width:100%;min-width:0;box-sizing:border-box;margin-top:4px;padding:6px;font:inherit;color:inherit;background:transparent;border:1px solid currentColor;border-radius:6px}.compare-select:focus-visible{outline:2px solid currentColor;outline-offset:2px}.compare-status{font-weight:650;margin:10px 0}.compare-field{padding:8px 0;border-block-start:1px solid currentColor}.compare-field h3{font-size:1em;margin:0 0 5px}.compare-cell{display:grid;grid-template-columns:1.4em minmax(0,1fr);gap:4px;padding-inline-end:3px}.compare-side{font-weight:750}.compare-cell .compare-value{margin:0;white-space:pre-wrap}
 @media (max-width:480px){.compare-columns{grid-template-columns:minmax(0,1fr)}}
 .work-nav [role=tab]:focus-visible,.card-body>[role=tabpanel]:focus-visible{outline:2px solid currentColor;outline-offset:-2px}
+.detail-reading-actions{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 10px;margin-block:8px;min-width:0}.detail-reading-feedback{overflow-wrap:anywhere}.detail-reading-pin[aria-disabled=true]{opacity:.65;cursor:not-allowed}.detail-reading-pin:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 </style></head><body>
 <header class="masthead"><div class="brand"><img class="rivule-logo" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHRpdGxlPlJpdnVsZTwvdGl0bGU+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTkiIGZpbGw9IiMyNDRiNTAiLz48ZyBmaWxsPSJub25lIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS13aWR0aD0iNC41Ij48cGF0aCBkPSJNMTYgMTd2OWMwIDEwIDIzIDUgMjMgMTh2NCIgc3Ryb2tlPSIjZjhmM2U5Ii8+PHBhdGggZD0iTTMyIDE2djhjMCA2LTkgOS05IDE1djlNNDggMTd2OWMwIDEwLTkgMTAtOSAxOCIgc3Ryb2tlPSIjZDdhYTdkIi8+PC9nPjwvc3ZnPgo=" alt="" width="34" height="34"><span class="brand-name">rivule</span></div></header>
 <main class="canvas" id="canvas" aria-label="PA 竖列工作台">
@@ -280,10 +281,11 @@ export function dashboardClient(brandImages = {}) {
   }
   let detailOpener=null;
   let detailShowsSnapshot=false;
+  let detailReading=null;
   let queueDetailKey=null;
-  function updateDetailSnapshotWarning(){el('detail-snapshot-warning').hidden=!detailShowsSnapshot || el('primary-snapshot-warning').hidden;}
-  function openDetail(title,paragraphs,opener,showsSnapshot=false){resetQueueDetailNavigation();detailShowsSnapshot=showsSnapshot;updateDetailSnapshotWarning();detailOpener=opener;el('detail-title').textContent=title;el('detail-content').replaceChildren(...paragraphs.filter(Boolean).map(text=>make('p',text)));if(!el('detail-dialog').open)el('detail-dialog').showModal();el('detail-close').focus();}
-  function closeDetail(){revealReadingQueueOpener();resetQueueDetailNavigation();detailShowsSnapshot=false;updateDetailSnapshotWarning();el('detail-dialog').close();el('detail-content').replaceChildren();el('detail-title').textContent='';detailOpener?.focus();detailOpener=null;}
+  function updateDetailSnapshotWarning(){el('detail-snapshot-warning').hidden=!detailShowsSnapshot || el('primary-snapshot-warning').hidden;syncDetailReading();}
+  function openDetail(title,paragraphs,opener,showsSnapshot=false){resetQueueDetailNavigation();detailReading=null;detailShowsSnapshot=showsSnapshot;updateDetailSnapshotWarning();detailOpener=opener;el('detail-title').textContent=title;el('detail-content').replaceChildren(...paragraphs.filter(Boolean).map(text=>make('p',text)));if(!el('detail-dialog').open)el('detail-dialog').showModal();el('detail-close').focus();}
+  function closeDetail(){revealReadingQueueOpener();resetQueueDetailNavigation();detailReading=null;detailShowsSnapshot=false;updateDetailSnapshotWarning();el('detail-dialog').close();el('detail-content').replaceChildren();el('detail-title').textContent='';detailOpener?.focus();detailOpener=null;}
   el('detail-close').addEventListener('click',closeDetail);
   el('detail-dialog').addEventListener('cancel',event=>{event.preventDefault();closeDetail();});
   const capabilityHeadings=new Map();
@@ -343,8 +345,11 @@ export function dashboardClient(brandImages = {}) {
     return section;
   }
   function openWorkDetail(item,title,opener){
+    const reading=detailReadingControl(item,opener);
     openDetail(title,workDetails(item),opener,true);
+    if(reading)el('detail-content').append(reading.node);
     el('detail-content').append(activityTimeline(item,true));
+    detailReading=reading;syncDetailReading();
   }
   const sourceScrollTargets=new Map();
   let sourceCards=[],sourceWarnings=[],sourceIdentities=[];const sourceButtons=new Map([['zot-main',el('choose-tasks')]]),sourceTaskButtons=new Map();
@@ -620,6 +625,33 @@ export function dashboardClient(brandImages = {}) {
   }
   function updateReadingPin(pin,key){
     const pinned=pinnedReads.has(key);pin.setAttribute('aria-pressed',String(pinned));pin.disabled=!pinned&&pinnedReads.size>=maxReadingPins;
+  }
+  function detailReadingEligible(item,key){
+    return !!key&&!loading&&!document.hidden&&el('primary-snapshot-warning').hidden&&item.state==='available'&&!item.stale&&!item.archived&&selectedItems?.includes(item);
+  }
+  function syncDetailReading(){
+    if(!detailReading)return;
+    const {item,key,button,feedback}=detailReading,eligible=detailReadingEligible(item,key);
+    updateReadingPin(button,key);
+    button.setAttribute('aria-disabled',String(!eligible||button.disabled));
+    if(!eligible)feedback.textContent='快照待核对，暂不可暂存。';
+    else if(button.disabled)feedback.textContent='暂存清单已满（'+maxReadingPins+' 项）。';
+  }
+  function detailReadingControl(item,opener){
+    const key=readingKey(item);
+    if(!detailReadingEligible(item,key)||[...readingQueueButtons.values()].some(entry=>entry.open===opener))return null;
+    const node=make('div',undefined,'detail-reading-actions');
+    const button=make('button','暂存阅读','detail-launch reading-pin detail-reading-pin'),feedback=make('small',undefined,'detail-reading-feedback');
+    button.setAttribute('type','button');button.setAttribute('aria-label','暂存阅读：'+readingLabel(item));feedback.setAttribute('role','status');
+    const record={node,item,key,button,feedback};
+    button.addEventListener('click',()=>{
+      if(detailReading!==record||!el('detail-dialog').open||!detailReadingEligible(item,key)||button.disabled)return;
+      const before=pinnedReads.has(key);
+      toggleTaskReading(key);syncDetailReading();
+      const after=pinnedReads.has(key);
+      if(before!==after)feedback.textContent=(after?'已暂存':'已从暂存移除')+' · 清单 '+pinnedReads.size+' / '+maxReadingPins+' 项';
+    });
+    node.append(button,feedback);return record;
   }
   function taskReadingButton(item,key,buttons=cardPinButtons){
     if(!key || item.state!=='available')return null;
