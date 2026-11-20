@@ -125,9 +125,8 @@ export function dashboardClient(brandImages = {}) {
   let readingNodes = new Map();
   const activityButtons = new Map();
   const readingKey = item => ['source_id','project_id','task_id','run_id','branch_id'].every(key=>typeof item[key]==='string' && item[key]) ? JSON.stringify([item.source_id,item.project_id,item.task_id,item.run_id,item.branch_id]) : null;
-  let activityEmptyText='还没有已选任务，选择任务后可查看动态与日志。';
   let lastTaskReadAt='';
-  let selectedItems = null, hasReadSession = false,workExpiryTimer=null;
+  let selectedItems = null, taskReadState='unknown', hasReadSession = false,workExpiryTimer=null;
   let initialViewChosen=false;
   const statusNames = {proposed:'待开始',running:'进行中',needs_input:'待决定',completed:'已完成',failed:'遇到问题',cancelled:'已取消'};
   const make = (tag, text, cls) => { const node=document.createElement(tag); if (text !== undefined) node.textContent=text; if(cls) node.className=cls; return node; };
@@ -342,6 +341,8 @@ export function dashboardClient(brandImages = {}) {
   function schedulePoll(){clearTimeout(pollTimer);if(!pollEnabled || document.hidden)return;pollTimer=setTimeout(()=>{if(el('detail-dialog').open || el('settings').open){schedulePoll();return;}load(true);},Math.min(300000,30000*2**pollFailures));pollTimer?.unref?.();}
   function clearSourceCards(){for(const card of sourceCards)card.remove();sourceCards=[];sourceWarnings=[];sourceButtons.clear();sourceTaskButtons.clear();sourceButtons.set('zot-main',el('choose-tasks'));}
   function sourceVerified(connection){const proof=connection?.source,age=Date.parse(connection?.observed_at)-Date.parse(proof?.last_verified_at);return proof?.status==='verified' && ['initialize','tools/list','read_probe','accepted_event'].includes(proof.evidence_kind) && Number.isFinite(age) && age>=0 && Number.isFinite(proof.proof_max_age_ms) && proof.proof_max_age_ms>0 && proof.proof_max_age_ms<=86400000 && age<proof.proof_max_age_ms;}
+  function emptyReadState(source){return source.items.length===0?(source.state==='error'?'unavailable':source.state==='unconfigured'?'unconfigured':['connected','ready'].includes(source.state)?'available':'unknown'):'available';}
+  function emptyReadText(state){return state==='unavailable'?'任务读取失败，不能视为没有已选任务。请重新读取；数量待确认。':state==='unconfigured'?'尚未连接真实任务服务，任务数量未知；此处没有读取未接入的数据。':state==='unknown'?'任务读取状态待确认，数量未知；请重新读取，不能视为没有任务。':null;}
   function renderSourceCards(sources){
     const focusedTask=[...sourceTaskButtons].find(([key,node])=>node===document.activeElement)?.[0];
     const focusedSource=[...sourceButtons].find(([id,node])=>id!=='zot-main' && node===document.activeElement)?.[0];
@@ -354,8 +355,8 @@ export function dashboardClient(brandImages = {}) {
       const top=make('header',undefined,'pa-top'),number=make('div',undefined,'pa-number'),name=source.display_name || source.source_id;
       number.append(make('span',source.source_id,'provider'),make('span',proofLabel,'badge'));
       const emblem=make('div','✳','emblem');if(source.provider && Object.hasOwn(brandImages,source.provider)){const image=make('img');image.src=brandImages[source.provider];image.alt=source.provider+' 官方图标';emblem.replaceChildren(image);}const nameBox=make('div',undefined,'pa-name');nameBox.append(make('h2',name));top.append(number,emblem,nameBox);
-      const body=make('div',undefined,'card-body');body.append(make('p','所选任务 '+source.items.length+' · 只读快照','view-heading'));
-      if(!source.items.length)body.append(make('p',source.presentation_reset?'旧工作信息已清除，请重新选择已上报任务。':'尚未配置所选任务；不代表此 PA 没有工作。未读取未上报的运行时活动。','empty'));
+      const body=make('div',undefined,'card-body'),readState=emptyReadState(source);body.append(make('p',readState==='available'?'所选任务 '+source.items.length+' · 只读快照':'所选任务数量待确认 · 只读','view-heading'));
+      if(!source.items.length)body.append(make('p',source.presentation_reset?'旧工作信息已清除，请重新选择已上报任务。':emptyReadText(readState)||'尚未配置所选任务；不代表此 PA 没有工作。未读取未上报的运行时活动。','empty'));
       for(const item of source.items){const task=make('article',undefined,'task');task.append(make('span',statusNames[item.source_status] || labels[item.state] || '状态未知','task-state'),make('h3',item.task_name || '所选任务'),make('p',item.summary || labels[item.state],'task-preview-summary'),make('small',[item.project_name,item.branch_name,item.stale?'快照已过期':'',item.archived?'已归档':''].filter(Boolean).join(' · ')),make('small',progressText(item)),make('small',item.last_confirmed_at ? '最近确认 · '+item.last_confirmed_at : '暂无确认时间'));const button=make('button','工作详情与日志','detail-launch');button.setAttribute('type','button');button.addEventListener('click',()=>openWorkDetail(item,name+' · '+(item.task_name || '所选任务'),button));task.append(button);body.append(task);const taskKey=readingKey({...item,source_id:source.source_id});if(taskKey)sourceTaskButtons.set(taskKey,button);}
       const actions=make('footer',undefined,'pa-actions'),choose=make('button','选择已上报任务');choose.type='button';choose.setAttribute('aria-haspopup','dialog');choose.addEventListener('click',()=>openPicker(source.source_id,choose));actions.append(choose);sourceButtons.set(source.source_id,choose);
       const warning=make('p','上次快照可能已过期 · 本次更新失败','snapshot-warning');warning.hidden=true;sourceWarnings.push(warning);card.setAttribute('data-palette',sourceCards.length%2===0?'teal':'rose');card.append(top,warning,body,actions);el('canvas').insertBefore(card,el('add-column'));sourceCards.push(card);
@@ -402,7 +403,7 @@ export function dashboardClient(brandImages = {}) {
     readingNodes.clear();activityButtons.clear();
     clearTimeout(workExpiryTimer);workExpiryTimer=null;
     if(el('detail-dialog').open)closeDetail();
-    clearSourceCards();sourceIdentities=[]; items.replaceChildren(); selectedItems=null; el('task-metrics').hidden=true; el('task-toolbar').hidden=true; el('task-distribution').hidden=true; showActivityMessage(activityMessage);
+    clearSourceCards();sourceIdentities=[]; items.replaceChildren(); selectedItems=null; taskReadState='unknown';el('task-metrics').hidden=true; el('task-toolbar').hidden=true; el('task-distribution').hidden=true; showActivityMessage(activityMessage);
     for(const key of ['running','attention','completed']) el(key+'-count').textContent='—';
     const labels={
       idle:['待核对','等待读取','状态待确认'],
@@ -617,11 +618,11 @@ export function dashboardClient(brandImages = {}) {
     const active=selectedItems.length>1 && (filter!=='all' || !!query.trim());
     const model=selectedWorkbench(selectedItems,filter,query);
     updateTaskFilterFeedback(active,model.visible.length,selectedItems.length);
-    for(const key of ['running','attention','completed']) el(key+'-count').textContent=String(model.counts[key]);
+    for(const key of ['running','attention','completed']) el(key+'-count').textContent=taskReadState==='available'?String(model.counts[key]):'—';
     const reading = new Map([...readingNodes].map(([key,node])=>[key,{open:node.facts.open,focused:document.activeElement===node.summary?'summary':document.activeElement===node.expand?'expand':node.pendingButton && document.activeElement===node.pendingButton?'pendingButton':node.pin && document.activeElement===node.pin?'pin':null}]));
     readingNodes.clear();
     cardPinButtons.clear();items.replaceChildren();
-    if(!model.visible.length) empty(selectedItems.length ? '没有匹配的任务' : '还没有已选任务');
+    if(!model.visible.length) empty(selectedItems.length ? '没有匹配的任务' : emptyReadText(taskReadState)||'还没有已选任务');
     if(!model.visible.length && active) {
       const reset=make('button','清除筛选，查看全部已选任务','detail-launch');reset.setAttribute('type','button');
       reset.addEventListener('click',resetTaskFilters);items.append(reset);
@@ -645,7 +646,7 @@ export function dashboardClient(brandImages = {}) {
     }
     renderReadingQueue();
     activityItems=model.recent;
-    activityEmptyMessage=selectedItems.length?'暂无确认时间':activityEmptyText;
+    activityEmptyMessage=taskReadState==='available'?(selectedItems.length?'暂无确认时间':'还没有已选任务，选择任务后可查看动态与日志。'):emptyReadText(taskReadState)+'日志状态也待确认。';
     renderActivity();
   }
 
@@ -728,14 +729,12 @@ export function dashboardClient(brandImages = {}) {
       const readable = data.items.some(item => item.source_id === 'zot-main' && item.state === 'available' && item.stale === false && ['proposed','running','needs_input','completed','failed','cancelled'].includes(item.source_status) && Number.isFinite(Date.parse(item.observed_at)));
       el('zot-card').setAttribute('data-state', warning ? 'warning' : verified ? 'active' : 'unknown');
       el('connection').textContent = proof?.status === 'revoked' ? '来源授权已撤销' : proof?.status === 'disabled' ? '来源已停用' : proof?.status === 'stale' ? '来源验证已过期' : verified ? '来源已验证' : '来源待验证';
-      showTaskReadTime(data.items.length||['connected','ready'].includes(data.state)?'available':data.state==='error'?'unavailable':data.state==='unconfigured'?'unconfigured':'unknown');
-      el('item-count').textContent = String(data.items.length).padStart(2, '0');
-      status.textContent = anyError ? '部分工作信息读取失败 · 自动重试' : allItems.length ? '工作信息已更新 · 30 秒自动刷新' : '尚未配置所选任务 · 30 秒自动刷新';
-      if (!data.items.length) empty('还没有已选任务');
+      taskReadState=emptyReadState(data);showTaskReadTime(taskReadState);
+      el('item-count').textContent=taskReadState==='available'?String(data.items.length).padStart(2,'0'):'—';
+      status.textContent=anyError?'部分工作信息读取失败 · 自动重试':allSources.some(source=>source.state==='unconfigured')?'部分任务服务尚未接入 · 未读取未连接数据':allSources.some(source=>emptyReadState(source)==='unknown')?'任务读取状态待确认 · 数量未知':allItems.length?'工作信息已更新 · 30 秒自动刷新':'尚未配置所选任务 · 30 秒自动刷新';
       if(!hasReadSession) switchView(preferences.view==='auto' ? (data.items.length ? 'tasks' : 'capabilities') : preferences.view); hasReadSession=true;initialViewChosen=false;
-      activityEmptyText=data.state==='error'?'任务读取失败，动态与日志暂不可用。':data.state==='unconfigured'?'尚未连接真实任务服务，动态与日志暂不可用。':['connected','ready'].includes(data.state)?'还没有已选任务，选择任务后可查看动态与日志。':'任务读取状态待确认，暂无法显示动态与日志。';
       el('primary-snapshot-warning').hidden=true;
-      selectedItems = data.items; renderWorkbench();recordTaskChanges(data); renderSourceCards(data.sources); renderCapabilities(verified ? '已验证' : '待验证', readable ? '可读取' : '尚无可读快照', el('qq-channel').textContent, proof?.last_verified_at,true);
+      selectedItems = data.items; renderWorkbench();recordTaskChanges(data); renderSourceCards(data.sources); renderCapabilities(verified ? '已验证' : '待验证', readable?'可读取':taskReadState==='unavailable'?'读取失败 · 数量待确认':taskReadState==='unconfigured'?'任务服务未接入':taskReadState==='unknown'?'任务读取状态待确认':'尚无可读快照', el('qq-channel').textContent, proof?.last_verified_at,true);
     } catch {
       if (id !== requestId) return;
       pollEnabled=true; pollFailures=Math.min(4,pollFailures+1);
