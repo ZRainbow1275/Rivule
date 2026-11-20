@@ -101,7 +101,12 @@ export function dashboardClient(brandImages = {}) {
     for (const {segment} of segments) { if (count++ >= limit) break; result += segment; }
     return result;
   }
-  function saveAppearance() { try { localStorage.setItem(appearanceKey, JSON.stringify(appearance)); } catch {} }
+  function saveAppearance() {
+    let message='外观已保存到此浏览器';
+    try { localStorage.setItem(appearanceKey, JSON.stringify(appearance)); }
+    catch { message='外观已应用，但此浏览器未能保存'; }
+    el('status').textContent=message;
+  }
   try {
     const raw = localStorage.getItem(appearanceKey);
     const saved = raw && raw.length <= 65536 ? JSON.parse(raw) : null;
