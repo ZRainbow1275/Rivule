@@ -36,7 +36,7 @@ function clientFixture(fetch, storage, timers = {}) {
 
 const fixture=fetch=>clientFixture(fetch,undefined,{setTimeout:()=>1,clearTimeout(){}});
 
-const first=c=>c.get('items').children[0]?.textContent;
+const first=c=>c.get('items').children[0]?.textContent || c.get('task-pane-state').textContent;
 test('task pane explains progress while waiting and keeps verification guidance after tab switching',async()=>{
  let resolve,reads=0;const c=fixture(()=>{reads++;return new Promise(r=>{resolve=r;});});
  const pending=c.load();c.get('view-tasks').listeners.click();assert.equal(first(c),'正在读取所选任务…');
