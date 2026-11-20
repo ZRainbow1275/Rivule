@@ -212,8 +212,8 @@ test('session failure clears counts, recent confirmations and ability status, no
 
  test('compact mode hides only the preview summary and preserves expanded details', () => {
  const html=ownerDashboardHtml('test');
- assert.match(html,/\.compact \.task>p\{display:none\}/);
- assert.doesNotMatch(html,/\.compact \.task p\{display:none\}/);
+ assert.match(html,/\.compact \.task>\.task-preview-summary\{display:none\}/);
+ assert.doesNotMatch(html,/\.compact \.task\s*>?\s*p\{display:none\}/);
  assert.match(html,/#61716b/);
  });
 
