@@ -358,6 +358,8 @@ export function dashboardClient(brandImages = {}) {
     el('read-time').textContent=lastTaskReadAt || ({unavailable:'本次任务读取失败',unconfigured:'任务服务尚未接入',unknown:'任务读取状态待确认'})[state];
   }
   function clearWorkbench(activityMessage=login.hidden?'等待读取所选任务':'验证本人后显示动态与日志', capabilityState=login.hidden?'idle':'login') {
+    // Task filters describe the previous selection, not a newly readable scope.
+    if(capabilityState==='login'||capabilityState==='selection'){el('task-search').value='';el('task-filter').value='all';}
     previousTaskSignals.clear();showTaskChanges([]);
     pinnedReads.clear();readingQueueButtons.clear();cardPinButtons.clear();readingQueueExpanded=false;applyReadingQueueWindow(false);
     el('reading-queue').hidden=true;el('reading-queue').open=false;el('reading-queue-title').textContent='临时阅读清单';el('reading-queue-list').replaceChildren();
