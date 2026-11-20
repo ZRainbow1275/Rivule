@@ -336,16 +336,19 @@ export function dashboardClient(brandImages = {}) {
     openDetail(title,workDetails(item),opener,showsSnapshot);
     el('detail-content').append(activityTimeline(item,true));
   }
+  const sourceScrollTargets=new Map();
   let sourceCards=[],sourceWarnings=[],sourceIdentities=[];const sourceButtons=new Map([['zot-main',el('choose-tasks')]]),sourceTaskButtons=new Map();
   let pollTimer=null,pollEnabled=false,pollFailures=0,resumeRead=false;
   function schedulePoll(){clearTimeout(pollTimer);if(!pollEnabled || document.hidden)return;pollTimer=setTimeout(()=>{if(el('detail-dialog').open || el('settings').open){schedulePoll();return;}load(true);},Math.min(300000,30000*2**pollFailures));pollTimer?.unref?.();}
-  function clearSourceCards(){for(const card of sourceCards)card.remove();sourceCards=[];sourceWarnings=[];sourceButtons.clear();sourceTaskButtons.clear();sourceButtons.set('zot-main',el('choose-tasks'));}
+  function clearSourceCards(){for(const card of sourceCards)card.remove();sourceCards=[];sourceWarnings=[];sourceScrollTargets.clear();sourceButtons.clear();sourceTaskButtons.clear();sourceButtons.set('zot-main',el('choose-tasks'));}
   function sourceVerified(connection){const proof=connection?.source,age=Date.parse(connection?.observed_at)-Date.parse(proof?.last_verified_at);return proof?.status==='verified' && ['initialize','tools/list','read_probe','accepted_event'].includes(proof.evidence_kind) && Number.isFinite(age) && age>=0 && Number.isFinite(proof.proof_max_age_ms) && proof.proof_max_age_ms>0 && proof.proof_max_age_ms<=86400000 && age<proof.proof_max_age_ms;}
   function emptyReadState(source){return source.items.length===0?(source.state==='error'?'unavailable':source.state==='unconfigured'?'unconfigured':['connected','ready'].includes(source.state)?'available':'unknown'):'available';}
   function emptyReadText(state){return state==='unavailable'?'任务读取失败，不能视为没有已选任务。请重新读取；数量待确认。':state==='unconfigured'?'尚未连接真实任务服务，任务数量未知；此处没有读取未接入的数据。':state==='unknown'?'任务读取状态待确认，数量未知；请重新读取，不能视为没有任务。':null;}
   function renderSourceCards(sources){
     const focusedTask=[...sourceTaskButtons].find(([key,node])=>node===document.activeElement)?.[0];
     const focusedSource=[...sourceButtons].find(([id,node])=>id!=='zot-main' && node===document.activeElement)?.[0];
+    // Secondary cards are replaced by an accepted read; capture both layout scrollers before replacing DOM.
+    const previousScroll=new Map([...sourceScrollTargets].map(([id,{card,body}])=>[id,[card.scrollTop,body.scrollTop]]));
     clearSourceCards();sourceIdentities=(Array.isArray(sources)?sources:[]).map(({source_id,display_name,provider})=>({source_id,display_name,provider}));
     for(const source of (Array.isArray(sources)?sources:[])){
       const proofStatus=source.connection?.source?.status,verified=sourceVerified(source.connection);
@@ -360,6 +363,11 @@ export function dashboardClient(brandImages = {}) {
       for(const item of source.items){const task=make('article',undefined,'task');task.append(make('span',statusNames[item.source_status] || labels[item.state] || '状态未知','task-state'),make('h3',item.task_name || '所选任务'),make('p',item.summary || labels[item.state],'task-preview-summary'),make('small',[item.project_name,item.branch_name,item.stale?'快照已过期':'',item.archived?'已归档':''].filter(Boolean).join(' · ')),make('small',progressText(item)),make('small',item.last_confirmed_at ? '最近确认 · '+item.last_confirmed_at : '暂无确认时间'));const button=make('button','工作详情与日志','detail-launch');button.setAttribute('type','button');button.addEventListener('click',()=>openWorkDetail(item,name+' · '+(item.task_name || '所选任务'),button));task.append(button);body.append(task);const taskKey=readingKey({...item,source_id:source.source_id});if(taskKey)sourceTaskButtons.set(taskKey,button);}
       const actions=make('footer',undefined,'pa-actions'),choose=make('button','选择已上报任务');choose.type='button';choose.setAttribute('aria-haspopup','dialog');choose.addEventListener('click',()=>openPicker(source.source_id,choose));actions.append(choose);sourceButtons.set(source.source_id,choose);
       const warning=make('p','上次快照可能已过期 · 本次更新失败','snapshot-warning');warning.hidden=true;sourceWarnings.push(warning);card.setAttribute('data-palette',sourceCards.length%2===0?'teal':'rose');card.append(top,warning,body,actions);el('canvas').insertBefore(card,el('add-column'));sourceCards.push(card);
+      if(!source.presentation_reset)sourceScrollTargets.set(source.source_id,{card,body});
+    }
+    for(const [id,{card,body}] of sourceScrollTargets){
+      const offset=previousScroll.get(id);if(!offset)continue;
+      if(offset[0])card.scrollTop=offset[0];if(offset[1])body.scrollTop=offset[1];
     }
     if(focusedSource)sourceButtons.get(focusedSource)?.focus();
     else if(focusedTask)sourceTaskButtons.get(focusedTask)?.focus();
