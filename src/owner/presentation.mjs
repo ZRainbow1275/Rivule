@@ -383,7 +383,7 @@ export function dashboardClient(brandImages = {}) {
     el('task-match-count').textContent=active?'显示 '+shown+' / '+total+' 项':'';
     el('task-clear-partial').hidden=!active||shown===0;
   }
-  function resetTaskFilters(){el('task-filter').value='all';el('task-search').value='';renderWorkbench();el('task-search').focus();}
+  function resetTaskFilters(){el('task-filter').value='all';el('task-search').value='';renderTaskList();el('task-search').focus();}
   function showTaskReadTime(state){
     lastTaskReadAt=state==='available'?new Date().toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}):'';
     el('read-time').textContent=lastTaskReadAt || ({unavailable:'本次任务读取失败',unconfigured:'任务服务尚未接入',unknown:'任务读取状态待确认'})[state];
@@ -609,7 +609,7 @@ export function dashboardClient(brandImages = {}) {
     pin.setAttribute('aria-label','暂存阅读：'+readingLabel(item));updateReadingPin(pin,key);
     pin.addEventListener('click',()=>{if(!document.hidden && buttons.get(key)===pin)toggleTaskReading(key);});buttons.set(key,pin);return pin;
   }
-  function renderWorkbench() {
+  function renderTaskList() {
     if(!selectedItems) return;
     showTaskPaneState('');
     el('task-metrics').hidden=selectedItems.length<=1; el('task-toolbar').hidden=selectedItems.length<=1; el('task-distribution').hidden=selectedItems.length<=1;
@@ -644,6 +644,11 @@ export function dashboardClient(brandImages = {}) {
       if(pendingButton){pendingButton.addEventListener('click',()=>{facts.open=!facts.open;pendingButton.setAttribute('aria-expanded',String(facts.open));openWorkDetail(item,item.task_name || '任务详情',pendingButton,true);});facts.addEventListener('toggle',()=>pendingButton.setAttribute('aria-expanded',String(facts.open)));}
       const expand=make('button','打开详情','detail-launch');expand.setAttribute('type','button');expand.addEventListener('click',()=>openWorkDetail(item,item.task_name || '任务详情',expand,true));const pin=taskReadingButton(item,readKey);card.append(facts,expand);if(pin)card.append(pin);items.append(card);if(readKey){const readNode={facts,summary:factsSummary,expand,pendingButton,pin};readingNodes.set(readKey,readNode);const focusTarget=reading.get(readKey)?.focused;if(focusTarget)(readNode[focusTarget] || readNode.expand).focus();}if(pendingButton)pendingButton.setAttribute('aria-expanded',String(facts.open));
     }
+    return model;
+  }
+
+  function renderAcceptedSnapshot(){
+    const model=renderTaskList();
     renderReadingQueue();
     activityItems=model.recent;
     activityEmptyMessage=taskReadState==='available'?(selectedItems.length?'暂无确认时间':'还没有已选任务，选择任务后可查看动态与日志。'):emptyReadText(taskReadState)+'日志状态也待确认。';
@@ -678,8 +683,8 @@ export function dashboardClient(brandImages = {}) {
   });
   wireViewTabs(name=>{if(!hasReadSession)initialViewChosen=true;switchView(name);});
   el('task-clear-partial').addEventListener('click',resetTaskFilters);
-  el('task-search').addEventListener('input',renderWorkbench);el('task-filter').addEventListener('change',renderWorkbench);
-  for(const name of ['running','attention','completed']) el('quick-'+name).addEventListener('click',()=>{el('task-filter').value=name;el('task-search').value='';switchView('tasks');renderWorkbench();el('task-filter').focus();});
+  el('task-search').addEventListener('input',renderTaskList);el('task-filter').addEventListener('change',renderTaskList);
+  for(const name of ['running','attention','completed']) el('quick-'+name).addEventListener('click',()=>{el('task-filter').value=name;el('task-search').value='';switchView('tasks');renderTaskList();el('task-filter').focus();});
   clearWorkbench(); switchView('capabilities');
 
   async function load(background = false) {
@@ -734,7 +739,7 @@ export function dashboardClient(brandImages = {}) {
       status.textContent=anyError?'部分工作信息读取失败 · 自动重试':allSources.some(source=>source.state==='unconfigured')?'部分任务服务尚未接入 · 未读取未连接数据':allSources.some(source=>emptyReadState(source)==='unknown')?'任务读取状态待确认 · 数量未知':allItems.length?'工作信息已更新 · 30 秒自动刷新':'尚未配置所选任务 · 30 秒自动刷新';
       if(!hasReadSession) switchView(preferences.view==='auto' ? (data.items.length ? 'tasks' : 'capabilities') : preferences.view); hasReadSession=true;initialViewChosen=false;
       el('primary-snapshot-warning').hidden=true;
-      selectedItems = data.items; renderWorkbench();recordTaskChanges(data); renderSourceCards(data.sources); renderCapabilities(verified ? '已验证' : '待验证', readable?'可读取':taskReadState==='unavailable'?'读取失败 · 数量待确认':taskReadState==='unconfigured'?'任务服务未接入':taskReadState==='unknown'?'任务读取状态待确认':'尚无可读快照', el('qq-channel').textContent, proof?.last_verified_at,true);
+      selectedItems = data.items; renderAcceptedSnapshot();recordTaskChanges(data); renderSourceCards(data.sources); renderCapabilities(verified ? '已验证' : '待验证', readable?'可读取':taskReadState==='unavailable'?'读取失败 · 数量待确认':taskReadState==='unconfigured'?'任务服务未接入':taskReadState==='unknown'?'任务读取状态待确认':'尚无可读快照', el('qq-channel').textContent, proof?.last_verified_at,true);
     } catch {
       if (id !== requestId) return;
       pollEnabled=true; pollFailures=Math.min(4,pollFailures+1);
