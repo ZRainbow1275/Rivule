@@ -302,7 +302,7 @@ export function dashboardClient(brandImages = {}) {
     if(expires<=Date.now()){expireWorkbench();return false;}workExpiryTimer=setTimeout(expireWorkbench,Math.min(2147483647,expires-Date.now()));workExpiryTimer?.unref?.();return true;
   }
   let previousTaskSignals=new Map();
-  const changeButtons=new Map();
+  const changeButtons=new Map(),changePinButtons=new Map();
   const maxReadingPins=20,pinnedReads=new Set(),readingQueueButtons=new Map(),cardPinButtons=new Map();
   let activityItems=[],activityEmptyMessage='';
   function showActivityMessage(text){el('activity-list').replaceChildren(make('p',text,'empty'));}
@@ -348,9 +348,11 @@ export function dashboardClient(brandImages = {}) {
   const readingLabel=item=>[item.task_name || '所选任务',item.project_name,item.branch_name && '分支：'+item.branch_name].filter(Boolean).join(' · ');
   function showTaskChanges(changes,compared=0,total=0){
     const panel=el('task-changes'),list=el('task-changes-list'),title=el('task-changes-title');
-    const focused=!document.hidden && !el('tasks-view').hidden && [...changeButtons].find(([,button])=>button===document.activeElement)?.[0];
+    const readFocus=!document.hidden && !el('tasks-view').hidden;
+    const focusMap=readFocus && [...changePinButtons.values()].includes(document.activeElement)?changePinButtons:changeButtons;
+    const focused=readFocus && [...focusMap].find(([,button])=>button===document.activeElement)?.[0];
     const titleFocused=!document.hidden && !el('tasks-view').hidden && document.activeElement===title;
-    changeButtons.clear();list.replaceChildren();panel.hidden=!compared;
+    changeButtons.clear();changePinButtons.clear();list.replaceChildren();panel.hidden=!compared;
     if(panel.hidden)panel.open=false;
     title.textContent=compared?'本次刷新 · '+(changes.length?changes.length+' 项变化':'已比较字段无变化'):'任务变化';
     el('task-changes-context').textContent=compared?'本次读取：'+lastTaskReadAt+' · 比较 '+compared+' / '+total+' 项。仅比较前后都已上报的状态或待确认数。':'';
@@ -363,9 +365,11 @@ export function dashboardClient(brandImages = {}) {
         const current=selectedItems?.find(value=>value.state==='available' && !value.stale && readingKey(value)===key);
         if(current)openDetail(current.task_name || '任务详情',workDetails(current),button,true);
       });
-      row.append(button,make('small',messages.join('；')));list.append(row);changeButtons.set(key,button);
+      row.append(button,make('small',messages.join('；')));
+      const pin=taskReadingButton(item,key,changePinButtons);if(pin)row.append(pin);
+      list.append(row);changeButtons.set(key,button);
     }
-    if(focused)(changeButtons.get(focused) || (!panel.hidden?title:el('view-tasks'))).focus();
+    if(focused)(focusMap.get(focused) || (!panel.hidden?title:el('view-tasks'))).focus();
     else if(titleFocused&&panel.hidden)el('view-tasks').focus();
   }
   function recordTaskChanges(data){
@@ -396,7 +400,7 @@ export function dashboardClient(brandImages = {}) {
     const focusKind=focused?.[1].remove===document.activeElement?'remove':'open';
     const available=new Map((selectedItems||[]).filter(item=>item.state==='available').map(item=>[readingKey(item),item]));
     for(const key of pinnedReads)if(!available.has(key))pinnedReads.delete(key);
-    for(const [key,pin] of cardPinButtons){const pinned=pinnedReads.has(key);pin.setAttribute('aria-pressed',String(pinned));pin.disabled=!pinned&&pinnedReads.size>=maxReadingPins;}
+    for(const buttons of [cardPinButtons,changePinButtons])for(const [key,pin] of buttons)updateReadingPin(pin,key);
     const queue=el('reading-queue'),list=el('reading-queue-list');readingQueueButtons.clear();list.replaceChildren();
     queue.hidden=!pinnedReads.size;if(queue.hidden)queue.open=false;
     el('reading-queue-title').textContent=pinnedReads.size?'临时阅读清单 · '+pinnedReads.size+' 项':'临时阅读清单';
@@ -417,12 +421,14 @@ export function dashboardClient(brandImages = {}) {
       target.focus();
     }
   }
-  function taskReadingButton(item,key){
+  function updateReadingPin(pin,key){
+    const pinned=pinnedReads.has(key);pin.setAttribute('aria-pressed',String(pinned));pin.disabled=!pinned&&pinnedReads.size>=maxReadingPins;
+  }
+  function taskReadingButton(item,key,buttons=cardPinButtons){
     if(!key || item.state!=='available')return null;
     const pin=make('button','暂存阅读','detail-launch reading-pin');pin.setAttribute('type','button');
-    pin.setAttribute('aria-pressed',String(pinnedReads.has(key)));pin.setAttribute('aria-label','暂存阅读：'+readingLabel(item));
-    pin.disabled=!pinnedReads.has(key)&&pinnedReads.size>=maxReadingPins;
-    pin.addEventListener('click',()=>{if(!document.hidden && cardPinButtons.get(key)===pin)toggleTaskReading(key);});cardPinButtons.set(key,pin);return pin;
+    pin.setAttribute('aria-label','暂存阅读：'+readingLabel(item));updateReadingPin(pin,key);
+    pin.addEventListener('click',()=>{if(!document.hidden && buttons.get(key)===pin)toggleTaskReading(key);});buttons.set(key,pin);return pin;
   }
   function renderWorkbench() {
     if(!selectedItems) return;
