@@ -388,8 +388,9 @@ export function dashboardClient(brandImages = {}) {
 
   async function load(background = false) {
     if (loading) return;
+    const previousStatus=status.textContent;
     clearTimeout(pollTimer); loading = true; refresh.disabled = true; if(!selectedItems){clearWorkbench('正在读取所选任务的动态与日志…','reading');} if(!background && el('detail-dialog').open)closeDetail();
-    status.textContent = '正在读取所选任务快照…';
+    if(!background)status.textContent = '正在读取所选任务快照…';
     const id = ++requestId, controller = new AbortController();
     let timer;
     const deadline = new Promise((_, reject) => {
@@ -414,8 +415,13 @@ export function dashboardClient(brandImages = {}) {
       if (id !== requestId) return;
       if (!Array.isArray(data.items)) throw Error('invalid');
       if(armWorkbenchExpiry(data.session_expires_at)===false)return;
-      if(pickerDialog.open){pollEnabled=true;return;}
-      if(el('detail-dialog').open || el('settings').open){pollEnabled=true;return;}
+      if(pickerDialog.open || el('detail-dialog').open || el('settings').open){
+        pollEnabled=true;
+        if(!background && status.textContent==='正在读取所选任务快照…'){
+          status.textContent=selectedItems?previousStatus:'尚未显示任务快照 · 关闭选择后请重新读取';
+        }
+        return;
+      }
       const allSources=[data,...(Array.isArray(data.sources)?data.sources:[])],allItems=allSources.flatMap(s=>s.items || []),anyError=allSources.some(s=>s.state==='error' || s.items?.some(i=>i.activity?.state==='unavailable'));
       pollEnabled=true; pollFailures=anyError?Math.min(4,pollFailures+1):0; login.hidden = true; controls.hidden = false;
       const proof = data.connection?.source;
