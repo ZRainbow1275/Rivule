@@ -160,7 +160,7 @@ export function dashboardClient(brandImages = {}) {
     if(revoke && csrf && source_id){const closedGeneration=pickerGeneration;void pickerRequest('/cancel',{csrf,source_id,request_id},{revoke:true}).catch(error=>{if(error.status!==401 && closedGeneration===pickerGeneration && !document.hidden)status.textContent='已关闭任务目录；撤销访问结果未确认，未自动重试';});}
   }
   function pickerError(error){
-    if(error.status===401){document.dispatchEvent?.(new Event('rivule-session-expired'));closePicker(true,false);pollEnabled=false;clearTimeout(pollTimer);++requestId;cancelRead?.();cancelRead=null;loading=false;refresh.disabled=false;clearWorkbench('验证本人后显示动态与日志');hasReadSession=false;login.hidden=false;controls.hidden=true;status.textContent='会话已失效，请重新验证本人';return;}
+    if(error.status===401){document.dispatchEvent?.(new Event('rivule-session-expired'));closePicker(true,false);pollEnabled=false;clearTimeout(pollTimer);++requestId;cancelRead?.();cancelRead=null;loading=false;refresh.disabled=false;clearWorkbench('验证本人后显示动态与日志','login');hasReadSession=false;login.hidden=false;controls.hidden=true;status.textContent='会话已失效，请重新验证本人';return;}
     if(error.status===403 || error.status===409){closePicker();status.textContent='任务选择授权已失效或目录已变化，请重新打开';return;}
     // Do not retry mutations: a lost response does not establish whether apply succeeded.
     closePicker();status.textContent='任务选择操作结果未确认，请重新打开核对；未自动重试';
@@ -289,20 +289,26 @@ export function dashboardClient(brandImages = {}) {
   }
   function expireWorkbench(){
     document.dispatchEvent?.(new Event('rivule-session-expired'));el('settings').close();el('settings-toggle').setAttribute('aria-expanded','false');
-    pollEnabled=false;clearTimeout(pollTimer);++requestId;cancelRead?.();cancelRead=null;loading=false;refresh.disabled=false;closePicker(true,false);clearWorkbench('验证本人后显示动态与日志');hasReadSession=false;switchView('capabilities');login.hidden=false;controls.hidden=true;el('item-count').textContent='—';el('read-time').textContent='会话已到期';el('connection').textContent='等待本人验证';el('qq-channel').textContent='尚未读取';status.textContent='会话已到期，已清除工作信息，请重新验证本人';
+    pollEnabled=false;clearTimeout(pollTimer);++requestId;cancelRead?.();cancelRead=null;loading=false;refresh.disabled=false;closePicker(true,false);clearWorkbench('验证本人后显示动态与日志','login');hasReadSession=false;switchView('capabilities');login.hidden=false;controls.hidden=true;el('item-count').textContent='—';el('read-time').textContent='会话已到期';el('connection').textContent='等待本人验证';el('qq-channel').textContent='尚未读取';status.textContent='会话已到期，已清除工作信息，请重新验证本人';
   }
   function armWorkbenchExpiry(value){
     if(value===undefined)return;const expires=Date.parse(value);if(!Number.isFinite(expires))throw Error('invalid');clearTimeout(workExpiryTimer);
     if(expires<=Date.now()){expireWorkbench();return false;}workExpiryTimer=setTimeout(expireWorkbench,Math.min(2147483647,expires-Date.now()));workExpiryTimer?.unref?.();return true;
   }
   function showActivityMessage(text){el('activity-list').replaceChildren(make('p',text,'empty'));}
-  function clearWorkbench(activityMessage=login.hidden?'等待读取所选任务':'验证本人后显示动态与日志') {
+  function clearWorkbench(activityMessage=login.hidden?'等待读取所选任务':'验证本人后显示动态与日志', capabilityState=login.hidden?'idle':'login') {
     readingNodes.clear();activityButtons.clear();
     clearTimeout(workExpiryTimer);workExpiryTimer=null;
     if(el('detail-dialog').open)closeDetail();
     clearSourceCards();sourceIdentities=[]; items.replaceChildren(); selectedItems=null; el('task-metrics').hidden=true; el('task-toolbar').hidden=true; el('task-distribution').hidden=true; showActivityMessage(activityMessage);
     for(const key of ['running','attention','completed']) el(key+'-count').textContent='—';
-    renderCapabilities('待验证','等待读取','状态待确认');
+    const labels={
+      idle:['待核对','等待读取','状态待确认'],
+      login:['验证本人后查看','验证本人后读取','验证本人后查看'],
+      reading:['核对中','正在读取','核对中'],
+      selection:['待核对','请重新选择任务','状态待确认'],
+    };
+    renderCapabilities(...labels[capabilityState]);
   }
   function renderWorkbench() {
     if(!selectedItems) return;
@@ -345,7 +351,7 @@ export function dashboardClient(brandImages = {}) {
 
   async function load(background = false) {
     if (loading) return;
-    clearTimeout(pollTimer); loading = true; refresh.disabled = true; if(!selectedItems){clearWorkbench('正在读取所选任务的动态与日志…');items.replaceChildren();} if(!background && el('detail-dialog').open)closeDetail();
+    clearTimeout(pollTimer); loading = true; refresh.disabled = true; if(!selectedItems){clearWorkbench('正在读取所选任务的动态与日志…','reading');items.replaceChildren();} if(!background && el('detail-dialog').open)closeDetail();
     status.textContent = '正在读取所选任务快照…';
     const id = ++requestId, controller = new AbortController();
     let timer;
@@ -358,12 +364,12 @@ export function dashboardClient(brandImages = {}) {
       if (id !== requestId) return;
       if (response.status === 401) {
         document.dispatchEvent?.(new Event('rivule-session-expired'));
-        pollEnabled=false; closePicker(true,false); clearWorkbench('验证本人后显示动态与日志'); hasReadSession=false; switchView('capabilities');
+        pollEnabled=false; closePicker(true,false); clearWorkbench('验证本人后显示动态与日志','login'); hasReadSession=false; switchView('capabilities');
         login.hidden = false; controls.hidden = true; items.replaceChildren(); el('item-count').textContent = '—'; el('read-time').textContent = '尚未读取';
         el('qq-channel').textContent = '尚未读取'; el('connection').textContent = '等待本人验证'; el('zot-card').setAttribute('data-state','disconnected'); status.textContent = '等待本人验证';
         empty('验证本人后显示任务'); return;
       }
-      if(response.status===409){const identities=sourceIdentities;closePicker(true,false);clearWorkbench('任务范围已变化，请重新选择任务后查看动态与日志。');renderSourceCards(identities.map(source=>({...source,items:[],presentation_reset:true})));hasReadSession=false;switchView('capabilities');pollEnabled=false;el('item-count').textContent='—';el('read-time').textContent='任务访问范围已变化';el('connection').textContent='所选任务需重新核对';status.textContent='所选任务已不可用或访问范围变化，已清除旧内容；请重新选择已上报任务';controls.hidden=false;if(!identities.length){try{const scope=await pickerRequest('');if(id===requestId && !pickerDialog.open && Array.isArray(scope.sources))renderSourceCards(scope.sources.filter(source=>source.source_id!=='zot-main').map(source=>({...source,items:[],presentation_reset:true})));}catch{}}return;}
+      if(response.status===409){const identities=sourceIdentities;closePicker(true,false);clearWorkbench('任务范围已变化，请重新选择任务后查看动态与日志。','selection');renderSourceCards(identities.map(source=>({...source,items:[],presentation_reset:true})));hasReadSession=false;switchView('capabilities');pollEnabled=false;el('item-count').textContent='—';el('read-time').textContent='任务访问范围已变化';el('connection').textContent='所选任务需重新核对';status.textContent='所选任务已不可用或访问范围变化，已清除旧内容；请重新选择已上报任务';controls.hidden=false;if(!identities.length){try{const scope=await pickerRequest('');if(id===requestId && !pickerDialog.open && Array.isArray(scope.sources))renderSourceCards(scope.sources.filter(source=>source.source_id!=='zot-main').map(source=>({...source,items:[],presentation_reset:true})));}catch{}}return;}
       if (!response.ok) throw Error('unavailable');
       const data = await Promise.race([response.json(), deadline]);
       if (id !== requestId) return;
@@ -400,6 +406,7 @@ export function dashboardClient(brandImages = {}) {
       items.replaceChildren(); el('item-count').textContent = '—'; el('read-time').textContent = '本次读取失败';
       empty('读取失败，请重试。');
       showActivityMessage('动态与日志读取失败，请重试。');
+      renderCapabilities('未能确认','读取失败 · 可重试','未能确认');
       // A retry remains available even if the very first status request failed.
       controls.hidden = false;
     } finally {
