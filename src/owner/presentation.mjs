@@ -334,8 +334,8 @@ export function dashboardClient(brandImages = {}) {
     section.append(list,make('p','投递状态仅表示 Discord 队列记录，不代表 QQ 投递或接收人已读','event-log-scope'));
     return section;
   }
-  function openWorkDetail(item,title,opener,showsSnapshot=false){
-    openDetail(title,workDetails(item),opener,showsSnapshot);
+  function openWorkDetail(item,title,opener){
+    openDetail(title,workDetails(item),opener,true);
     el('detail-content').append(activityTimeline(item,true));
   }
   const sourceScrollTargets=new Map();
@@ -447,7 +447,7 @@ export function dashboardClient(brandImages = {}) {
       button.addEventListener('click',()=>{
         if(document.hidden || changeButtons.get(key)!==button)return;
         const current=selectedItems?.find(value=>value.state==='available' && !value.stale && readingKey(value)===key);
-        if(current)openWorkDetail(current,current.task_name || '任务详情',button,true);
+        if(current)openWorkDetail(current,current.task_name || '任务详情',button);
       });
       row.append(button,make('small',messages.join('；')));
       const pin=taskReadingButton(item,key,changePinButtons);if(pin)row.append(pin);
@@ -549,7 +549,7 @@ export function dashboardClient(brandImages = {}) {
     if(document.hidden)return;
     const queue=currentReadableQueue(),index=queue.findIndex(entry=>entry.key===key);if(index<0)return;
     const {current,opener}=queue[index];
-    openWorkDetail(current,current.task_name || '任务详情',opener,true);
+    openWorkDetail(current,current.task_name || '任务详情',opener);
     queueDetailKey=key;
     if(queue.length<2)return;
     const nav=el('queue-detail-nav'),position=el('queue-detail-position');
@@ -656,8 +656,8 @@ export function dashboardClient(brandImages = {}) {
       if(step>=0 && item.state==='available') { const rail=make('div',undefined,'state-track');rail.setAttribute('aria-label','当前阶段：'+statusNames[item.source_status]);for(let i=0;i<3;i++)rail.append(make('span',undefined,i===step?'current':''));card.append(rail); }
       const facts=make('details',undefined,'task-facts'),factsSummary=make('summary','查看完整内容'),readKey=readingKey(item);facts.append(factsSummary);if(readKey && reading.has(readKey))facts.open=reading.get(readKey).open;if(item.summary)facts.append(make('p',item.summary,'full-summary'));
       for(const [label,value] of [['分支',item.branch_name],['来源确认',item.last_confirmed_at],['读取时间',item.observed_at]]) if(value)facts.append(make('p',label+' · '+value));
-      if(pendingButton){pendingButton.addEventListener('click',()=>{facts.open=!facts.open;pendingButton.setAttribute('aria-expanded',String(facts.open));openWorkDetail(item,item.task_name || '任务详情',pendingButton,true);});facts.addEventListener('toggle',()=>pendingButton.setAttribute('aria-expanded',String(facts.open)));}
-      const expand=make('button','打开详情','detail-launch');expand.setAttribute('type','button');expand.addEventListener('click',()=>openWorkDetail(item,item.task_name || '任务详情',expand,true));const pin=taskReadingButton(item,readKey);card.append(facts,expand);if(pin)card.append(pin);items.append(card);if(readKey){const readNode={facts,summary:factsSummary,expand,pendingButton,pin};readingNodes.set(readKey,readNode);const focusTarget=reading.get(readKey)?.focused;if(focusTarget)(readNode[focusTarget] || readNode.expand).focus();}if(pendingButton)pendingButton.setAttribute('aria-expanded',String(facts.open));
+      if(pendingButton){pendingButton.addEventListener('click',()=>{facts.open=!facts.open;pendingButton.setAttribute('aria-expanded',String(facts.open));openWorkDetail(item,item.task_name || '任务详情',pendingButton);});facts.addEventListener('toggle',()=>pendingButton.setAttribute('aria-expanded',String(facts.open)));}
+      const expand=make('button','打开详情','detail-launch');expand.setAttribute('type','button');expand.addEventListener('click',()=>openWorkDetail(item,item.task_name || '任务详情',expand));const pin=taskReadingButton(item,readKey);card.append(facts,expand);if(pin)card.append(pin);items.append(card);if(readKey){const readNode={facts,summary:factsSummary,expand,pendingButton,pin};readingNodes.set(readKey,readNode);const focusTarget=reading.get(readKey)?.focused;if(focusTarget)(readNode[focusTarget] || readNode.expand).focus();}if(pendingButton)pendingButton.setAttribute('aria-expanded',String(facts.open));
     }
     if(previousFocus){
       const toolbarDisappeared=toolbarWasVisible&&toolbar.hidden&&(previousFocus===el('task-search')||previousFocus===el('task-filter'));
