@@ -298,7 +298,15 @@ export function dashboardClient(brandImages = {}) {
   const deliveryNames={pending:'排队中',queued:'排队中（尚未发送）',retry_wait:'等待重试（尚未确认送达）',sending:'发送中',sent:'服务端已发送（未确认阅读）',failed:'发送失败',uncertain:'结果未知',superseded:'已被替代',cancelled:'已取消',blocked:'已阻止',dead_letter:'发送终止',coalesced:'已合并（非单条送达）',suppressed:'已抑制',unknown:'未知',not_recorded:'无对应投递记录'};
   const kindNames={registered:'登记',started:'开始',progress:'进展',needs_input:'待确认',completed:'完成',failed:'失败',cancelled:'取消',heartbeat:'状态确认',correction:'修正'};
   function progressText(item){const p=item.progress;return p ? '来源上报进度 · '+p.done+(p.total===null?'':' / '+p.total)+' '+p.unit : '尚未上报量化进度';}
-  function workDetails(item){return [item.summary,item.source_id && '来源 · '+item.source_id,'项目 / 任务 / 运行 / 分支 · '+[item.project_id,item.task_id,item.run_id,item.branch_id].join(' / '),item.stale && '快照已过期',item.archived && '已归档',item.phase_label && '阶段 · '+item.phase_label,progressText(item),item.blocker && '阻塞 · '+item.blocker,'任务状态 · '+(statusNames[item.source_status] || labels[item.state] || '未知'),item.last_confirmed_at && '来源最近确认 · '+item.last_confirmed_at,item.observed_at && '快照读取 · '+item.observed_at];}
+  function pendingReadText(item){
+    if(item.state!=='available')return '';
+    const count=Number.isSafeInteger(item.pending_action_count)&&item.pending_action_count>=0?item.pending_action_count:null;
+    if(!(count>0)&&item.source_status!=='needs_input')return '';
+    const basis=item.archived?'归档记录':item.stale?'旧快照记录':'来源快照记录';
+    const signal=count>0?count+' 项待确认':(count===0?'等待输入；上报 0 项待确认':'等待输入；数量未上报');
+    return basis+' · '+signal+' · 此处只读，详情请回原 PA 核对。';
+  }
+  function workDetails(item){return [item.summary,item.source_id && '来源 · '+item.source_id,'项目 / 任务 / 运行 / 分支 · '+[item.project_id,item.task_id,item.run_id,item.branch_id].join(' / '),item.stale && '快照已过期',item.archived && '已归档',item.phase_label && '阶段 · '+item.phase_label,progressText(item),item.blocker && '阻塞 · '+item.blocker,'任务状态 · '+(statusNames[item.source_status] || labels[item.state] || '未知'),pendingReadText(item),item.last_confirmed_at && '来源最近确认 · '+item.last_confirmed_at,item.observed_at && '快照读取 · '+item.observed_at];}
   function activityTimeline(item,collapsed=false){
     const log=item.activity,section=make(collapsed?'details':'section',undefined,'event-timeline');
     const available=item.state==='available' && log?.state==='available';
