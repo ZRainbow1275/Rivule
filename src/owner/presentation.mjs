@@ -124,6 +124,7 @@ export function dashboardClient(brandImages = {}) {
   let activityEmptyText='还没有已选任务，选择任务后可查看动态与日志。';
   let lastTaskReadAt='';
   let selectedItems = null, hasReadSession = false,workExpiryTimer=null;
+  let initialViewChosen=false;
   const statusNames = {proposed:'待开始',running:'进行中',needs_input:'待决定',completed:'已完成',failed:'遇到问题',cancelled:'已取消'};
   const make = (tag, text, cls) => { const node=document.createElement(tag); if (text !== undefined) node.textContent=text; if(cls) node.className=cls; return node; };
   const showTaskPaneState=text=>{const hint=el('task-pane-state');hint.textContent=text;hint.hidden=!text;};
@@ -379,7 +380,7 @@ export function dashboardClient(brandImages = {}) {
       const branch=item.branch_name?'分支：'+item.branch_name:'',context=[item.task_name||'业务事件日志',item.project_name,branch].filter(Boolean).join(' · ');
       row.append(make('time',new Date(item.last_confirmed_at).toLocaleString('zh-CN')),make('h3',item.task_name || '所选任务'),make('p',[statusNames[item.source_status] || '状态未知',item.project_name,branch,item.stale?'快照已过期':''].filter(Boolean).join(' · ')));const logs=make('button','查看日志','detail-launch');logs.setAttribute('type','button');logs.setAttribute('aria-label','查看日志：'+context);logs.addEventListener('click',()=>openDetail(context,activityDetails(item),logs,true));row.append(make('p',item.activity?.items?.[0]?.summary || '尚无可展示的最新事件'),make('p',item.activity?.state==='available' ? String(item.activity.items.length)+' 条可展示事件'+(item.activity.truncated?' · 最近 30 条':'') : '日志暂不可用'),logs);activity.append(row);const key=readingKey(item);if(key){activityButtons.set(key,logs);if(key===focusedActivity)logs.focus();}}
   }
-  for(const name of ['tasks','activity','capabilities']) el('view-'+name).addEventListener('click',()=>switchView(name));
+  for(const name of ['tasks','activity','capabilities']) el('view-'+name).addEventListener('click',()=>{if(!hasReadSession)initialViewChosen=true;switchView(name);});
   el('task-clear-partial').addEventListener('click',resetTaskFilters);
   el('task-search').addEventListener('input',renderWorkbench);el('task-filter').addEventListener('change',renderWorkbench);
   for(const name of ['running','attention','completed']) el('quick-'+name).addEventListener('click',()=>{el('task-filter').value=name;el('task-search').value='';switchView('tasks');renderWorkbench();el('task-filter').focus();});
@@ -400,7 +401,9 @@ export function dashboardClient(brandImages = {}) {
       if (id !== requestId) return;
       if (response.status === 401) {
         document.dispatchEvent?.(new Event('rivule-session-expired'));
-        pollEnabled=false; closePicker(true,false); clearWorkbench('验证本人后显示动态与日志','login'); hasReadSession=false; switchView('capabilities');
+        const retainInitialView=!hasReadSession && initialViewChosen;
+        pollEnabled=false; closePicker(true,false); clearWorkbench('验证本人后显示动态与日志','login'); hasReadSession=false;initialViewChosen=false;
+        if(!retainInitialView)switchView('capabilities');
         login.hidden = false; controls.hidden = true; el('item-count').textContent = '—'; el('read-time').textContent = '尚未读取';
         el('qq-channel').textContent = '尚未读取'; el('connection').textContent = '等待本人验证'; el('zot-card').setAttribute('data-state','disconnected'); status.textContent = '等待本人验证';
         empty('验证本人后显示任务'); return;
@@ -428,7 +431,7 @@ export function dashboardClient(brandImages = {}) {
       el('item-count').textContent = String(data.items.length).padStart(2, '0');
       status.textContent = anyError ? '部分工作信息读取失败 · 自动重试' : allItems.length ? '工作信息已更新 · 30 秒自动刷新' : '尚未配置所选任务 · 30 秒自动刷新';
       if (!data.items.length) empty('还没有已选任务');
-      if(!hasReadSession) switchView(preferences.view==='auto' ? (data.items.length ? 'tasks' : 'capabilities') : preferences.view); hasReadSession=true;
+      if(!hasReadSession) switchView(preferences.view==='auto' ? (data.items.length ? 'tasks' : 'capabilities') : preferences.view); hasReadSession=true;initialViewChosen=false;
       activityEmptyText=data.state==='error'?'任务读取失败，动态与日志暂不可用。':data.state==='unconfigured'?'尚未连接真实任务服务，动态与日志暂不可用。':['connected','ready'].includes(data.state)?'还没有已选任务，选择任务后可查看动态与日志。':'任务读取状态待确认，暂无法显示动态与日志。';
       el('primary-snapshot-warning').hidden=true;
       selectedItems = data.items; renderWorkbench(); renderSourceCards(data.sources); renderCapabilities(verified ? '已验证' : '待验证', readable ? '可读取' : '尚无可读快照', el('qq-channel').textContent, proof?.last_verified_at,true);
