@@ -122,6 +122,7 @@ export function dashboardClient(brandImages = {}) {
   const activityButtons = new Map();
   const readingKey = item => ['source_id','project_id','task_id','run_id','branch_id'].every(key=>typeof item[key]==='string' && item[key]) ? JSON.stringify([item.source_id,item.project_id,item.task_id,item.run_id,item.branch_id]) : null;
   let activityEmptyText='还没有已选任务，选择任务后可查看动态与日志。';
+  let lastTaskReadAt='';
   let selectedItems = null, hasReadSession = false,workExpiryTimer=null;
   const statusNames = {proposed:'待开始',running:'进行中',needs_input:'待决定',completed:'已完成',failed:'遇到问题',cancelled:'已取消'};
   const make = (tag, text, cls) => { const node=document.createElement(tag); if (text !== undefined) node.textContent=text; if(cls) node.className=cls; return node; };
@@ -303,7 +304,13 @@ export function dashboardClient(brandImages = {}) {
     el('task-clear-partial').hidden=!active||shown===0;
   }
   function resetTaskFilters(){el('task-filter').value='all';el('task-search').value='';renderWorkbench();el('task-search').focus();}
+  function showTaskReadTime(state){
+    lastTaskReadAt=state==='available'?new Date().toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}):'';
+    el('read-time').textContent=lastTaskReadAt || ({unavailable:'本次任务读取失败',unconfigured:'任务服务尚未接入',unknown:'任务读取状态待确认'})[state];
+  }
   function clearWorkbench(activityMessage=login.hidden?'等待读取所选任务':'验证本人后显示动态与日志', capabilityState=login.hidden?'idle':'login') {
+    lastTaskReadAt='';
+    el('read-time').textContent=capabilityState==='reading'?'正在读取任务…':'尚未读取';
     updateTaskFilterFeedback(false,0,0);
     el('primary-snapshot-warning').hidden=true;
     readingNodes.clear();activityButtons.clear();
@@ -412,7 +419,7 @@ export function dashboardClient(brandImages = {}) {
       const readable = data.items.some(item => item.source_id === 'zot-main' && item.state === 'available' && item.stale === false && ['proposed','running','needs_input','completed','failed','cancelled'].includes(item.source_status) && Number.isFinite(Date.parse(item.observed_at)));
       el('zot-card').setAttribute('data-state', warning ? 'warning' : verified ? 'active' : 'unknown');
       el('connection').textContent = proof?.status === 'revoked' ? '来源授权已撤销' : proof?.status === 'disabled' ? '来源已停用' : proof?.status === 'stale' ? '来源验证已过期' : verified ? '来源已验证' : '来源待验证';
-      el('read-time').textContent = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      showTaskReadTime(data.items.length||['connected','ready'].includes(data.state)?'available':data.state==='error'?'unavailable':data.state==='unconfigured'?'unconfigured':'unknown');
       el('item-count').textContent = String(data.items.length).padStart(2, '0');
       status.textContent = anyError ? '部分工作信息读取失败 · 自动重试' : allItems.length ? '工作信息已更新 · 30 秒自动刷新' : '尚未配置所选任务 · 30 秒自动刷新';
       if (!data.items.length) empty('还没有已选任务');
@@ -425,7 +432,7 @@ export function dashboardClient(brandImages = {}) {
       pollEnabled=true; pollFailures=Math.min(4,pollFailures+1);
       for(const card of sourceCards)card.setAttribute('data-state','warning');
       for(const warning of sourceWarnings)warning.hidden=false;
-      if(selectedItems){el('primary-snapshot-warning').hidden=false;el('zot-card').setAttribute('data-state','warning');status.textContent='更新中断 · 保留上次快照（可能已过期）· 自动重试';el('read-time').textContent='本次更新失败 · 上次快照可能已过期';return;}
+      if(selectedItems){el('primary-snapshot-warning').hidden=false;el('zot-card').setAttribute('data-state','warning');status.textContent='更新中断 · 保留上次快照（可能已过期）· 自动重试';el('read-time').textContent=lastTaskReadAt?'上次成功读取：'+lastTaskReadAt+' · 本次更新失败':'本次任务读取失败';return;}
       hasReadSession=false; switchView('capabilities');
       el('qq-channel').textContent = '状态待确认'; el('zot-card').setAttribute('data-state','warning'); el('connection').textContent = '读取中断 · 可重试'; status.textContent = '读取失败 · 可重试（自动退避）';
       items.replaceChildren(); el('item-count').textContent = '—'; el('read-time').textContent = '本次读取失败';
