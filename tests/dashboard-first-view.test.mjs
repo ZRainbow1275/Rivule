@@ -40,7 +40,7 @@ const snapshot={state:'available',source_id:'zot-main',task_name:'Prior task',so
 for(const view of ['tasks','activity'])test('first login-gated result honors explicit '+view+' navigation',async()=>{
  let release,reads=0;const c=fixture(path=>{assert.equal(path,'/dashboard/data');reads++;return new Promise(r=>{release=r;});});
  const initial=c.load();c.get('view-'+view).listeners.click();assert.equal(c.get(view+'-view').hidden,false);
- release({status:401});await initial;assert.equal(c.get(view+'-view').hidden,false);assert.equal(c.get('view-'+view).attributes['aria-pressed'],'true');
+ release({status:401});await initial;assert.equal(c.get(view+'-view').hidden,false);assert.equal(c.get('view-'+view).attributes['aria-selected'],'true');
  assert.equal(c.get('login').hidden,false);assert.equal(c.get('controls').hidden,true);
  assert.match(c.get(view==='tasks'?'items':'activity-list').children[0].textContent,/验证本人后显示/);assert.equal(reads,1);
 });
