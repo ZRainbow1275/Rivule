@@ -308,6 +308,12 @@ export function dashboardClient(brandImages = {}) {
       reading:['核对中','正在读取','核对中'],
       selection:['待核对','请重新选择任务','状态待确认'],
     };
+    const taskMessage={
+      login:'验证本人后显示任务',
+      reading:'正在读取所选任务…',
+      selection:'任务范围已变化，请重新选择已上报任务。',
+    }[capabilityState];
+    if(taskMessage) empty(taskMessage);
     renderCapabilities(...labels[capabilityState]);
   }
   function renderWorkbench() {
@@ -351,7 +357,7 @@ export function dashboardClient(brandImages = {}) {
 
   async function load(background = false) {
     if (loading) return;
-    clearTimeout(pollTimer); loading = true; refresh.disabled = true; if(!selectedItems){clearWorkbench('正在读取所选任务的动态与日志…','reading');items.replaceChildren();} if(!background && el('detail-dialog').open)closeDetail();
+    clearTimeout(pollTimer); loading = true; refresh.disabled = true; if(!selectedItems){clearWorkbench('正在读取所选任务的动态与日志…','reading');} if(!background && el('detail-dialog').open)closeDetail();
     status.textContent = '正在读取所选任务快照…';
     const id = ++requestId, controller = new AbortController();
     let timer;
@@ -365,9 +371,9 @@ export function dashboardClient(brandImages = {}) {
       if (response.status === 401) {
         document.dispatchEvent?.(new Event('rivule-session-expired'));
         pollEnabled=false; closePicker(true,false); clearWorkbench('验证本人后显示动态与日志','login'); hasReadSession=false; switchView('capabilities');
-        login.hidden = false; controls.hidden = true; items.replaceChildren(); el('item-count').textContent = '—'; el('read-time').textContent = '尚未读取';
+        login.hidden = false; controls.hidden = true; el('item-count').textContent = '—'; el('read-time').textContent = '尚未读取';
         el('qq-channel').textContent = '尚未读取'; el('connection').textContent = '等待本人验证'; el('zot-card').setAttribute('data-state','disconnected'); status.textContent = '等待本人验证';
-        empty('验证本人后显示任务'); return;
+        return;
       }
       if(response.status===409){const identities=sourceIdentities;closePicker(true,false);clearWorkbench('任务范围已变化，请重新选择任务后查看动态与日志。','selection');renderSourceCards(identities.map(source=>({...source,items:[],presentation_reset:true})));hasReadSession=false;switchView('capabilities');pollEnabled=false;el('item-count').textContent='—';el('read-time').textContent='任务访问范围已变化';el('connection').textContent='所选任务需重新核对';status.textContent='所选任务已不可用或访问范围变化，已清除旧内容；请重新选择已上报任务';controls.hidden=false;if(!identities.length){try{const scope=await pickerRequest('');if(id===requestId && !pickerDialog.open && Array.isArray(scope.sources))renderSourceCards(scope.sources.filter(source=>source.source_id!=='zot-main').map(source=>({...source,items:[],presentation_reset:true})));}catch{}}return;}
       if (!response.ok) throw Error('unavailable');
