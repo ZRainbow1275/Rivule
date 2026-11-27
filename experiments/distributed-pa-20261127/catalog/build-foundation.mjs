@@ -24,6 +24,7 @@ add('lobster-ai','网易有道龙虾 LobsterAI','self-hosted','cn','pull','docum
 add('wenxin-agentbuilder','文心智能体平台','platform','cn','observe','documented',['https://agents.baidu.com/community/list.html?categoryId=3'],'官方预告北京时间 2026-12-31 零时停运，只列迁移观察，不新建接入；不等同于搭子。');
 add('tasklet','Tasklet','consumer','global','push','documented',['https://tasklet.ai/learn/mcp'],'允许所选 Agent 的 MCP OAuth；启动任务会消耗积分，工具名和 schema 待合格账户发现。');
 add('lindy-personal','Lindy','consumer','global','observe','documented',['https://www.lindy.ai/changelog'],'官方更新记录的 MCP 入口待逐项验证；先保留产品观察，不猜工具名。');
+add('openassistant-rest','OpenAssistant REST Tasks','consumer','global','push','mock-tested',['https://docs.openassistant.us/reference/tasks','https://docs.openassistant.us/guides/api-authentication','https://docs.openassistant.us/guides/connections'],'官方 REST 支持同用户、同键、同内容的原请求回执复查；期限未见公开说明，默认禁重放。','纯离线合同模拟，专用用户 Key 与无外部连接的助手；和 MCP 工具发现分开。');
 validateCatalog(rows);
 fs.writeFileSync(new URL('./market-foundation.json',import.meta.url),JSON.stringify(rows,null,2)+'\n');
 console.log(rows.length);

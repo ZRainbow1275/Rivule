@@ -464,5 +464,29 @@
     "limits": [
       "官方更新记录的 MCP 入口待逐项验证；先保留产品观察，不猜工具名。"
     ]
+  },
+  {
+    "id": "openassistant-rest",
+    "name": "OpenAssistant REST Tasks",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "mock-tested",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://docs.openassistant.us/reference/tasks",
+      "https://docs.openassistant.us/guides/api-authentication",
+      "https://docs.openassistant.us/guides/connections"
+    ],
+    "limits": [
+      "官方 REST 支持同用户、同键、同内容的原请求回执复查；期限未见公开说明，默认禁重放。",
+      "纯离线合同模拟，专用用户 Key 与无外部连接的助手；和 MCP 工具发现分开。"
+    ]
   }
 ]
