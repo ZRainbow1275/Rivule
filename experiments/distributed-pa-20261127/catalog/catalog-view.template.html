@@ -1,0 +1,45 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rivule · PA 接入图谱</title>
+<style>
+:root{color-scheme:light;--paper:#f3efe4;--ink:#1e2928;--muted:#515f58;--line:#c5c4b1;--dark:#173634;--green:#cce4d1}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 system-ui,sans-serif}main{max-width:1230px;margin:auto;padding:25px 28px 55px}
+header{color:#fdf7e9;background:var(--dark);border-radius:18px;padding:30px clamp(14px,5vw,58px);margin-bottom:18px}
+header p{margin:.4em 0;color:#d7e0ce}h1{font-size:clamp(28px,5vw,48px);margin:.08em 0;letter-spacing:-.045em}h2{margin:0;font-size:19px}a{color:#2d5b51}
+.stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}.stats span{border:1px solid #789589;padding:.35em .7em;border-radius:8px}
+nav{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 6px;background:#fffcf0;padding:12px;border:1px solid var(--line);border-radius:10px}
+label{display:flex;align-items:center;gap:7px;font-weight:650}input,select,button{font:inherit}input,select{background:white;color:var(--ink);border:1px solid #738377;border-radius:6px;padding:5px 8px}input{max-width:100%;width:170px}
+#cards{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(330px,100%),1fr));gap:13px}.card{background:#fffdf3;border:1px solid var(--line);border-radius:10px;padding:16px}.meta{color:var(--muted);margin:2px 0 9px}.badge{display:inline-block;margin:2px 5px 2px 0;background:#e7e8d9;border-radius:5px;padding:3px 7px;font-size:13px}.tested{background:var(--green);font-weight:650}
+ul{padding-left:1.4em;margin:10px 0}.sources{display:flex;gap:10px;flex-wrap:wrap}.map{font-size:15px;margin-top:15px}.quiet{color:var(--muted);font-size:13px}
+:focus-visible{outline:3px solid #306f5f;outline-offset:2px}@media(max-width:560px){main{padding:14px}.card{padding:13px}}
+</style>
+<main>
+<header><p>RIVULE / 接入台账</p><h1>个人 Agent 接入图谱</h1><p>同一张看板。各家走自己的接口：能派工、能领单、能查阅，或者先人工交接。</p><div class="stats" id="stats"></div></header>
+<nav aria-label="筛选"><label>市场 <select id="market"><option value="">全部</option><option value="cn">国内</option><option value="global">国际</option><option value="both">跨区／自托管</option></select></label><label>路线 <select id="mode"><option value="">全部</option><option value="push">主动派工</option><option value="pull">助手领单</option><option value="read">查阅状态</option><option value="handoff">人工交接</option><option value="observe">只作观察</option></select></label><label>搜索 <input id="search" type="search" placeholder="产品名或限制"></label></nav>
+<div id="tally" class="quiet" role="status"></div><section id="cards" aria-label="产品与运行时"></section>
+<p class="map"><strong>真实试点建议：</strong>用同一份公开资料，从两条独立执行路线各取一份证据。主 Agent 验证才合稿；回包丢了核对原尝试。</p>
+<p class="quiet">生成于 2026-11-27。覆盖以本轮核对范围为准。离线查看不会联络任何供应商；官方来源链接由你主动打开。</p>
+</main>
+<script>
+'use strict';
+const rows=/*DATA*/;
+const types={enterprise:'企业',consumer:'个人助手',platform:'开发平台','self-hosted':'自托管',protocol:'协议'};
+const markets={cn:'国内',global:'国际',both:'跨区／自托管'};
+const modes={push:'主动派工',pull:'助手领单',read:'查阅状态',handoff:'人工交接',observe:'观察'};
+const steps={documented:'有官方说明','mock-tested':'离线验证通过',unverified:'接口待核',retired:'停止新增'};
+const $=id=>document.getElementById(id),el=(tag,t,cls)=>{const n=document.createElement(tag);if(t)n.textContent=t;if(cls)n.className=cls;return n;};
+$('stats').append(el('span',rows.length+' 条产品／平台记录'),el('span',rows.filter(x=>x.routes.some(r=>r.stage==='mock-tested')).length+' 项已有离线验证'),el('span','真实账号调用 0'));
+function render(){
+ const market=$('market').value,mode=$('mode').value,q=$('search').value.trim().toLowerCase();
+ const shown=rows.filter(x=>(!market||x.market===market)&&(!mode||x.routes.some(r=>r.mode===mode))&&(!q||[x.name,x.id,...x.limits].join(' ').toLowerCase().includes(q)));
+ $('tally').textContent='显示 '+shown.length+' / '+rows.length+' 条';
+ const frag=document.createDocumentFragment();
+ for(const x of shown){
+  const card=el('article',null,'card');card.append(el('h2',x.name),el('p',markets[x.market]+' · '+types[x.type],'meta'));
+  for(const r of x.routes)card.append(el('span',modes[r.mode]+' · '+steps[r.stage],'badge'+(r.stage==='mock-tested'?' tested':'')));
+  const desc=el('ul');for(const d of x.limits)desc.append(el('li',d));card.append(desc);
+  const link=el('div',null,'sources'); x.official.forEach((url,i)=>{const a=el('a','官方来源 '+(i+1));a.href=url;a.target='_blank';a.rel='noopener noreferrer';link.append(a);});card.append(link);frag.append(card);
+ }
+ $('cards').replaceChildren(frag);
+ if(!shown.length)$('cards').append(el('p','没有符合当前筛选的记录。'));
+}
+for(const id of ['market','mode','search'])$(id).addEventListener('input',render);render();
+</script></html>
