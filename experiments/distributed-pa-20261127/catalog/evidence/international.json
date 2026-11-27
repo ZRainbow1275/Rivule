@@ -8,7 +8,7 @@
       "name": "Tasklet",
       "operator": "Tasklet",
       "product_kind": "work_assistant",
-      "market_or_residency": "全球/以实际账户为准",
+      "market_or_residency": "服务支持地区由账号核定；按被选 Agent 授权",
       "availability": "released",
       "route": "dispatch_mcp",
       "verified_contract_zh": "指定既有 Tasklet Agent，可开始工作、查看线程、后续追问及查结果。",
@@ -148,7 +148,7 @@
       "availability": "released",
       "route": "routine_trigger",
       "verified_contract_zh": "可将一项 routine 绑定已鉴权的入站 webhook；也可让 Bot 使用允许的 MCP，按工具审批。",
-      "activation_gate_zh": "事件与目标 routine 明确绑定；不把 webhook 回包当任务完成；未启用外部联系动作。",
+      "activation_gate_zh": "绑定具体例程、HMAC 签名/时间窗；HTTP 202 仅入队。要有独立结果回传或人工验收；无真实动作。",
       "sources": [
         "https://docs.x.ai/grok/automations/webhooks",
         "https://docs.x.ai/grok-bot/skills-routines-and-automations"
@@ -165,7 +165,7 @@
       "availability": "released",
       "route": "routine_trigger",
       "verified_contract_zh": "已配置的 routine 可由外部认证 webhook 触发；Town 也可经 Streamable HTTP 调自定义 MCP。",
-      "activation_gate_zh": "每个 routine 独立 secret；注入性载荷与自动外发须隔离；旧 SSE 传输不适用其自定义 MCP。",
+      "activation_gate_zh": "每例程独立 bearer；官方 X-Town-Idempotency-Key 可为同一投递去重；禁调用者切换账号；需另验结果。",
       "sources": [
         "https://www.town.com/docs/routines/stock-routines/webhooks",
         "https://www.town.com/docs/integrations/mcp-servers"
@@ -263,10 +263,10 @@
       "name": "Notis",
       "operator": "Notis",
       "product_kind": "personal_assistant",
-      "market_or_residency": "全球/实际账户与服务授权",
+      "market_or_residency": "已开通的用户与其服务授权；未核国家清单",
       "availability": "released",
       "route": "tool_gateway",
-      "verified_contract_zh": "Rivule 可调用 Notis 的托管 MCP，在用户的授权应用中执行已发现的工具；部分功能由现有云/本地 agent 承接。",
+      "verified_contract_zh": "Rivule 可经托管 MCP 在用户授权的服务中执行已发现的工具；Notis 也能安排自动化，但有时借助订阅账户运行，不等同持久 PA 任务轮询。",
       "activation_gate_zh": "OAuth+PKCE，MCP/CLI 的 audience 不同；禁自动路由到 ChatGPT Work/Codex；只有确认独立计费路径后才运行。",
       "sources": [
         "https://www.notis.ai/developers/",
@@ -423,7 +423,7 @@
       "activation_gate_zh": "不把 Studio 自建 agent_id 或 API key 等同用户在 Vibe 中的个人对话。",
       "sources": [
         "https://help.mistral.ai/en/articles/682992-le-chat-is-now-vibe",
-        "https://mistral.ai/news/connectors/"
+        "https://docs.mistral.ai/vibe/work/web/connectors/mcp-connectors"
       ],
       "attempt": "public_contract_review",
       "live": "not_connected"
@@ -490,7 +490,8 @@
       "activation_gate_zh": "认证、类别范围和账号绑定分别验证；它是 Alexa 调用服务，而非远控消费者 Alexa 的通用代理 API。",
       "sources": [
         "https://developer.amazon.com/docs/alexaplus/add-ons/home",
-        "https://developer.amazon.com/alexaplus"
+        "https://developer.amazon.com/alexaplus",
+        "https://developer.amazon.com/docs/alexaplus/add-ons/mcp-toolkit-overview"
       ],
       "attempt": "public_contract_review",
       "live": "not_connected"
@@ -1014,7 +1015,8 @@
       "activation_gate_zh": "作用域按站点、用户、规则隔离；界面已打开不是 agent 已接单。",
       "sources": [
         "https://developer.atlassian.com/platform/forge/manifest-reference/modules/rovo-agent/",
-        "https://developer.atlassian.com/platform/forge/apis-reference/ui-api-bridge/rovo/"
+        "https://developer.atlassian.com/platform/forge/apis-reference/ui-api-bridge/rovo/",
+        "https://support.atlassian.com/cloud-automation/docs/automation-smart-values-rovo-agents/"
       ],
       "attempt": "public_contract_review",
       "live": "not_connected"
@@ -1168,6 +1170,363 @@
       "sources": [
         "https://github.com/n8n-io/nod",
         "https://nod.n8n.io/"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "openassistant-us",
+      "name": "OpenAssistant（openassistant.us）",
+      "operator": "OpenAssistant",
+      "product_kind": "personal_assistant",
+      "market_or_residency": "已配置的个人或组织账号",
+      "availability": "released",
+      "route": "dispatch_mcp",
+      "verified_contract_zh": "账号专属 MCP 可创建、读取和管理助理任务；每个任务有独立会话/状态，待人工审核是单独状态。",
+      "activation_gate_zh": "MCP 默认关闭；管理员开启，只授予该账号的 tasks 权限。选择账号专属 URL，不用文档的演示地址。不加入面向第三方的社交网络。",
+      "sources": [
+        "https://docs.openassistant.us/guides/mcp",
+        "https://docs.openassistant.us/guides/tasks",
+        "https://docs.openassistant.us/guides/agents"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "hussh-agent-one",
+      "name": "hussh Agent One / One Personal Data",
+      "operator": "Hushh",
+      "product_kind": "personal_assistant",
+      "market_or_residency": "授权的 hussh 账号与此用途",
+      "availability": "released_limited",
+      "route": "data_connector",
+      "verified_contract_zh": "外部助理可经 hussh MCP 请求为特定目的访问用户同意的一项数据范围。",
+      "activation_gate_zh": "逐项说明用途、单独同意后才取数；不把本人数据的访问许可当成任意代理执行权限。",
+      "sources": [
+        "https://www.hushh.ai/developers/mcp",
+        "https://dev.hushh.ai/learn"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "remio",
+      "name": "remio",
+      "operator": "remio",
+      "product_kind": "personal_assistant",
+      "market_or_residency": "个人桌面/配对移动端",
+      "availability": "released",
+      "route": "reverse_candidate",
+      "verified_contract_zh": "个人知识助理可关联 CLI、MCP 等外部服务，需用桌面实例确认可添加项目的目标连接器。",
+      "activation_gate_zh": "容易包含整个本地知识库，固定干净资料夹和单独实例；不冒充可从外部派单。",
+      "sources": [
+        "https://www.remio.ai/",
+        "https://www.remio.ai/user-guide/agent"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "heyclicky",
+      "name": "heyclicky",
+      "operator": "Humansongs",
+      "product_kind": "device_assistant",
+      "market_or_residency": "支持的 macOS / Windows 设备",
+      "availability": "released",
+      "route": "manual_handoff",
+      "verified_contract_zh": "在用户通过快捷键、语音或扩展提出要求时使用屏幕上下文；可在获准的浏览器/App 中做事。",
+      "activation_gate_zh": "屏幕、麦克风和现有真实会话默认不接；未核实 PA 级入站契约。",
+      "sources": [
+        "https://www.heyclicky.com/about",
+        "https://www.heyclicky.com/privacy-policy"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "underdog",
+      "name": "Underdog",
+      "operator": "Conway Research",
+      "product_kind": "device_assistant",
+      "market_or_residency": "支持的用户设备；以本地产品与商店为准",
+      "availability": "released",
+      "route": "manual_handoff",
+      "verified_contract_zh": "Conway 的个人助理产品，设备端支持会议记录等个人功能。",
+      "activation_gate_zh": "记录、邮箱与日历是私域；开发者商店的产品证据不表示有第三方派工。",
+      "sources": [
+        "https://underdog.ai/",
+        "https://github.com/Conway-Research",
+        "https://apps.apple.com/gb/app/underdog-ai/id6807185856"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "zapia",
+      "name": "Zapia",
+      "operator": "Zapia",
+      "product_kind": "personal_assistant",
+      "market_or_residency": "拉丁美洲/按具体国家及渠道复核",
+      "availability": "released",
+      "route": "manual_handoff",
+      "verified_contract_zh": "以官方 App/网页为基线。WhatsApp 入口经历地区性调整：英语公告与巴西葡语版的描述不同，且现官网显示连接器方案。",
+      "activation_gate_zh": "核准国家＋渠道＋账号三者后才能测试；不给‘全球可用’标签，不擅自在用户 WhatsApp 生成连接。",
+      "sources": [
+        "https://zapia.com/",
+        "https://zapia.com/blog/zapia-whatsapp-stopped-working-what-happened?lang=en",
+        "https://zapia.com/blog/zapia-parou-de-funcionar-no-whatsapp-o-que-aconteceu?lang=pt"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "luzia",
+      "name": "Luzia",
+      "operator": "Luzia",
+      "product_kind": "conversational_boundary",
+      "market_or_residency": "西语/葡语产品；WhatsApp 与 App 限额不同",
+      "availability": "released",
+      "route": "manual_handoff",
+      "verified_contract_zh": "面向个人的问答、整理与辅助产品；官方直接把它描述为 chatbot。",
+      "activation_gate_zh": "登记在相邻类别，不与长期自主执行的 PA 混数，也不从 WhatsApp/App 入口推断开放 API。",
+      "sources": [
+        "https://www.luzia.com/ayuda",
+        "https://www.luzia.com/pt-br/terminos-y-condiciones-app"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "nithami",
+      "name": "Nithami（نِظامي）",
+      "operator": "Nithami",
+      "product_kind": "personal_assistant",
+      "market_or_residency": "阿语/英语用户；具体国家尚待账号核实",
+      "availability": "released_limited",
+      "route": "manual_handoff",
+      "verified_contract_zh": "官网展示双语 WhatsApp 个人行政助理，配专用邮箱与日历。",
+      "activation_gate_zh": "目前仅有产品和注册入口，未核一般第三方派工协议；不注册/绑定号码。",
+      "sources": [
+        "https://nithami.ai/"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "sber-gigachat",
+      "name": "GigaChat",
+      "operator": "Sber",
+      "product_kind": "conversational_boundary",
+      "market_or_residency": "俄语/按当地账号和产品",
+      "availability": "released",
+      "route": "manual_handoff",
+      "verified_contract_zh": "个人 GigaChat 与 11-26 发布的 agentic GigaChat 4 模型、GigaPlatform AI Studio 分列理解。",
+      "activation_gate_zh": "模型能用工具不自动开放用户的聊天与记忆；此条只登记个人产品面。",
+      "sources": [
+        "https://giga.chat/help/articles/faq",
+        "https://www.sberbank.com/ru/news-and-media/press-releases/article?blockID=7&lang=ru&newsID=64476fc5-50de-4287-b772-bc5e9276a1b5&regionID=77&type=NEWS"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "mem-agent",
+      "name": "Mem Agent / Mem Chat",
+      "operator": "Mem",
+      "product_kind": "specialist_memory",
+      "market_or_residency": "已授权的 Mem 个人知识库",
+      "availability": "released",
+      "route": "data_connector",
+      "verified_contract_zh": "官方 MCP 可让外部客户端检索/管理笔记；Mem 同时有独立个人跟进助理。",
+      "activation_gate_zh": "不等同远程发任务给 Mem Agent；试用只读取专用测试笔记，不导入个人历史。",
+      "sources": [
+        "https://get.mem.ai/guides/mem-api-mcp-custom-workflows",
+        "https://get.mem.ai/product/agent"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "perplexity-comet",
+      "name": "Comet Assistant",
+      "operator": "Perplexity",
+      "product_kind": "device_assistant",
+      "market_or_residency": "支持的浏览器/工作区",
+      "availability": "released",
+      "route": "manual_handoff",
+      "verified_contract_zh": "随浏览器提供上下文研究及网页操作；Comet、扩展、云 Computer 是不同层，不多计同一席位。",
+      "activation_gate_zh": "用户已登录的浏览器才有上下文；本次不附接真实浏览器。",
+      "sources": [
+        "https://www.perplexity.ai/changelog/what-we-shipped---march-13-2026",
+        "https://www.perplexity.ai/changelog/multiagent-teammates-on-mobile-and-chrome-extension"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "fellou",
+      "name": "Fellou",
+      "operator": "Fellou",
+      "product_kind": "device_assistant",
+      "market_or_residency": "已有许可的浏览器客户端",
+      "availability": "released",
+      "route": "manual_handoff",
+      "verified_contract_zh": "浏览器/系统级助理可在用户授权时使用本地应用并执行浏览器工作。",
+      "activation_gate_zh": "不能将 Eko 等开发框架能力误当个人浏览器实例的标准发单口；不启动付费 sparks。",
+      "sources": [
+        "https://fellou.ai/",
+        "https://fellou.ai/pricing"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "nanoclaw",
+      "name": "NanoClaw",
+      "operator": "NanoCo",
+      "product_kind": "self_hosted",
+      "market_or_residency": "自托管/推理后端另选",
+      "availability": "released",
+      "route": "local_candidate",
+      "verified_contract_zh": "按容器隔离运行既定 Agent，可接聊天渠道并调度；为自建候选。",
+      "activation_gate_zh": "按官方当前版本核验插件和文档；不能套用 v1 架构说明；不选 Codex/Work 计费后端。",
+      "sources": [
+        "https://github.com/nanocoai/nanoclaw",
+        "https://github.com/nanocoai/nanoclaw/blob/main/CHANGELOG.md"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "openhuman",
+      "name": "OpenHuman",
+      "operator": "Tiny Humans",
+      "product_kind": "self_hosted",
+      "market_or_residency": "用户自建；外部模型/连接器另定",
+      "availability": "released",
+      "route": "local_candidate",
+      "verified_contract_zh": "本地优先的开源 Agent 运行时，支持编排、工作流、集成。",
+      "activation_gate_zh": "固定版本核对 managed 与本地托管边界；不绑定用户私有凭据或广权限工具。",
+      "sources": [
+        "https://github.com/tinyhumansai/openhuman"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "openjarvis",
+      "name": "OpenJarvis",
+      "operator": "Stanford Hazy Research / Scaling Intelligence Lab",
+      "product_kind": "self_hosted",
+      "market_or_residency": "自托管用户设备",
+      "availability": "released",
+      "route": "local_candidate",
+      "verified_contract_zh": "开放个人设备 Agent 研究框架，CLI 可选 agent 和工具并提供本地 UI。",
+      "activation_gate_zh": "仅作可自建运行时，不声称已有商业个人账户；默认不启动付费模型或外部工具。",
+      "sources": [
+        "https://github.com/open-jarvis/OpenJarvis",
+        "https://github.com/open-jarvis/OpenJarvis/blob/main/docs/index.md"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "pine-harness",
+      "name": "Pine（pmndre/pine）",
+      "operator": "Pine 开源贡献者",
+      "product_kind": "self_hosted",
+      "market_or_residency": "自托管",
+      "availability": "released_limited",
+      "route": "local_candidate",
+      "verified_contract_zh": "事件驱动的本地 Agent daemon，可配显式的 webhook 等事件源并唤起 Agent。",
+      "activation_gate_zh": "与同名云电脑产品区分，先验证事件鉴权与作用域；未部署。",
+      "sources": [
+        "https://github.com/pmndre/pine"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "letta",
+      "name": "Letta Agents",
+      "operator": "Letta",
+      "product_kind": "developer_runtime",
+      "market_or_residency": "项目/自托管环境",
+      "availability": "released",
+      "route": "dispatch_api",
+      "verified_contract_zh": "对已建 agent 异步发送消息，获得带 agent_id 的 Run，可按 run 查询。",
+      "activation_gate_zh": "开发者自建有状态身份；设置记忆策略但不读取用户其他产品的记忆。不启用任意工具。",
+      "sources": [
+        "https://docs.letta.com/api/python/resources/agents/subresources/messages/methods/create_async",
+        "https://docs.letta.com/api/typescript/resources/runs"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "cognition-devin",
+      "name": "Devin",
+      "operator": "Cognition",
+      "product_kind": "specialist_coding",
+      "market_or_residency": "已授权的组织",
+      "availability": "released",
+      "route": "dispatch_api",
+      "verified_contract_zh": "V3 有组织级、企业级两套范围；组织服务用户可创建并管理 session。",
+      "activation_gate_zh": "禁止用 create_as_user_id 转嫁到别人的历史或预算；本轮不发出编程会话或生成 PR。",
+      "sources": [
+        "https://docs.devin.ai/api-reference/overview",
+        "https://docs.devin.ai/api-reference/getting-started/teams-quickstart"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "github-copilot-cloud",
+      "name": "GitHub Copilot cloud agent",
+      "operator": "GitHub",
+      "product_kind": "specialist_coding",
+      "market_or_residency": "授权的 GitHub 仓库/付费权限",
+      "availability": "released",
+      "route": "policy_held",
+      "verified_contract_zh": "官方 REST 支持创建/读取仓库 agent task。GitHub 代码保存连接器与启动编程 agent 的权限分开。",
+      "activation_gate_zh": "用户要 GitHub 备份无须也不应自动启用 GitHub cloud agent；不启动、扣额、改库或 PR。",
+      "sources": [
+        "https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-via-the-api",
+        "https://docs.github.com/en/rest/agent-tasks/agent-tasks?apiVersion=2026-03-10"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "browser-use-cloud",
+      "name": "Browser Use Cloud",
+      "operator": "Browser Use",
+      "product_kind": "specialist_browser",
+      "market_or_residency": "单个授权的开发者项目/浏览器会话",
+      "availability": "released",
+      "route": "dispatch_api",
+      "verified_contract_zh": "官方文档区分 task_id 与 sessionId，可派发受限的浏览器任务并按具体版本查询。",
+      "activation_gate_zh": "独立云浏览器 worker，不代表用户任何其他消费 PA；独立版本、费用、空白会话；禁止导入真实 cookies。",
+      "sources": [
+        "https://github.com/browser-use/browser-use/blob/main/skills/cloud/references/quickstart.md",
+        "https://github.com/browser-use/browser-use/blob/main/skills/cloud/references/api-v3.md"
+      ],
+      "attempt": "public_contract_review",
+      "live": "not_connected"
+    },
+    {
+      "id": "gemini-api-research",
+      "name": "Gemini API Deep Research",
+      "operator": "Google",
+      "product_kind": "specialist_research",
+      "market_or_residency": "受支持的开发者项目",
+      "availability": "released_limited",
+      "route": "dispatch_api",
+      "verified_contract_zh": "开发者 Interactions API 提供后台研究代理及交互状态或 SSE；是单独技术面。",
+      "activation_gate_zh": "不是个人 Gemini App/Spark 席位；公开研究实验限定公开文本、独立预算，不用真实 key。",
+      "sources": [
+        "https://ai.google.dev/gemini-api/docs/get-started",
+        "https://ai.google.dev/gemini-api/docs/streaming"
       ],
       "attempt": "public_contract_review",
       "live": "not_connected"

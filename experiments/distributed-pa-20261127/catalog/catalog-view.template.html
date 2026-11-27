@@ -24,7 +24,7 @@ const rows=/*DATA*/;
 const types={enterprise:'企业',consumer:'个人助手',platform:'开发平台','self-hosted':'自托管',protocol:'协议'};
 const markets={cn:'国内',global:'国际',both:'跨区／自托管'};
 const modes={push:'主动派工',pull:'助手领单',read:'查阅状态',handoff:'人工交接',observe:'观察'};
-const steps={documented:'有官方说明','mock-tested':'离线验证通过',unverified:'接口待核',retired:'停止新增'};
+const steps={documented:'有官方说明','mock-tested':'离线验证通过',unverified:'接口待核',retired:'已停服'};
 const $=id=>document.getElementById(id),el=(tag,t,cls)=>{const n=document.createElement(tag);if(t)n.textContent=t;if(cls)n.className=cls;return n;};
 $('stats').append(el('span',rows.length+' 条产品／平台记录'),el('span',rows.filter(x=>x.routes.some(r=>r.stage==='mock-tested')).length+' 项已有离线验证'),el('span','真实账号调用 0'));
 function render(){
