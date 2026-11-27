@@ -97,9 +97,9 @@
       "availability": "released_limited",
       "route": "reverse_connector",
       "verified_contract_zh": "Gemini 在任务内用自定义 Connected App（远程 MCP）调用 Rivule。",
-      "activation_gate_zh": "自定义 app：美国18+、个人 Google 账号、开启 History；不可用工作或学校账户代替；逐端核准。",
+      "activation_gate_zh": "自定义 app：美国18+、个人 Google 账号、开启 History、英文；配置要在网页版，连接后移动端也可用。",
       "sources": [
-        "https://support.google.com/gemini/answer/17209137?hl=en",
+        "https://support.google.com/gemini/answer/17209137",
         "https://support.google.com/gemini/answer/17094507?hl=en",
         "https://developers.google.com/connected-apps/mcp/"
       ],
@@ -128,13 +128,14 @@
       "name": "Claude Duet",
       "operator": "Anthropic",
       "product_kind": "personal_assistant",
-      "market_or_residency": "美国；初期需候补",
+      "market_or_residency": "美国、印度、印度尼西亚、巴西、日本；需邀请或候补",
       "availability": "waitlist",
       "route": "reverse_candidate",
       "verified_contract_zh": "专门的主动助理 App，沿用该用户的 Claude 记忆、Skills、已连服务；可尝试由有资格的账号使用其已授权工具。",
-      "activation_gate_zh": "美国 Pro/Max/Ultra 研究预览，与原账户共用使用限额；不推断已有公开的 Duet 派单 API。",
+      "activation_gate_zh": "Pro/Max/Ultra 研究预览，非 Enterprise；与原账号共用使用限额。首发仅美国，现以更新后的帮助中心为准。",
       "sources": [
-        "https://claude.com/resources/articles/claude-duet"
+        "https://claude.com/resources/articles/claude-duet",
+        "https://support.claude.com/en/articles/17631495-get-started-with-claude-duet"
       ],
       "attempt": "public_contract_review",
       "live": "not_connected"
@@ -525,7 +526,7 @@
       "activation_gate_zh": "官方开发 beta 限自有设备个人项目/评估。因可访问整个屏幕，不接用户主力手机；本轮不配对。",
       "sources": [
         "https://www.theagi.company/blog/agi-mcp-for-every-app-on-your-phone",
-        "https://theagi.company/agent"
+        "https://theagi.company/about"
       ],
       "attempt": "public_contract_review",
       "live": "not_connected"
@@ -929,7 +930,8 @@
       "verified_contract_zh": "官方称非 Pendant 的 Rewind 功能将下线；Pendant 不再销售，现有客户在 2026 年继续受支持。",
       "activation_gate_zh": "只保留退场记录；不把存量设备支持计入可新增接入的 PA。",
       "sources": [
-        "https://www.limitless.ai/"
+        "https://www.limitless.ai/",
+        "https://help.limitless.ai/en/articles/9135527-screen-recording"
       ],
       "attempt": "public_contract_review",
       "live": "not_connected"
@@ -1255,8 +1257,7 @@
       "activation_gate_zh": "记录、邮箱与日历是私域；开发者商店的产品证据不表示有第三方派工。",
       "sources": [
         "https://underdog.ai/",
-        "https://github.com/Conway-Research",
-        "https://apps.apple.com/gb/app/underdog-ai/id6807185856"
+        "https://github.com/Conway-Research"
       ],
       "attempt": "public_contract_review",
       "live": "not_connected"
@@ -1324,7 +1325,7 @@
       "activation_gate_zh": "模型能用工具不自动开放用户的聊天与记忆；此条只登记个人产品面。",
       "sources": [
         "https://giga.chat/help/articles/faq",
-        "https://www.sberbank.com/ru/news-and-media/press-releases/article?blockID=7&lang=ru&newsID=64476fc5-50de-4287-b772-bc5e9276a1b5&regionID=77&type=NEWS"
+        "https://giga.chat/blog/posts/gigachat-4"
       ],
       "attempt": "public_contract_review",
       "live": "not_connected"

@@ -1877,7 +1877,7 @@
     ],
     "official": [
       "https://www.theagi.company/blog/agi-mcp-for-every-app-on-your-phone",
-      "https://theagi.company/agent"
+      "https://theagi.company/about"
     ],
     "limits": [
       "MCP 可通过配对设备执行屏幕动作，和用户在手机上的语音助理身份不能混记。",
@@ -2167,12 +2167,13 @@
       }
     ],
     "official": [
-      "https://claude.com/resources/articles/claude-duet"
+      "https://claude.com/resources/articles/claude-duet",
+      "https://support.claude.com/en/articles/17631495-get-started-with-claude-duet"
     ],
     "limits": [
       "专门的主动助理 App，沿用该用户的 Claude 记忆、Skills、已连服务；可尝试由有资格的账号使用其已授权工具。",
-      "美国 Pro/Max/Ultra 研究预览，与原账户共用使用限额；不推断已有公开的 Duet 派单 API。",
-      "美国；初期需候补"
+      "Pro/Max/Ultra 研究预览，非 Enterprise；与原账号共用使用限额。首发仅美国，现以更新后的帮助中心为准。",
+      "美国、印度、印度尼西亚、巴西、日本；需邀请或候补"
     ]
   },
   {
@@ -2458,13 +2459,13 @@
       }
     ],
     "official": [
-      "https://support.google.com/gemini/answer/17209137?hl=en",
+      "https://support.google.com/gemini/answer/17209137",
       "https://support.google.com/gemini/answer/17094507?hl=en",
       "https://developers.google.com/connected-apps/mcp/"
     ],
     "limits": [
       "Gemini 在任务内用自定义 Connected App（远程 MCP）调用 Rivule。",
-      "自定义 app：美国18+、个人 Google 账号、开启 History；不可用工作或学校账户代替；逐端核准。",
+      "自定义 app：美国18+、个人 Google 账号、开启 History、英文；配置要在网页版，连接后移动端也可用。",
       "任务可用地区与自定义 MCP 地区分开；后者要求美国"
     ]
   },
@@ -2508,7 +2509,7 @@
     ],
     "official": [
       "https://giga.chat/help/articles/faq",
-      "https://www.sberbank.com/ru/news-and-media/press-releases/article?blockID=7&lang=ru&newsID=64476fc5-50de-4287-b772-bc5e9276a1b5&regionID=77&type=NEWS"
+      "https://giga.chat/blog/posts/gigachat-4"
     ],
     "limits": [
       "个人 GigaChat 与 11-26 发布的 agentic GigaChat 4 模型、GigaPlatform AI Studio 分列理解。",
@@ -3608,7 +3609,8 @@
       }
     ],
     "official": [
-      "https://www.limitless.ai/"
+      "https://www.limitless.ai/",
+      "https://help.limitless.ai/en/articles/9135527-screen-recording"
     ],
     "limits": [
       "官方称非 Pendant 的 Rewind 功能将下线；Pendant 不再销售，现有客户在 2026 年继续受支持。",
@@ -3904,8 +3906,7 @@
     ],
     "official": [
       "https://underdog.ai/",
-      "https://github.com/Conway-Research",
-      "https://apps.apple.com/gb/app/underdog-ai/id6807185856"
+      "https://github.com/Conway-Research"
     ],
     "limits": [
       "Conway 的个人助理产品，设备端支持会议记录等个人功能。",
