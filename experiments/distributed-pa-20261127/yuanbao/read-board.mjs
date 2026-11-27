@@ -1,10 +1,11 @@
 /* Bounded read-only bridge experiment; no OAuth endpoint, credentials or callbacks.
  * loadJournal and resolve are trusted host dependencies. Nothing dispatches here. */
+import {makeScopedValidator} from '../src/sdk/scoped-validator.mjs';
 import {projectBoard} from '../src/sdk/coordination-board.mjs';
 const name=x=>typeof x==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u.test(x);
 const trustedViews=new Set(['owner','yuanbao','muse-personal']);
 const states=new Set(['ready','blocked','leased','submitting','running','needs_review','reported','accepted','failed','canceled']);
-const delivery=new Set(['unknown','owner_review','throttled','rejected','input_observed']);
+const delivery=new Set(['unknown','owner_review','throttled','rejected','input_observed','owner_input_required']);
 const own=(o,k)=>Object.hasOwn(o,k);
 const err=code=>Object.assign(new Error(code),{code});
 const requireThat=(p,code)=>{if(!p)throw err(code)};
@@ -16,16 +17,16 @@ export const tools=deepFreeze([
 ]);
 const validAlias=x=>typeof x==='string'&&/^[A-Z][A-Z0-9]{0,7}$/.test(x);
 const texts={blocked:'等待前置验收',ready:'待领取',leased:'已领取',submitting:'投递中',running:'已收到',needs_review:'待核对',reported:'已交稿',accepted:'已验收',failed:'失败',canceled:'已取消'};
-const labels={owner_review:'待所有者审核',throttled:'限流',rejected:'明确拒绝',input_observed:'已见原输入、仍待核',unknown:'投递结果待核'};
+const labels={owner_review:'待所有者审核',throttled:'限流',rejected:'明确拒绝',input_observed:'已见原输入、仍待核',unknown:'投递结果待核',owner_input_required:'待补充资料'};
 const exact=(o,fields)=>o&&Object.getPrototypeOf(o)===Object.prototype&&Object.keys(o).every(k=>fields.includes(k))&&Object.keys(o).every(k=>'value' in Object.getOwnPropertyDescriptor(o,k));
-function safeCards(j,p,aliases){
+function safeCards(j,p,aliases,owner){
  // j is one durable snapshot. projectBoard has validated the complete journal.
  // Track evidence just for the current attempt, including running→uncertain.
  const evidence=new Map();
  for(const e of j.events){
   const c=e.command;
   if(c.type==='claim'||c.type==='add'||(c.type==='reconcile'&&e.meta.answer?.verdict==='closed_not_sent'))evidence.delete(c.task);
-  if(c.type==='acknowledged'||(c.type==='reconcile'&&['result_verified','failure_verified'].includes(e.meta.answer?.verdict)))evidence.set(c.task,'confirmed');
+  if(c.type==='acknowledged'||c.type==='viktor_checkpoint'||(c.type==='reconcile'&&['result_verified','failure_verified'].includes(e.meta.answer?.verdict)))evidence.set(c.task,'confirmed');
   if(c.type==='reconcile'&&e.meta.answer?.verdict==='input_verified')evidence.set(c.task,'input_only');
  }
  const aliasByTask=new Map([...aliases].map(([a,id])=>[id,a]));
@@ -36,18 +37,21 @@ function safeCards(j,p,aliases){
    evidence:evidence.get(c.task)??(c.state==='needs_review'?'uncertain':'not_confirmed'),
    reviewLabel:readback?labels[readback]:null},
    submitted:c.state==='reported'||c.state==='accepted',accepted:c.state==='accepted',
-   updatedAt:new Date(j.events[c.taskVersion-1].at).toISOString(),
-   revision:c.taskVersion,dependencies:c.dependencies.map(d=>({alias:aliasByTask.get(d.task),state:d.state,accepted:d.state==='accepted'}))};
- });
+   ...(owner?{updatedAt:new Date(j.events[c.taskVersion-1].at).toISOString(),revision:c.taskVersion}:{}),
+   dependencies:c.dependencies.map(d=>({alias:aliasByTask.get(d.task),state:d.state,accepted:d.state==='accepted'}))
+    .sort((a,b)=>a.alias<b.alias?-1:a.alias>b.alias?1:0)};
+ }).sort((a,b)=>a.alias<b.alias?-1:a.alias>b.alias?1:0);
 }
-export function createBoardReadBridge({resolve,loadJournal,demoBoard}){
+export function createBoardReadBridge({resolve,loadJournal,demoBoard,validatorKey}){
+ const validate=makeScopedValidator(validatorKey);
  requireThat(name(demoBoard)&&[resolve,loadJournal].every(x=>typeof x==='function'),'host_binding_required');
  function access(p){
-  requireThat(p?.active===true&&p.board===demoBoard&&trustedViews.has(p.audience)&&name(p.subject)&&
+  requireThat(p?.active===true&&p.board===demoBoard&&trustedViews.has(p.audience)&&name(p.subject)&&name(p.policyEpoch)&&
     p.rights instanceof Set&&p.rights.has('pa:board:read')&&p.aliases instanceof Map&&p.aliases.size<=128,'not_authorized');
   const aliases=new Map(p.aliases);const ids=[...aliases.values()];
   requireThat([...aliases.keys()].every(validAlias)&&ids.every(name)&&new Set(ids).size===ids.length,'view_unavailable');
-  return {aliases,ids,identity:[p.board,p.subject,p.audience]};
+  const owner=p.audience==='owner'&&p.rights.has('pa:board:read_global');
+  return {aliases,ids,owner,identity:[p.board,p.subject,p.audience,p.policyEpoch,owner]};
  }
  return Object.freeze({tools,async invoke(request,method,args){
   requireThat(tools.some(x=>x.name===method),'unknown_tool');
@@ -55,7 +59,7 @@ export function createBoardReadBridge({resolve,loadJournal,demoBoard}){
   if(method==='get_task_status')requireThat(validAlias(args.alias),'invalid_input');
   else requireThat(!own(args,'filter')||['all','accepted','blocked'].includes(args.filter),'invalid_input');
   const p=await resolve(request);
-  const {aliases,ids,identity}=access(p);
+  const {aliases,ids,identity,owner}=access(p);
   const j=await loadJournal({board:demoBoard,subject:p.subject,audience:p.audience});
   requireThat(j?.scope===demoBoard,'view_unavailable');
   // Recheck at the release boundary: one read can straddle a revocation.
@@ -63,9 +67,12 @@ export function createBoardReadBridge({resolve,loadJournal,demoBoard}){
   requireThat(identity.every((x,i)=>x===refreshed.identity[i])&&aliases.size===refreshed.aliases.size&&
    [...aliases].every(([a,id])=>refreshed.aliases.get(a)===id),'not_authorized');
   const view=projectBoard(j,{scope:demoBoard,selected:ids,readable:ids});
-  const cards=safeCards(j,view,aliases);
-  if(method==='get_task_status')return {asOfVersion:view.asOfVersion,card:cards.find(c=>c.alias===args.alias)??null};
-  const f=args.filter??'all';
-  return {asOfVersion:view.asOfVersion,cards:cards.filter(c=>f==='all'||c.state===f)};
+  const cards=safeCards(j,view,aliases,owner),filter=args.filter??'all';
+  const payload=method==='get_task_status'?{card:cards.find(c=>c.alias===args.alias)??null}:
+   {cards:cards.filter(c=>filter==='all'||c.state===filter)};
+  if(owner)return {asOfVersion:view.asOfVersion,...payload};
+  // Scope to the returned payload: e.g. another visible but unrequested card
+  // changing does not perturb a read of just this card.
+  return {validator:validate(method,identity,payload),...payload};
  }});
 }
