@@ -13,3 +13,21 @@ test('fixed user-scoped MCP tool fingerprints accept exact semantics, fail on dr
  A.equal(again.state,'needs_schema_review');
  A(!JSON.stringify(now).includes('Untrusted text'));
 });
+test('review is pinned to the same subject and exact selected agent names',async()=>{
+ const selected={...req,allowedAgentRefs:['public-synthetic','other-synthetic']};
+ const first=await reviewMcpPeer(selected);
+ const approvedFingerprints=new Map([['synthetic_tool',{fingerprint:first.tools[0].fingerprint,semantic:'read_status'}]]);
+ const state=r=>reviewMcpPeer({...selected,...r,approvedFingerprints}).then(q=>q.state);
+ A.equal(await state({allowedAgentRefs:['other-synthetic','public-synthetic']}),'verified_schema_offline');
+ A.equal(await state({verified:{...selected.verified,subject:'different-subject'}}),'needs_schema_review');
+ A.equal(await state({allowedAgentRefs:['public-synthetic']}),'needs_schema_review');
+ A.equal(await state({allowedAgentRefs:['public-synthetic','public-synthetic']}),'needs_user_binding');
+});
+test('deep or cyclic schemas fail closed without crashing the review',async()=>{
+ const cycle={type:'object'};cycle.self=cycle;
+ let deep={type:'object'};for(let i=0;i<25;i++)deep={type:'object',value:deep};
+ for(const inputSchema of [cycle,deep]){
+  const q=await reviewMcpPeer({...req,toolList:[{name:'synthetic_tool',inputSchema}]});
+  A.deepEqual(q,{state:'needs_schema_review',tools:[]});
+ }
+});
