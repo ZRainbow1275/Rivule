@@ -490,5 +490,116 @@
       "官方 REST 支持同用户、同键、同内容的原请求回执复查；期限未见公开说明，默认禁重放。",
       "纯离线合同模拟，专用用户 Key 与无外部连接的助手；和 MCP 工具发现分开。"
     ]
+  },
+  {
+    "id": "viktor-rest",
+    "name": "Viktor REST",
+    "type": "enterprise",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "mock-tested",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://viktor.com/docs/public-api",
+      "https://viktor.com/security",
+      "https://viktor.com/legal/privacy"
+    ],
+    "limits": [
+      "新线程含首个任务；模拟核验 HTTP 202 三个原 ID，已知 ID 只读原运行，需输入留待决定。",
+      "真实接口用付费工作区专属密钥和额度。文档未列幂等保留期限，默认不重发。官方默认托管美国，企业欧洲另核模型与工具流向。"
+    ]
+  },
+  {
+    "id": "viktor-mcp",
+    "name": "Viktor MCP",
+    "type": "enterprise",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://viktor.com/docs/mcp-server",
+      "https://viktor.com/security"
+    ],
+    "limits": [
+      "公开文档有派工和读回工具；不同于 REST。官方列出 Claude／ChatGPT 客户端 OAuth，Rivule 自定义资格未证实。"
+    ]
+  },
+  {
+    "id": "coworker-ai-trigger",
+    "name": "Coworker.ai Agent Builder",
+    "type": "enterprise",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://intercom.help/coworker-ai/en/articles/14759188-configuring-triggers-for-your-agent",
+      "https://intercom.help/coworker-ai/en/articles/14799776-understanding-your-agent-execution-history"
+    ],
+    "limits": [
+      "专属 Agent 有 API 触发、幂等键。未见公开回执样式、重放窗口或自动结果端点。保留已登录原执行历史的人工核查。"
+    ]
+  },
+  {
+    "id": "coworker-ai-mcp",
+    "name": "Coworker.ai MCP",
+    "type": "enterprise",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "observe",
+        "stage": "unverified",
+        "effect": "manual-copy",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://intercom.help/coworker-ai/en/articles/14745496-coworker-mcp-overview",
+      "https://intercom.help/coworker-ai/en/articles/17456288-connecting-custom-mcp-servers-to-coworker"
+    ],
+    "limits": [
+      "OAuth 服务含组织数据与动作；先核工具、权限和结果接口。支持在 Coworker 内安装自定义远程 MCP，不自动视为可领单。"
+    ]
+  },
+  {
+    "id": "claude-tag",
+    "name": "Claude Tag（Slack）",
+    "type": "enterprise",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "handoff",
+        "stage": "documented",
+        "effect": "manual-copy",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://support.claude.com/en/articles/15594475-what-is-claude-tag"
+    ],
+    "limits": [
+      "Team／Enterprise 测试版。Workspace Owner 配置身份与频道；提及 Claude 交接，组织计费，尚无 Rivule 自动派工证据。"
+    ]
   }
 ]

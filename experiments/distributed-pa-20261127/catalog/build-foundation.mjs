@@ -25,6 +25,11 @@ add('wenxin-agentbuilder','文心智能体平台','platform','cn','observe','doc
 add('tasklet','Tasklet','consumer','global','push','documented',['https://tasklet.ai/learn/mcp'],'允许所选 Agent 的 MCP OAuth；启动任务会消耗积分，工具名和 schema 待合格账户发现。');
 add('lindy-personal','Lindy','consumer','global','observe','documented',['https://www.lindy.ai/changelog'],'官方更新记录的 MCP 入口待逐项验证；先保留产品观察，不猜工具名。');
 add('openassistant-rest','OpenAssistant REST Tasks','consumer','global','push','mock-tested',['https://docs.openassistant.us/reference/tasks','https://docs.openassistant.us/guides/api-authentication','https://docs.openassistant.us/guides/connections'],'官方 REST 支持同用户、同键、同内容的原请求回执复查；期限未见公开说明，默认禁重放。','纯离线合同模拟，专用用户 Key 与无外部连接的助手；和 MCP 工具发现分开。');
+add('viktor-rest','Viktor REST','enterprise','global','push','mock-tested',['https://viktor.com/docs/public-api','https://viktor.com/security','https://viktor.com/legal/privacy'],'新线程含首个任务；模拟核验 HTTP 202 三个原 ID，已知 ID 只读原运行，需输入留待决定。','真实接口用付费工作区专属密钥和额度。文档未列幂等保留期限，默认不重发。官方默认托管美国，企业欧洲另核模型与工具流向。');
+add('viktor-mcp','Viktor MCP','enterprise','global','push','documented',['https://viktor.com/docs/mcp-server','https://viktor.com/security'],'公开文档有派工和读回工具；不同于 REST。官方列出 Claude／ChatGPT 客户端 OAuth，Rivule 自定义资格未证实。');
+add('coworker-ai-trigger','Coworker.ai Agent Builder','enterprise','global','push','documented',['https://intercom.help/coworker-ai/en/articles/14759188-configuring-triggers-for-your-agent','https://intercom.help/coworker-ai/en/articles/14799776-understanding-your-agent-execution-history'],'专属 Agent 有 API 触发、幂等键。未见公开回执样式、重放窗口或自动结果端点。保留已登录原执行历史的人工核查。');
+add('coworker-ai-mcp','Coworker.ai MCP','enterprise','global','observe','unverified',['https://intercom.help/coworker-ai/en/articles/14745496-coworker-mcp-overview','https://intercom.help/coworker-ai/en/articles/17456288-connecting-custom-mcp-servers-to-coworker'],'OAuth 服务含组织数据与动作；先核工具、权限和结果接口。支持在 Coworker 内安装自定义远程 MCP，不自动视为可领单。');
+add('claude-tag','Claude Tag（Slack）','enterprise','global','handoff','documented',['https://support.claude.com/en/articles/15594475-what-is-claude-tag'],'Team／Enterprise 测试版。Workspace Owner 配置身份与频道；提及 Claude 交接，组织计费，尚无 Rivule 自动派工证据。');
 validateCatalog(rows);
 fs.writeFileSync(new URL('./market-foundation.json',import.meta.url),JSON.stringify(rows,null,2)+'\n');
 console.log(rows.length);
