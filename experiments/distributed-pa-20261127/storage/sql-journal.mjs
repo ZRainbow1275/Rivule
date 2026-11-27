@@ -37,10 +37,16 @@ export function makeSqlJournal({sql,transactionSync}) {
   return {...result,committed:true};
  });
  const project=input=>transactionSync(()=>projectBoard(read(input.scope),input));
+ // Host-only complete projection; wrappers must explicitly authorize the
+ // board and choose which (if any) readers can receive this snapshot.
+ const projectAll=scope=>transactionSync(()=>{
+  const j=read(scope),all=j.events.filter(e=>e.command.type==='add').map(e=>e.command.task);
+  return projectBoard(j,{scope,selected:all,readable:all});
+ });
  const outboxAfter=(board,after=0,limit=40)=>transactionSync(()=>{
   if(!valid(board)||!Number.isSafeInteger(after)||after<0||!Number.isSafeInteger(limit)||limit<1||limit>100)throw new TypeError('invalid projection cursor');
   return [...sql.exec('SELECT v, phase, task FROM lab_coord_outbox WHERE board=? AND v>? ORDER BY v LIMIT ?',board,after,limit)]
    .map(row=>({version:row.v,phase:row.phase,task:row.task}));
  });
- return Object.freeze({prepare,append,project,outboxAfter});
+ return Object.freeze({prepare,append,project,projectAll,outboxAfter});
 }
