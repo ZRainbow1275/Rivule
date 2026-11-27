@@ -28,3 +28,9 @@
 选一份用户指定的公开产品说明书，由国内的搭子抽指标、国际的 Cue 核英文原文；另一个已绑定的 Muse 席位只对比这两份**脱敏结果**。主 Agent 先定义交付物的字段、引用要求和谁可以读，让两个子任务独立运行。只有收到 provider 真实回执、各自的结果、主 Agent 对引用的验收后，主卡才进“完成”。中途若 Cue 请求授权，停在该分支并显示原因，国内分支继续。初次真实派单需通道配置、凭据和任务范围齐备后再进行。
 
 **多账号升级门槛：** 席位是已授权的独立执行身份，不是共享会话/凭据；同一工作单一次只有一个有效接单凭据（lease＋generation）。旧席位迟回可留作审计，不能覆盖新结果。发送超时未明先查询，不从国内/外账号补发相同副作用。统计用可按时交付、能验证的任务数，而非接口个数。
+
+## 可查阅、可认领与可派工是三个层级
+
+- **腾讯元宝**：企业资质审核后，合作方可上传 `SKILL.md`，以 Streamable HTTP／OAuth 2.0 配置远程 MCP Connector，勾选工具、联调并提交评测。它适合在用户主动问起时查同一张看板。离线实验现在只允许读总览和单卡；不声明自动唤醒、外派或个人客户端可用。[平台介绍](https://open.yuanbao.tencent.com/docs/overview) · [Connector](https://open.yuanbao.tencent.com/docs/mcp-integration) · [评测用例](https://open.yuanbao.tencent.com/docs/test-case-sample)
+- **WorkBuddy Managed Agents**：与普通用户版远程 MCP 不同。企业管理 API 创建会话非幂等且启动计费沙箱。每次只给一个已核定、专用且有预算的席位留一个活跃 prompt；断 ACP 连接不等于关闭沙箱，收到历史回放不等于本轮开始或有结果。不自动复用整个账户的最新会话。[企业直连](https://cloud.tencent.com/document/product/1831/140759) · [开通、计费](https://cloud.tencent.com/document/product/1831/140272)
+- **A2A 1.0.1**：供应商可以按 messageId 去重，协议没有统一保证。List Tasks 的筛选没有 messageId；第一回包丢失时，taskId 和 contextId 可能还未知，空列表不能证明未派出。Rivule 应把原尝试证据保留在账本里；在核明前不重新派工、换号或把收到回执写成已验收。A2A 在此是网关协议，不代表上面列出的消费产品已有接口。[幂等](https://a2a-protocol.org/v1.0.1/specification/#331-idempotency) · [任务列表](https://a2a-protocol.org/v1.0.1/specification/#314-list-tasks)
