@@ -332,7 +332,7 @@
     "routes": [
       {
         "mode": "push",
-        "stage": "documented",
+        "stage": "mock-tested",
         "effect": "research-public-text",
         "liveTested": false
       }
@@ -342,7 +342,7 @@
       "https://aily.feishu.cn/hc/1u7kleqg_jsmwydi4"
     ],
     "limits": [
-      "专用会话与 Bearer 权限，准备模拟真实 Session→消息→Run。",
+      "企业发布专用文本应用；会话→消息→运行已离线模拟。72 小时去重只用于同一条消息，运行不盲重试。",
       "创建 session、写 message、创建 run；查询/取消 run，再读会话消息。",
       "指定 Aily 应用、飞书自建应用权限及对应 access_token；配置应用与使用者权限。",
       "组织应用身份；不是个人专属伙伴账号。",

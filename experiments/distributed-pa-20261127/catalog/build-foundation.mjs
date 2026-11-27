@@ -18,7 +18,7 @@ add('coze-cn','扣子 CN','platform','cn','push','documented',['https://docs.coz
 add('coze-global','Coze 国际','platform','global','push','documented',['https://www.coze.com/open/docs/developer_guides/coze_api_overview'],'单一已发布 Bot，国际端点独立。');
 add('glean-durable','Glean Agents','enterprise','global','push','mock-tested',['https://developers.glean.com/api/platform-api/agents-overview','https://developers.glean.com/cookbook/human-in-the-loop-agent'],'限租户与个人 OAuth；发布专用文本 Agent；有工具审批时停，不自动批准。');
 add('a2a','A2A 1.0.1','protocol','both','push','mock-tested',['https://a2a-protocol.org/v1.0.1/specification/'],'框架协议，不等于消费 App 已开放；只能由经评审的固定节点绑定传输层。');
-add('feishu-aily','飞书 Aily 企业应用','enterprise','cn','push','documented',['https://aily.feishu.cn/hc/8qluoxsa_zi14u22m'],'专用会话与 Bearer 权限，准备模拟真实 Session→消息→Run。');
+add('feishu-aily','飞书 Aily 企业应用','enterprise','cn','push','mock-tested',['https://aily.feishu.cn/hc/8qluoxsa_zi14u22m'],'企业发布专用文本应用；会话→消息→运行已离线模拟。72 小时去重只用于同一条消息，运行不盲重试。');
 add('qwenpaw','通义 QwenPaw（原 CoPaw）','self-hosted','both','push','documented',['https://github.com/agentscope-ai/QwenPaw/blob/main/website/public/docs/api-tutorial.en.md'],'自有运行时+Web 鉴权；不能拿消费者账号名冒用其会话。');
 add('lobster-ai','网易有道龙虾 LobsterAI','self-hosted','cn','pull','documented',['https://github.com/netease-youdao/LobsterAI'],'用户安装远程 MCP 连接器，反向领单。');
 add('wenxin-agentbuilder','文心智能体平台','platform','cn','observe','documented',['https://agents.baidu.com/community/list.html?categoryId=3'],'官方预告北京时间 2026-12-31 零时停运，只列迁移观察，不新建接入；不等同于搭子。');

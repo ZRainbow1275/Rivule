@@ -348,7 +348,7 @@
     "routes": [
       {
         "mode": "push",
-        "stage": "documented",
+        "stage": "mock-tested",
         "effect": "research-public-text",
         "liveTested": false
       }
@@ -357,7 +357,7 @@
       "https://aily.feishu.cn/hc/8qluoxsa_zi14u22m"
     ],
     "limits": [
-      "专用会话与 Bearer 权限，准备模拟真实 Session→消息→Run。"
+      "企业发布专用文本应用；会话→消息→运行已离线模拟。72 小时去重只用于同一条消息，运行不盲重试。"
     ]
   },
   {
