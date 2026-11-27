@@ -5,6 +5,7 @@
 :root{color-scheme:dark;--bg:#101c1b;--paper:#172b28;--line:#395048;--mint:#b7dfad;--ink:#e9efe1;--muted:#acc1b3;--warn:#ffc479;--haze:#d1c8f0}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top right,#283d28 0,transparent 38%),var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}main{width:min(1020px,92vw);margin:auto;padding:43px 0 55px}h1,h2,p{margin:0}header p{margin-top:9px;color:var(--muted)}h1{font-size:clamp(32px,6vw,60px);line-height:1.1;letter-spacing:-.055em}h1 span{color:var(--mint)}.kicker{font-size:13px;color:var(--mint);letter-spacing:.17em;margin-bottom:12px}small{color:var(--muted)}.board{margin-top:20px;padding:22px;border:1px solid var(--line);border-radius:22px;background:rgba(23,43,40,.86)}.board>header{display:flex;justify-content:space-between;align-items:flex-start;gap:15px}.step{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin:17px 0}.step button{border:1px solid var(--line);background:#203630;color:var(--ink);font:inherit;font-size:13px;border-radius:10px;min-height:43px;cursor:pointer}.step button[aria-pressed=true]{background:var(--mint);color:#162820;font-weight:750;border-color:var(--mint)}button:focus-visible{outline:3px solid var(--warn);outline-offset:3px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:17px 0}.lane{padding:13px;border:1px solid var(--line);border-radius:16px;background:#1b2c27;min-width:0}.lane h2{font-size:14px;color:var(--muted);margin-bottom:9px}.lane article{min-height:118px;border-radius:12px;background:#233931;border:1px solid #557365;padding:10px;margin:6px 0}.lane article h3{margin:0 0 4px;font-size:16px}.lane article p{color:var(--muted);font-size:12px;overflow-wrap:anywhere}.state{display:inline-block;border-radius:25px;background:#354e40;color:var(--mint);padding:2px 9px;font-size:12px;margin:3px 0}.needs_review .state{background:#50402a;color:var(--warn)}.blocked .state,.reported .state{background:#40394c;color:var(--haze)}.footer{color:var(--muted);font-size:13px;padding-top:7px}.note{min-height:52px;color:var(--ink)}.place{color:var(--mint);border:1px solid #4a6351;padding:2px 7px;border-radius:7px;white-space:nowrap;font-size:12px}
 select{max-width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:7px 12px;margin:12px 0 2px}label{font-size:14px;color:var(--muted);margin-right:6px}select:focus-visible,button:focus-visible{outline:2px solid var(--warn);outline-offset:3px}
+.sync-rail{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}.sync-rail[hidden]{display:none}.sync-tile{min-width:0;padding:9px 10px;background:#20342d;border:1px solid var(--line);border-radius:10px}.sync-tile strong,.sync-tile small{display:block;overflow-wrap:anywhere}.sync-tile[data-kind=lag] strong{color:var(--warn)}.sync-tile[data-kind=steady] strong{color:var(--mint)}
 @media(max-width:680px){main{padding-top:25px}.board{padding:12px}.grid{grid-template-columns:1fr}.step{grid-template-columns:repeat(3,1fr)}}
 </style>
 <main><header><p class="kicker">RIVULE / COORDINATION LAB</p><h1>一项任务，<span>各路并行。</span></h1><p>用同一份任务记录，回放地区隔离、掉线查回执和主 Agent 验收。</p></header>
@@ -12,9 +13,11 @@ select{max-width:100%;font:inherit;color:var(--ink);background:var(--bg);border:
 <label for="scenario">演练场景</label> <select id="scenario">
 <option value="qwen">QwenPaw 断流，Glean 继续</option>
 <option value="viktor">Viktor 等补充，另一项先交付</option>
+<option value="coordinator">两个调度窗口断线后对齐</option>
 <option value="muse">两个独立 Muse 席位</option>
 </select>
 <nav id="steps" class="step" aria-label="回放步骤"></nav><p id="caption" class="note" aria-live="polite"></p>
+<div id="sync-rail" class="sync-rail" hidden aria-label="两个窗口的同步状态"></div>
 <div class="grid"><section class="lane"><h2 id="first-heading">境内独立</h2><div id="cn"></div></section><section class="lane"><h2 id="second-heading">海外公共材料</h2><div id="foreign"></div></section><section class="lane"><h2>主任务依赖</h2><div id="join"></div></section></div>
 <p class="footer">每一步来自同一份事件记录。席位、回执、足迹均为测试样本；没有实际派工，也没有改动现有 Rivule。</p>
 </section></main>
@@ -29,6 +32,10 @@ const tracks={
   names:{'public-date':'核对公开日期',peer:'独立公开资料',merge:'合稿'},
   workers:{'viktor-actor':'Viktor 示例','independent':'Glean 示例'},cn:'public-date',merge:'merge',
   headings:['Viktor · 海外','独立任务 · 海外'],defaultStep:1},
+ coordinator:{phases:verifiedCoordinatorReplay,labels:['已同步','窗口断线','原任务验收','重连补齐','忽略迟到'],
+  names:{'public-source':'核对公开来源','editor-note':'独立编辑任务',merge:'汇总材料'},
+  workers:{helper:'原派送示例'},cn:'public-source',merge:'merge',
+  headings:['窗口 A · 当前任务','窗口 A · 独立任务'],defaultStep:0},
  muse:{phases:runCoordinationExample().phases,
   labels:['拆分','领取','断线','核回','允许合稿','验收完成'],
   names:{'cn-notes':'国内原件核对','overseas-a':'国际材料原文 A','overseas-b':'国际材料原文 B',editorial:'两份公开材料合稿'},
@@ -45,7 +52,19 @@ function loadTrack(key){
  $('first-heading').textContent=first;$('second-heading').textContent=second;
  $('steps').replaceChildren(...buttons);render(track.defaultStep??2);
 }
-function render(i){const f=track.phases[i];$('clock').textContent='记录修订 '+String(f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.label;
+function syncRail(sample){
+ const rail=$('sync-rail');rail.hidden=!sample;
+ if(!sample){rail.replaceChildren();return;}
+ const tile=(title,value,detail,kind)=>{
+  const x=node('div','');x.className='sync-tile';x.setAttribute('data-kind',kind);
+  x.append(node('small',title),node('strong',value),node('small',detail));return x;
+ };
+ rail.replaceChildren(
+  tile('窗口 A',sample.a.state,'修订 '+sample.a.version,sample.a.version<sample.b.version?'lag':'steady'),
+  tile('窗口 B',sample.b.state,'修订 '+sample.b.version,'steady'),
+  tile('派送凭证',sample.permits+' 次','重连只读记录','steady'));
+}
+function render(i){const f=track.phases[i];syncRail(f.sync);$('clock').textContent='记录修订 '+String(f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.label;
  buttons.forEach((b,k)=>b.setAttribute('aria-pressed',String(i===k)));
  for(const id of ['cn','foreign','join'])$(id).replaceChildren();
  for(const item of f.cards){const a=node('article','');a.className=item.state;

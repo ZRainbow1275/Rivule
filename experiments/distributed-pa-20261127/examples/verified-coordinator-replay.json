@@ -1,0 +1,227 @@
+[
+  {
+    "schema": 1,
+    "scope": "authority",
+    "asOfVersion": 4,
+    "cards": [
+      {
+        "task": "editor-note",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "state": "blocked",
+        "worker": null,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "public-source",
+            "state": "leased"
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "state": "leased",
+        "worker": "helper",
+        "taskVersion": 4,
+        "dependencies": []
+      }
+    ],
+    "label": "两个调度窗口都已看到任务被领走。",
+    "sync": {
+      "a": {
+        "version": 4,
+        "state": "已同步"
+      },
+      "b": {
+        "version": 4,
+        "state": "已同步"
+      },
+      "permits": 0
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "authority",
+    "asOfVersion": 4,
+    "cards": [
+      {
+        "task": "editor-note",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "state": "blocked",
+        "worker": null,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "public-source",
+            "state": "leased"
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "state": "leased",
+        "worker": "helper",
+        "taskVersion": 4,
+        "dependencies": []
+      }
+    ],
+    "label": "窗口 A 断线，仍显示已领取。窗口 B 已看到首次派送。",
+    "sync": {
+      "a": {
+        "version": 4,
+        "state": "已断线"
+      },
+      "b": {
+        "version": 5,
+        "state": "已同步"
+      },
+      "permits": 1
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "authority",
+    "asOfVersion": 4,
+    "cards": [
+      {
+        "task": "editor-note",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "state": "blocked",
+        "worker": null,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "public-source",
+            "state": "leased"
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "state": "leased",
+        "worker": "helper",
+        "taskVersion": 4,
+        "dependencies": []
+      }
+    ],
+    "label": "窗口 B 已验收原任务，合稿解锁。离线的窗口 A 还停在旧进度。",
+    "sync": {
+      "a": {
+        "version": 4,
+        "state": "等待重连"
+      },
+      "b": {
+        "version": 8,
+        "state": "已验收"
+      },
+      "permits": 1
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "authority",
+    "asOfVersion": 8,
+    "cards": [
+      {
+        "task": "editor-note",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "public-source",
+            "state": "accepted"
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "state": "accepted",
+        "worker": "helper",
+        "taskVersion": 8,
+        "dependencies": []
+      }
+    ],
+    "label": "A 重连时发现通知有缺口，于是读取最新整板。合稿已在两个窗口解锁。",
+    "sync": {
+      "a": {
+        "version": 8,
+        "state": "已恢复"
+      },
+      "b": {
+        "version": 8,
+        "state": "已同步"
+      },
+      "permits": 1
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "authority",
+    "asOfVersion": 8,
+    "cards": [
+      {
+        "task": "editor-note",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "public-source",
+            "state": "accepted"
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "state": "accepted",
+        "worker": "helper",
+        "taskVersion": 8,
+        "dependencies": []
+      }
+    ],
+    "label": "旧派送响应和重复更新迟到。两个窗口继续显示已验收的版本。",
+    "sync": {
+      "a": {
+        "version": 8,
+        "state": "忽略迟到响应"
+      },
+      "b": {
+        "version": 8,
+        "state": "已同步"
+      },
+      "permits": 1
+    }
+  }
+]

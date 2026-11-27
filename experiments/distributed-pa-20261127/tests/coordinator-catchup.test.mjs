@@ -102,3 +102,48 @@ test('R05 replaying a begin invalidation cannot create another permit or write, 
  A.equal(terminal.asOfVersion,3);
  A.equal(h.db.prepare('SELECT COUNT(*) n FROM lab_coord_outbox').get().n,3);
 });
+
+test('R06 offline board shows two coordinator views converging without repeating dispatch',t=>{
+ const h=fixture(t,2),a=owner(),b=owner('peer','second-window'),frames=[];
+ const job='public-source',peer='editor-note',merge='merge';
+ const worker={scope:board,role:'worker',subject:'helper'};
+ const profile={worker:'helper',provider:'fixture',lane:'lab.public',capabilities:['research'],dataRegions:['us'],authorized:true,ready:true};
+ const submit=(type,extra={})=>h.append({type,task:job,id:'job-'+type,fence:1,...extra},worker,profile);
+ const stage=(task,requires)=>h.append({type:'add',task,id:'new-'+task,capability:'research',allowedRegions:['us'],inputDigest:artifact,requires});
+ stage(job,[]);stage(peer,[]);stage(merge,[job]);
+ h.append({type:'claim',id:'job-claim',task:job,worker:'helper',leaseMs:1000},worker,profile);
+ const a0=h.stream.bootstrap(a),b0=h.open().stream.bootstrap(b);
+ let va=apply(null,a0,a0),vb=apply(null,b0,b0),permits=0;
+ const frame=(label,viewA,viewB)=>{
+   const snap=va.snapshot;
+   // Fixture render output only: no cursors, channels or permit material.
+   frames.push({schema:snap.schema,scope:snap.scope,asOfVersion:snap.asOfVersion,
+     cards:snap.cards.map(c=>({task:c.task,state:c.state,worker:c.worker,taskVersion:c.taskVersion,
+      dependencies:c.dependencies.map(d=>({task:d.task,state:d.state}))})),
+     label,sync:{a:{version:snap.asOfVersion,state:viewA},b:{version:vb.snapshot.asOfVersion,state:viewB},permits}});
+ };
+ frame('两个调度窗口都已看到任务被领走。','已同步','已同步');
+ const begun=submit('begin');A(begun.permit);permits++;
+ const old=h.stream.poll(a,va.cursor);
+ const sb=h.stream.poll(b,vb.cursor);vb=apply(vb,b0,sb);
+ A.equal(vb.snapshot.asOfVersion,5);A.equal(va.snapshot.asOfVersion,4);
+ frame('窗口 A 断线，仍显示已领取。窗口 B 已看到首次派送。','已断线','已同步');
+ submit('acknowledged',{receipt:'original-run'});
+ submit('reported',{receipt:'original-run',artifact});
+ h.append({type:'accept',id:'job-accept',task:job,fence:1,artifact});
+ const accepted=h.stream.poll(b,vb.cursor);A.equal(accepted.mode,'coalesced');
+ vb=apply(vb,b0,accepted);A.equal(vb.snapshot.cards.find(c=>c.task===merge).state,'ready');
+ frame('窗口 B 已验收原任务，合稿解锁。离线的窗口 A 还停在旧进度。','等待重连','已验收');
+ h.db.prepare('DELETE FROM lab_coord_outbox WHERE board=? AND v=?').run(board,5);
+ const cold=h.open();
+ const reset=cold.stream.poll(a,va.cursor);A.equal(reset.mode,'reset');va=apply(va,a0,reset);
+ A.deepEqual(va.snapshot,vb.snapshot);
+ frame('A 重连时发现通知有缺口，于是读取最新整板。合稿已在两个窗口解锁。','已恢复','已同步');
+ A.equal(apply(va,a0,old),va);A.equal(apply(va,a0,reset),va);
+ frame('旧派送响应和重复更新迟到。两个窗口继续显示已验收的版本。','忽略迟到响应','已同步');
+ const e=h.db.prepare('SELECT COUNT(*) n FROM lab_coord_event').get().n;
+ A.equal(cold.stream.poll(a,va.cursor).mode,'unchanged');
+ A.equal(e,8);A.equal(permits,1);
+ A(!/cursor|channel|original-run|inputDigest|sv1-|providerRequestId/.test(JSON.stringify(frames)));
+ if(process.env.RIVULE_COORDINATOR_REPLAY==='1')console.log('RIVULE_COORDINATOR_REPLAY:'+JSON.stringify(frames));
+});
