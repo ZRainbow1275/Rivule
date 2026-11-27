@@ -8,18 +8,20 @@
     "routes": [
       {
         "mode": "push",
-        "stage": "documented",
+        "stage": "mock-tested",
         "effect": "research-public-text",
         "liveTested": false
       }
     ],
     "official": [
       "https://github.com/agentscope-ai/QwenPaw/blob/main/website/public/docs/api-tutorial.en.md",
+      "https://raw.githubusercontent.com/agentscope-ai/QwenPaw/v2.3.0.post1/src/qwenpaw/app/routers/console.py#L411-L534",
       "https://github.com/agentscope-ai/QwenPaw/blob/main/website/public/docs/quickstart.zh.md",
       "https://github.com/agentscope-ai/CoPaw"
     ],
     "limits": [
       "自有运行时+Web 鉴权；不能拿消费者账号名冒用其会话。",
+      "稳定版离线：无提示词重连只接回已绑定会话；空流不重派，精确历史成果交主 Agent 验收。",
       "POST /api/console/chat，user_id、session_id 和 SSE。",
       "用户拥有实例及其目标 agent；远端要求管理者开启 Web 鉴权，Rivule 要求 TLS 和专属令牌。",
       "控制面在用户指定部署；另核模型端点及 MCP 工具流向。",

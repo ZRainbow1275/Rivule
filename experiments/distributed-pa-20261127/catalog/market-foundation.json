@@ -369,16 +369,18 @@
     "routes": [
       {
         "mode": "push",
-        "stage": "documented",
+        "stage": "mock-tested",
         "effect": "research-public-text",
         "liveTested": false
       }
     ],
     "official": [
-      "https://github.com/agentscope-ai/QwenPaw/blob/main/website/public/docs/api-tutorial.en.md"
+      "https://github.com/agentscope-ai/QwenPaw/blob/main/website/public/docs/api-tutorial.en.md",
+      "https://raw.githubusercontent.com/agentscope-ai/QwenPaw/v2.3.0.post1/src/qwenpaw/app/routers/console.py#L411-L534"
     ],
     "limits": [
-      "自有运行时+Web 鉴权；不能拿消费者账号名冒用其会话。"
+      "自有运行时+Web 鉴权；不能拿消费者账号名冒用其会话。",
+      "稳定版离线：无提示词重连只接回已绑定会话；空流不重派，精确历史成果交主 Agent 验收。"
     ]
   },
   {
