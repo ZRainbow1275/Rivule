@@ -22,6 +22,8 @@ add('feishu-aily','飞书 Aily 企业应用','enterprise','cn','push','documente
 add('qwenpaw','通义 QwenPaw（原 CoPaw）','self-hosted','both','push','documented',['https://github.com/agentscope-ai/QwenPaw/blob/main/website/public/docs/api-tutorial.en.md'],'自有运行时+Web 鉴权；不能拿消费者账号名冒用其会话。');
 add('lobster-ai','网易有道龙虾 LobsterAI','self-hosted','cn','pull','documented',['https://github.com/netease-youdao/LobsterAI'],'用户安装远程 MCP 连接器，反向领单。');
 add('wenxin-agentbuilder','文心智能体平台','platform','cn','observe','documented',['https://agents.baidu.com/community/list.html?categoryId=3'],'官方预告北京时间 2026-12-31 零时停运，只列迁移观察，不新建接入；不等同于搭子。');
+add('tasklet','Tasklet','consumer','global','push','documented',['https://tasklet.ai/learn/mcp'],'允许所选 Agent 的 MCP OAuth；启动任务会消耗积分，工具名和 schema 待合格账户发现。');
+add('lindy-personal','Lindy','consumer','global','observe','documented',['https://www.lindy.ai/changelog'],'官方更新记录的 MCP 入口待逐项验证；先保留产品观察，不猜工具名。');
 validateCatalog(rows);
 fs.writeFileSync(new URL('./market-foundation.json',import.meta.url),JSON.stringify(rows,null,2)+'\n');
 console.log(rows.length);
