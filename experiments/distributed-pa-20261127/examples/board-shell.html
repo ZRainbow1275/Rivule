@@ -11,10 +11,11 @@ select{max-width:100%;font:inherit;color:var(--ink);background:var(--bg);border:
 <section class="board"><header><div><h2>调度回放</h2><small id="clock"></small></div><span class="place">模拟数据 · 无联网</span></header>
 <label for="scenario">演练场景</label> <select id="scenario">
 <option value="qwen">QwenPaw 断流，Glean 继续</option>
+<option value="viktor">Viktor 等补充，另一项先交付</option>
 <option value="muse">两个独立 Muse 席位</option>
 </select>
 <nav id="steps" class="step" aria-label="回放步骤"></nav><p id="caption" class="note" aria-live="polite"></p>
-<div class="grid"><section class="lane"><h2>境内独立</h2><div id="cn"></div></section><section class="lane"><h2>海外公共材料</h2><div id="foreign"></div></section><section class="lane"><h2>主任务依赖</h2><div id="join"></div></section></div>
+<div class="grid"><section class="lane"><h2 id="first-heading">境内独立</h2><div id="cn"></div></section><section class="lane"><h2 id="second-heading">海外公共材料</h2><div id="foreign"></div></section><section class="lane"><h2>主任务依赖</h2><div id="join"></div></section></div>
 <p class="footer">每一步来自同一份事件记录。席位、回执、足迹均为测试样本；没有实际派工，也没有改动现有 Rivule。</p>
 </section></main>
 <script>
@@ -24,24 +25,31 @@ const tracks={
   labels:['拆分','派工','断线','海外验收','核回国内','解锁合稿'],
   names:{'china-proof':'境内公开材料','overseas-proof':'海外公开材料',merge:'两份材料合稿'},
   workers:{qwen:'QwenPaw 境内示例',international:'Glean 海外示例'},cn:'china-proof',merge:'merge'},
+ viktor:{phases:verifiedViktorReplay,labels:['接单','待补充','冷启动复核','另一项验收'],
+  names:{'public-date':'核对公开日期',peer:'独立公开资料',merge:'合稿'},
+  workers:{'viktor-actor':'Viktor 示例','independent':'Glean 示例'},cn:'public-date',merge:'merge',
+  headings:['Viktor · 海外','独立任务 · 海外'],defaultStep:1},
  muse:{phases:runCoordinationExample().phases,
   labels:['拆分','领取','断线','核回','允许合稿','验收完成'],
   names:{'cn-notes':'国内原件核对','overseas-a':'国际材料原文 A','overseas-b':'国际材料原文 B',editorial:'两份公开材料合稿'},
   workers:{local:'境内示例端',seatA:'Muse 示例席位 A',seatB:'Muse 示例席位 B'},cn:'cn-notes',merge:'editorial'}
 };
 const statuses={ready:'待领',leased:'已领取',submitting:'派送中',running:'已收 · 执行中',reported:'已交稿 · 待验收',accepted:'已验收',needs_review:'待核回执 · 不重发',blocked:'等待前置验收',failed:'失败',canceled:'已取消'};
+const cardStatus=x=>x.deliveryState==='owner_input_required'?'待补充资料':statuses[x.state];
 const $=x=>document.getElementById(x);let track=tracks.qwen,buttons=[];
 function node(tag,text){const e=document.createElement(tag);e.textContent=text;return e}
 function loadTrack(key){
  track=tracks[key]??tracks.qwen;
  buttons=track.labels.map((s,i)=>{const b=node('button',String(i+1)+' · '+s);b.type='button';b.onclick=()=>render(i);return b});
- $('steps').replaceChildren(...buttons);render(2);
+ const [first,second]=track.headings??['境内独立','海外公共材料'];
+ $('first-heading').textContent=first;$('second-heading').textContent=second;
+ $('steps').replaceChildren(...buttons);render(track.defaultStep??2);
 }
 function render(i){const f=track.phases[i];$('clock').textContent='记录修订 '+String(f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.label;
  buttons.forEach((b,k)=>b.setAttribute('aria-pressed',String(i===k)));
  for(const id of ['cn','foreign','join'])$(id).replaceChildren();
  for(const item of f.cards){const a=node('article','');a.className=item.state;
-  a.append(node('h3',track.names[item.task]));const state=node('span',statuses[item.state]);state.className='state';a.append(state);
+  a.append(node('h3',track.names[item.task]));const state=node('span',cardStatus(item));state.className='state';a.append(state);
   a.append(node('p',(track.workers[item.worker]||'未分配')+' · 修订 '+item.taskVersion));
   for(const dep of item.dependencies)a.append(node('p','前置：'+track.names[dep.task]+' · '+statuses[dep.state]));
   $(item.task===track.cn?'cn':item.task===track.merge?'join':'foreign').append(a);

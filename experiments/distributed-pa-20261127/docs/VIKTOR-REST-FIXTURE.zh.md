@@ -12,3 +12,14 @@
 - 用 ID 定位线程、消息和原执行，读回计划只允许 GET 原 run 和其 result。等待在时间窗内超时与实际运行报为 timed_out 是两件事。前者用原 ID 查，后者只进终态待证据；无 ID 永不另建线程或自动复用 idem key。官方没有公布 replay 期限。
 - 状态和结果在测试里用独立可信网关归一化收据；实时 endpoint 形状仍须实际获准使用官方完整 schema 核对。只有同源同 run 的有限纯文本给待审者；摘要留台账；附件、脚本、Markdown 动作指令和自行继续不在范围。当前没有将 Viktor 连进生产板或发送给其他 Agent。
 - Coworker.ai 的 [Agent Builder 触发](https://intercom.help/coworker-ai/en/articles/14759188-configuring-triggers-for-your-agent) 与 [人工执行历史](https://intercom.help/coworker-ai/en/articles/14799776-understanding-your-agent-execution-history) 分开记录。它的 [MCP](https://intercom.help/coworker-ai/en/articles/14745496-coworker-mcp-overview) 有不同的授权和工具面，保持 schema 待查，不用未知合约假装可收成果。
+
+## 主 Agent 任务板演练
+
+本地、默认关闭的 SQLite 桥接共享同一事务。任务板锁定派送与 Viktor 样本原请求保留记录一并写入；已知原请求的回执才可以进入查状态。核对原任务、原运行编号和当前修订后，把核查结论与任务板状态一起写入。两边任何一处写入失败，双方都回到原状态。
+
+| 样本回执 | 任务板 | 其余任务 |
+|---|---|---|
+| needs input | 待补充资料。冷重启后保留状态，不自动回复、不重试派送、不把问题当成成果 | 无依赖的任务照常；合稿继续锁定 |
+| completed | 已交稿，等待主 Agent 对准确摘要单独验收 | 验收后才解除依赖 |
+
+问题原文仅经过测试内存，不写入任务板或 SQLite。快照只显示状态和授权可见的任务。没有内置回答按钮，没有真实密钥，也没有请求过真实 Viktor。运行 `node examples/rebuild-verified-replay.mjs --check` 可直接从 SQLite 回归重现放进看板的四个画面。

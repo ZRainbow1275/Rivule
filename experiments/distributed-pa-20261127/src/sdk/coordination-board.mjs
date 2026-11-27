@@ -35,6 +35,7 @@ const kinds = {
   claim: ['worker','leaseMs'], renew: ['fence','leaseMs'],
   begin: ['fence'], acknowledged: ['fence','receipt'], reported: ['fence','receipt','artifact'],
   delivery_hold: ['fence','deliveryState','providerRequestId'],
+  viktor_checkpoint: ['fence','attestation'],
   uncertain: ['fence'], expire: ['fence'], canceled: ['fence'], failed: ['fence','receipt','evidence'],
   reconcile: ['fence','attestation'], accept: ['fence','artifact']
 };
@@ -112,7 +113,7 @@ function fold(j) {
   return v;
 }
 function derive(v,scope,auth,c,at,context,replay=false) {
-  const owner=['add','expire','reconcile','accept','canceled'].includes(c.type);
+  const owner=['add','expire','reconcile','accept','canceled','viktor_checkpoint'].includes(c.type);
   requireThat(auth.role===(owner?'coordinator':'worker'),'wrong_role');
   const t=v.tasks.get(c.task);
   if(c.type==='add') {
@@ -157,12 +158,28 @@ function derive(v,scope,auth,c,at,context,replay=false) {
   } else if(c.type==='delivery_hold') {
     requireThat(t.route.provider==='cue'&&t.state==='submitting','not_submitting');
     requireThat((c.deliveryState==='owner_review')===(c.providerRequestId!==null),'invalid_delivery_reference');
+  } else if(c.type==='viktor_checkpoint') {
+    requireThat(t.route.provider==='viktor-rest'&&['running','needs_review'].includes(t.state)&&
+      !!t.receipt&&t.deliveryState!=='owner_input_required','not_checkpointable');
+    let checkpoint;
+    if(replay) checkpoint=context.checkpoint;
+    else{
+      const x=context.attestation;
+      requireThat(plain(x)&&x.verified===true&&x.scope===scope&&x.task===t.task&&x.fence===t.fence&&
+        x.worker===t.route.worker&&x.provider===t.route.provider&&x.lane===t.route.lane&&
+        x.key===attemptKey(scope,t.task,t.fence)&&x.digest===c.attestation&&x.receipt===t.receipt,'invalid_attestation');
+      checkpoint={verdict:x.verdict,artifact:x.artifact};
+    }
+    shape(checkpoint,['verdict','artifact']);
+    requireThat(['owner_input_required','result_verified'].includes(checkpoint.verdict),'invalid_checkpoint');
+    digest(checkpoint.artifact);
+    return {checkpoint};
   } else if(c.type==='uncertain') {
     requireThat(t.state==='submitting'||t.state==='running','not_in_flight');
   } else if(c.type==='expire') {
     requireThat(at>=t.until&&['leased','submitting','running'].includes(t.state),'not_expirable');
   } else if(c.type==='reconcile') {
-    requireThat(t.state==='needs_review','not_under_review');
+    requireThat(t.state==='needs_review'&&t.deliveryState!=='owner_input_required','not_under_review');
     const answer=replay?context.answer:validAttestation(context.attestation,scope,t,c);
     if(answer.verdict==='input_verified'){
       shape(answer,['verdict','inputReceipt']);id(answer.inputReceipt);
@@ -193,6 +210,10 @@ function apply(v,scope,c,meta,version,at){
     }else if(c.type==='renew')t.until=at+c.leaseMs;
     else if(c.type==='begin')t.state='submitting';
     else if(c.type==='acknowledged'){t.state='running';t.receipt=c.receipt;}
+    else if(c.type==='viktor_checkpoint'){
+      if(meta.checkpoint.verdict==='owner_input_required'){t.state='needs_review';t.deliveryState='owner_input_required';}
+      else{t.state='reported';t.artifact=meta.checkpoint.artifact;v.lanes.delete(t.route.lane);}
+    }
     else if(c.type==='delivery_hold'){t.state='needs_review';t.deliveryState=c.deliveryState;t.providerRequestId=c.providerRequestId;}
     else if(c.type==='canceled'){t.state='canceled';if(t.route)v.lanes.delete(t.route.lane);}
     else if(c.type==='failed'){t.state='failed';t.failureDigest=c.evidence;v.lanes.delete(t.route.lane);}

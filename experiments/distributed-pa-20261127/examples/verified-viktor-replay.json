@@ -1,0 +1,169 @@
+[
+  {
+    "schema": 1,
+    "scope": "rivule-lab-us",
+    "asOfVersion": 6,
+    "cards": [
+      {
+        "task": "merge",
+        "capability": "public-research",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 2,
+        "dependencies": [
+          {
+            "task": "public-date",
+            "state": "running",
+            "version": 6
+          }
+        ]
+      },
+      {
+        "task": "peer",
+        "capability": "public-research",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": []
+      },
+      {
+        "task": "public-date",
+        "capability": "public-research",
+        "state": "running",
+        "worker": "viktor-actor",
+        "fence": 1,
+        "taskVersion": 6,
+        "dependencies": []
+      }
+    ],
+    "label": "Viktor 已接单。只查询原任务的回执。"
+  },
+  {
+    "schema": 1,
+    "scope": "rivule-lab-us",
+    "asOfVersion": 7,
+    "cards": [
+      {
+        "task": "merge",
+        "capability": "public-research",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 2,
+        "dependencies": [
+          {
+            "task": "public-date",
+            "state": "needs_review",
+            "version": 7
+          }
+        ]
+      },
+      {
+        "task": "peer",
+        "capability": "public-research",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": []
+      },
+      {
+        "task": "public-date",
+        "capability": "public-research",
+        "state": "needs_review",
+        "worker": "viktor-actor",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": [],
+        "deliveryState": "owner_input_required"
+      }
+    ],
+    "label": "Viktor 请求补充资料。原任务暂停，不自动回答。"
+  },
+  {
+    "schema": 1,
+    "scope": "rivule-lab-us",
+    "asOfVersion": 7,
+    "cards": [
+      {
+        "task": "merge",
+        "capability": "public-research",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 2,
+        "dependencies": [
+          {
+            "task": "public-date",
+            "state": "needs_review",
+            "version": 7
+          }
+        ]
+      },
+      {
+        "task": "peer",
+        "capability": "public-research",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": []
+      },
+      {
+        "task": "public-date",
+        "capability": "public-research",
+        "state": "needs_review",
+        "worker": "viktor-actor",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": [],
+        "deliveryState": "owner_input_required"
+      }
+    ],
+    "label": "重启后仍保留等待状态，合稿保持锁定。"
+  },
+  {
+    "schema": 1,
+    "scope": "rivule-lab-us",
+    "asOfVersion": 12,
+    "cards": [
+      {
+        "task": "merge",
+        "capability": "public-research",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 2,
+        "dependencies": [
+          {
+            "task": "public-date",
+            "state": "needs_review",
+            "version": 7
+          }
+        ]
+      },
+      {
+        "task": "peer",
+        "capability": "public-research",
+        "state": "accepted",
+        "worker": "independent",
+        "fence": 1,
+        "taskVersion": 12,
+        "dependencies": []
+      },
+      {
+        "task": "public-date",
+        "capability": "public-research",
+        "state": "needs_review",
+        "worker": "viktor-actor",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": [],
+        "deliveryState": "owner_input_required"
+      }
+    ],
+    "label": "另一项工作已验收。Viktor 还在等输入，合稿依然不会开始。"
+  }
+]

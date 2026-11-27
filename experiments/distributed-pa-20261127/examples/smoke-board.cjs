@@ -4,7 +4,7 @@ const html=readFileSync(process.argv[2]??'Rivule-调度看板演练.html','utf8'
 A(html.includes("default-src 'none'"));
 const run=html.match(/<script>([\s\S]+)<\/script>/)[1];
 const elem=()=>({children:[],attrs:{},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x},setAttribute(k,v){this.attrs[k]=v}});
-const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join'].map(x=>[x,elem()]));
+const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading'].map(x=>[x,elem()]));
 vm.runInNewContext(run,{document:{getElementById:x=>elements[x],createElement:elem},structuredClone});
 const check=(step,cn,us,merge)=>{
  elements.steps.children[step].onclick();
@@ -16,4 +16,8 @@ check(4,'reported','accepted','blocked');check(5,'accepted','accepted','ready');
 elements.scenario.onchange({target:{value:'muse'}});
 A.equal(elements.foreign.children.length,2);A(elements.steps.children[5].textContent.includes('验收完成'));
 elements.steps.children[5].onclick();A.equal(elements.join.children[0].className,'accepted');
-console.log(JSON.stringify({scenarios:2,browserViewNoProviderI_O:true,canonicalQwenPawReplay:true}));
+elements.scenario.onchange({target:{value:'viktor'}});
+check(0,'running','ready','blocked');check(1,'needs_review','ready','blocked');check(2,'needs_review','ready','blocked');check(3,'needs_review','accepted','blocked');
+A.equal(elements['first-heading'].textContent,'Viktor · 海外');
+A.equal(elements.cn.children[0].children[1].textContent,'待补充资料');
+console.log(JSON.stringify({scenarios:3,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true}));
