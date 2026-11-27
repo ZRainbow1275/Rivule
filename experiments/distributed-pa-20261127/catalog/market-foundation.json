@@ -1,0 +1,426 @@
+[
+  {
+    "id": "manus-cue",
+    "name": "Manus Cue",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "mock-tested",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://open.manus.ai/docs/v2/agents-overview"
+    ],
+    "limits": [
+      "专用 Cue 初始化，账户 Key 或 Trusted OAuth，失去回包先核查原尝试。"
+    ]
+  },
+  {
+    "id": "doubao-xiaodou",
+    "name": "豆包小豆",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "handoff",
+        "stage": "documented",
+        "effect": "manual-copy",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://apps.apple.com/cn/app/id6815582077"
+    ],
+    "limits": [
+      "消费者 App 已发布，未证实外部派单接口。"
+    ]
+  },
+  {
+    "id": "lingguang",
+    "name": "蚂蚁灵光",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "unverified",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.antgroup.com/en/news-media/press-releases/1793066400000"
+    ],
+    "limits": [
+      "官方称可调 MCP，仍需核验当前版本可对自定义远程 MCP 领单。"
+    ]
+  },
+  {
+    "id": "muse-personal",
+    "name": "Meta Muse",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "mock-tested",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.meta.com/en-gb/help/superintelligence/1687253048996149/"
+    ],
+    "limits": [
+      "单个经授权身份一个席位，按账户限流与分区可用性；不作外部唤醒。"
+    ]
+  },
+  {
+    "id": "baidu-dumate-managed",
+    "name": "百度搭子 DuMate 企业 API",
+    "type": "enterprise",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "mock-tested",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://cloud.baidu.com/doc/Dumate/s/8mwc0j8yi"
+    ],
+    "limits": [
+      "自建 Agent 版本与运行环境，事件续传、预算和回执另审。"
+    ]
+  },
+  {
+    "id": "poke",
+    "name": "Poke",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://poke.com/docs/api",
+      "https://poke.com/docs/mcp-servers"
+    ],
+    "limits": [
+      "入站可接收，原文会传给助手；只有入站成功不算交稿。"
+    ]
+  },
+  {
+    "id": "qwenwork",
+    "name": "千问办公 QwenWork",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://help.aliyun.com/zh/qwenwork/qw-connectors-1",
+      "https://www.alibabagroup.com/zh-CN/document-2021039099929952256"
+    ],
+    "limits": [
+      "远程 MCP 工具由 PA 发起；QoderWork、MuleRun、悟空核心能力已整合，不把同一身份重复计入。"
+    ]
+  },
+  {
+    "id": "workbuddy",
+    "name": "腾讯 WorkBuddy",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://open.workbuddy.cn/docs/connector"
+    ],
+    "limits": [
+      "按用户连接授权；管理运行时另列。"
+    ]
+  },
+  {
+    "id": "workbuddy-managed",
+    "name": "WorkBuddy Managed Agents",
+    "type": "enterprise",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://cloud.tencent.com/document/product/1831/140759"
+    ],
+    "limits": [
+      "非幂等新建计费会话；不要盲重试或复用账户的最新会话。"
+    ]
+  },
+  {
+    "id": "yuanbao",
+    "name": "腾讯元宝",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "read",
+        "stage": "mock-tested",
+        "effect": "read-status",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://open.yuanbao.tencent.com/docs/overview",
+      "https://open.yuanbao.tencent.com/docs/mcp-integration"
+    ],
+    "limits": [
+      "用户问起才查；真实入口需企业资格、OAuth 和发布审核。"
+    ]
+  },
+  {
+    "id": "doubao-open",
+    "name": "豆包开放平台",
+    "type": "platform",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://open.doubao.com/document"
+    ],
+    "limits": [
+      "内测和平台认证；不同于个人小豆。"
+    ]
+  },
+  {
+    "id": "openclaw",
+    "name": "OpenClaw",
+    "type": "self-hosted",
+    "market": "both",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://docs.openclaw.ai/automation/cron-jobs/webhooks"
+    ],
+    "limits": [
+      "默认关闭，私有固定 Agent，模型和日志处理地点分别核。"
+    ]
+  },
+  {
+    "id": "coze-cn",
+    "name": "扣子 CN",
+    "type": "platform",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://docs.coze.cn/developer_guides_chat_v3"
+    ],
+    "limits": [
+      "单一已发布 Bot，国内端点独立。"
+    ]
+  },
+  {
+    "id": "coze-global",
+    "name": "Coze 国际",
+    "type": "platform",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.coze.com/open/docs/developer_guides/coze_api_overview"
+    ],
+    "limits": [
+      "单一已发布 Bot，国际端点独立。"
+    ]
+  },
+  {
+    "id": "glean-durable",
+    "name": "Glean Agents",
+    "type": "enterprise",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "mock-tested",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://developers.glean.com/api/platform-api/agents-overview",
+      "https://developers.glean.com/cookbook/human-in-the-loop-agent"
+    ],
+    "limits": [
+      "限租户与个人 OAuth；发布专用文本 Agent；有工具审批时停，不自动批准。"
+    ]
+  },
+  {
+    "id": "a2a",
+    "name": "A2A 1.0.1",
+    "type": "protocol",
+    "market": "both",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "mock-tested",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://a2a-protocol.org/v1.0.1/specification/"
+    ],
+    "limits": [
+      "框架协议，不等于消费 App 已开放；只能由经评审的固定节点绑定传输层。"
+    ]
+  },
+  {
+    "id": "feishu-aily",
+    "name": "飞书 Aily 企业应用",
+    "type": "enterprise",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://aily.feishu.cn/hc/8qluoxsa_zi14u22m"
+    ],
+    "limits": [
+      "专用会话与 Bearer 权限，准备模拟真实 Session→消息→Run。"
+    ]
+  },
+  {
+    "id": "qwenpaw",
+    "name": "通义 QwenPaw（原 CoPaw）",
+    "type": "self-hosted",
+    "market": "both",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://github.com/agentscope-ai/QwenPaw/blob/main/website/public/docs/api-tutorial.en.md"
+    ],
+    "limits": [
+      "自有运行时+Web 鉴权；不能拿消费者账号名冒用其会话。"
+    ]
+  },
+  {
+    "id": "lobster-ai",
+    "name": "网易有道龙虾 LobsterAI",
+    "type": "self-hosted",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://github.com/netease-youdao/LobsterAI"
+    ],
+    "limits": [
+      "用户安装远程 MCP 连接器，反向领单。"
+    ]
+  },
+  {
+    "id": "wenxin-agentbuilder",
+    "name": "文心智能体平台",
+    "type": "platform",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "observe",
+        "stage": "documented",
+        "effect": "manual-copy",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://agents.baidu.com/community/list.html?categoryId=3"
+    ],
+    "limits": [
+      "官方预告北京时间 2026-12-31 零时停运，只列迁移观察，不新建接入；不等同于搭子。"
+    ]
+  }
+]
