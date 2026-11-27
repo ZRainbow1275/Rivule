@@ -25,8 +25,8 @@ export function makeCueAdapter({fetcher, credential, bindings = [], timeoutMs=12
   const allowed = new Map(), uniqueThreads = new Set();
   for (const b of bindings) {
     if (!id(b?.agentId) || !id(b?.threadId) || allowed.has(b.agentId) ||
-        uniqueThreads.has(b.threadId) || b.dedicated !== true || b.regionVerified !== true)
-      throw new TypeError('dedicated, region-verified Cue binding required');
+        uniqueThreads.has(b.threadId) || b.dedicated !== true || b.ownedByCredential !== true || b.regionVerified !== true)
+      throw new TypeError('dedicated, region-verified Cue binding owned by credential required');
     allowed.set(b.agentId,b.threadId); uniqueThreads.add(b.threadId);
   }
   const request = async (path, query, body) => {
