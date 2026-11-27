@@ -422,5 +422,47 @@
     "limits": [
       "官方预告北京时间 2026-12-31 零时停运，只列迁移观察，不新建接入；不等同于搭子。"
     ]
+  },
+  {
+    "id": "tasklet",
+    "name": "Tasklet",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://tasklet.ai/learn/mcp"
+    ],
+    "limits": [
+      "允许所选 Agent 的 MCP OAuth；启动任务会消耗积分，工具名和 schema 待合格账户发现。"
+    ]
+  },
+  {
+    "id": "lindy-personal",
+    "name": "Lindy",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "observe",
+        "stage": "documented",
+        "effect": "manual-copy",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.lindy.ai/changelog"
+    ],
+    "limits": [
+      "官方更新记录的 MCP 入口待逐项验证；先保留产品观察，不猜工具名。"
+    ]
   }
 ]
