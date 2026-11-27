@@ -11,3 +11,11 @@ OpenAssistant 试验将创建回执、运行回执、工件与 Rivule 主 Agent 
 两个适配文件只描述或分类，不开启连接、启动子进程、接凭据或发请求。用于专用用户级账号，助手不接入私人邮箱、日历、联系人或网盘。第一次真实验证仍需确认用户、费用、数据区与留存；仅发送公开文本。读回活动/工件必须另做授权与真实回执审查，模拟返回只验证分类和去重行为。
 
 一手参考：[OpenAssistant Tasks](https://docs.openassistant.us/reference/tasks) · [API Authentication](https://docs.openassistant.us/guides/api-authentication) · [MCP](https://docs.openassistant.us/guides/mcp) · [MuleRun CLI Sessions](https://mulerun.com/docs/cli/commands/session)。
+
+## OpenAssistant 事务演练
+
+    创建（单次） → 原凭据核实 → 已创建
+                                   ├─ 未验证是否启动 / 未单独批准 → 只读原任务
+                                   └─ 核实从未启动 + 批准确切文本 → 独立执行（单次）
+
+创建与执行各有自己的请求键、台账位置及响应指纹。读取状态不签发写许可。创建或执行丢失回包分别留待核实，既无重发入口，也不允许创建不明时转借执行。原任务、账户、助手、通道、批准 ID、输入摘要、台账修订号都匹配且近期才允许执行拟制签发；提交时再核对一次。回滚时不会交出拟制请求。运行状态或对方自称完成并不会变成实际结果，更不会自动验收。仅离线 SQLite，无真实 API 调用、Key、额度或账户。
