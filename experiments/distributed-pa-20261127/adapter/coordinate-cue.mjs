@@ -23,7 +23,14 @@ export async function coordinateCue({commit, adapter, task, fence, packet, autho
   if(clock()>=p.expiresAt)throw new Error('expired before send');
   result=await adapter.dispatch({agentId:authorization.agentId,attemptRef,approvedText:packet.text,approval:authorization.fact});
  }catch{/* Leave an explicit needs_review decision rather than claiming absence. */}
- const ok=result?.state==='delivered' && typeof result.requestId==='string';
- const recorded=await commit({type:ok?'acknowledged':'uncertain',id:'cue-observed-'+token,task,fence,...(ok?{receipt:result.requestId}:{})});
- return {state:recorded?.committed?(ok?'accepted_by_provider':'needs_review'):'verify_original_attempt'};
+ const validId=v=>typeof v==='string'&&/^[A-Za-z0-9_-]{1,96}$/.test(v);
+ const ok=result?.state==='delivered'&&validId(result.requestId);
+ const hold=(result?.state==='owner_review'&&validId(result.requestId)||['throttled','rejected'].includes(result?.state))
+   ?result.state:null;
+ const decision={type:ok?'acknowledged':hold?'delivery_hold':'uncertain',id:'cue-observed-'+token,task,fence,
+  ...(ok?{receipt:result.requestId}:hold?{deliveryState:hold,providerRequestId:hold==='owner_review'?result.requestId:null}:{})};
+ try {
+  const recorded=await commit(decision);
+  return {state:recorded?.committed?(ok?'accepted_by_provider':hold??'needs_review'):'verify_original_attempt'};
+ }catch{return {state:'verify_original_attempt'};}
 }
