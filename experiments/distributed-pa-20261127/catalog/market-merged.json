@@ -1,0 +1,1108 @@
+[
+  {
+    "id": "qwenpaw",
+    "name": "通义 QwenPaw（原 CoPaw）",
+    "type": "self-hosted",
+    "market": "both",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://github.com/agentscope-ai/QwenPaw/blob/main/website/public/docs/api-tutorial.en.md",
+      "https://github.com/agentscope-ai/QwenPaw/blob/main/website/public/docs/quickstart.zh.md"
+    ],
+    "limits": [
+      "自有运行时+Web 鉴权；不能拿消费者账号名冒用其会话。",
+      "POST /api/console/chat，user_id、session_id 和 SSE。",
+      "用户拥有实例及其目标 agent；远端要求管理者开启 Web 鉴权，Rivule 要求 TLS 和专属令牌。",
+      "控制面在用户指定部署；另核模型端点及 MCP 工具流向。"
+    ]
+  },
+  {
+    "id": "a2a",
+    "name": "A2A 1.0.1",
+    "type": "protocol",
+    "market": "both",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "mock-tested",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://a2a-protocol.org/v1.0.1/specification/"
+    ],
+    "limits": [
+      "框架协议，不等于消费 App 已开放；只能由经评审的固定节点绑定传输层。"
+    ]
+  },
+  {
+    "id": "openclaw",
+    "name": "OpenClaw",
+    "type": "self-hosted",
+    "market": "both",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://docs.openclaw.ai/automation/cron-jobs/webhooks"
+    ],
+    "limits": [
+      "默认关闭，私有固定 Agent，模型和日志处理地点分别核。"
+    ]
+  },
+  {
+    "id": "baidu-dumate-managed",
+    "name": "百度搭子 DuMate 企业 API",
+    "type": "enterprise",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "mock-tested",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://cloud.baidu.com/doc/Dumate/s/8mwc0j8yi"
+    ],
+    "limits": [
+      "自建 Agent 版本与运行环境，事件续传、预算和回执另审。"
+    ]
+  },
+  {
+    "id": "cn-aliyun-bailian",
+    "name": "百炼新版智能体应用",
+    "type": "platform",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://help.aliyun.com/zh/model-studio/new-agent-application-api-reference",
+      "https://help.aliyun.com/zh/model-studio/obtain-the-app-id-and-workspace-id"
+    ],
+    "limits": [
+      "DashScope POST /api/v1/apps/{app_id}/completion；可选 SSE，session_id 续聊。",
+      "租户辖下授权的应用 ID、同域 API Key，子空间或特定域还需 Workspace ID。",
+      "目标业务空间与 endpoint 必须明确；不使用个人千问身份。"
+    ]
+  },
+  {
+    "id": "cn-dingtalk-wukong",
+    "name": "钉钉悟空",
+    "type": "enterprise",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://wukong.dingtalk.com/docs/quick-start/general-settings/",
+      "https://wukong.dingtalk.com/docs/core-features/skills-center/",
+      "https://www.alibabagroup.com/zh-CN/document-2021039099929952256"
+    ],
+    "limits": [
+      "手动配置 MCP 服务，导入自定义 Skill；只开放 Rivule 任务工具。",
+      "用户或组织许可、客户端安装；企业上下文权限和用量按当前账号。",
+      "与 QwenWork 产品家族有关；核不同实例、模型与数据源，不重复计席。"
+    ]
+  },
+  {
+    "id": "doubao-open",
+    "name": "豆包开放平台",
+    "type": "platform",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://open.doubao.com/document"
+    ],
+    "limits": [
+      "内测和平台认证；不同于个人小豆。"
+    ]
+  },
+  {
+    "id": "doubao-xiaodou",
+    "name": "豆包小豆",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "handoff",
+        "stage": "documented",
+        "effect": "manual-copy",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://apps.apple.com/cn/app/id6815582077"
+    ],
+    "limits": [
+      "消费者 App 已发布，未证实外部派单接口。"
+    ]
+  },
+  {
+    "id": "feishu-aily",
+    "name": "飞书 Aily 企业应用",
+    "type": "enterprise",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://aily.feishu.cn/hc/8qluoxsa_zi14u22m"
+    ],
+    "limits": [
+      "专用会话与 Bearer 权限，准备模拟真实 Session→消息→Run。",
+      "创建 session、写 message、创建 run；查询/取消 run，再读会话消息。",
+      "指定 Aily 应用、飞书自建应用权限及对应 access_token；配置应用与使用者权限。",
+      "组织应用身份；不是个人专属伙伴账号。"
+    ]
+  },
+  {
+    "id": "coze-cn",
+    "name": "扣子 CN",
+    "type": "platform",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://docs.coze.cn/developer_guides_chat_v3"
+    ],
+    "limits": [
+      "单一已发布 Bot，国内端点独立。"
+    ]
+  },
+  {
+    "id": "lingguang",
+    "name": "蚂蚁灵光",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "unverified",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.antgroup.com/en/news-media/press-releases/1793066400000"
+    ],
+    "limits": [
+      "官方称可调 MCP，仍需核验当前版本可对自定义远程 MCP 领单。"
+    ]
+  },
+  {
+    "id": "cn-baidu-qianfan",
+    "name": "千帆 Agent 应用（AppBuilder / AI 应用开发者中心）",
+    "type": "platform",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://cloud.baidu.com/doc/qianfan-api/s/pmwbql6o7",
+      "https://cloud.baidu.com/doc/qianfan-api/s/Kmwbl4w5k"
+    ],
+    "limits": [
+      "创建 /v2/app/conversation，再 POST /v2/app/conversation/runs；支持信息收集中断。",
+      "已发布的指定 Agent、其 app_id 和有权的 API Key。",
+      "云应用及其工具；不代入小度、文心消费端或搭子个人记忆。"
+    ]
+  },
+  {
+    "id": "qwenwork",
+    "name": "千问办公 QwenWork",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://help.aliyun.com/zh/qwenwork/qw-connectors-1",
+      "https://www.alibabagroup.com/zh-CN/document-2021039099929952256"
+    ],
+    "limits": [
+      "远程 MCP 工具由 PA 发起；QoderWork、MuleRun、悟空核心能力已整合，不把同一身份重复计入。"
+    ]
+  },
+  {
+    "id": "workbuddy",
+    "name": "腾讯 WorkBuddy",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://open.workbuddy.cn/docs/connector"
+    ],
+    "limits": [
+      "按用户连接授权；管理运行时另列。"
+    ]
+  },
+  {
+    "id": "yuanbao",
+    "name": "腾讯元宝",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "read",
+        "stage": "mock-tested",
+        "effect": "read-status",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://open.yuanbao.tencent.com/docs/overview",
+      "https://open.yuanbao.tencent.com/docs/mcp-integration"
+    ],
+    "limits": [
+      "用户问起才查；真实入口需企业资格、OAuth 和发布审核。"
+    ]
+  },
+  {
+    "id": "cn-tencent-yuanqi",
+    "name": "腾讯元器",
+    "type": "platform",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "observe",
+        "stage": "retired",
+        "effect": "manual-copy",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://yuanqi.tencent.com/cl/service-discontinuation"
+    ],
+    "limits": [
+      "普通对话和 API 均关停；替代宿主为 ADP，迁移需另立授权。",
+      "已于 2026-11-09 停服，现有客户仅有公告规定的数据导出过渡期。",
+      "元器关闭不影响元宝、ADP 的独立登记。"
+    ]
+  },
+  {
+    "id": "cn-tencent-adp",
+    "name": "腾讯云智能体开发平台 ADP",
+    "type": "platform",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://cloud.tencent.com/document/product/1759/129202",
+      "https://cloud.tencent.com/document/product/1759/133868"
+    ],
+    "limits": [
+      "POST https://wss.lke.cloud.tencent.com/adp/v2/chat，HTTP SSE；另有 WebSocket。",
+      "应用已发布；AppKey；绑定外部 UserId 及用户权限；管理凭据另行隔离。",
+      "企业应用；不同于元宝个人对话、WorkBuddy、已停的元器。"
+    ]
+  },
+  {
+    "id": "lobster-ai",
+    "name": "网易有道龙虾 LobsterAI",
+    "type": "self-hosted",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://github.com/netease-youdao/LobsterAI",
+      "https://github.com/netease-youdao/LobsterAI/blob/main/README_zh.md"
+    ],
+    "limits": [
+      "用户安装远程 MCP 连接器，反向领单。",
+      "本机 Agent 连接远程 MCP；飞书、钉钉、微信等为聊天渠道。",
+      "用户装桌面客户端、指定模型，安装本地或远程 MCP，可按工具授权。",
+      "本地会话库；模型调用与 MCP 仍依配置，不能凭本地 UI 认定全程本地。"
+    ]
+  },
+  {
+    "id": "wenxin-agentbuilder",
+    "name": "文心智能体平台",
+    "type": "platform",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "observe",
+        "stage": "documented",
+        "effect": "manual-copy",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://agents.baidu.com/community/list.html?categoryId=3",
+      "https://agents.baidu.com/docs/develop/out-deployment/API_calls/"
+    ],
+    "limits": [
+      "官方预告北京时间 2026-12-31 零时停运，只列迁移观察，不新建接入；不等同于搭子。",
+      "老平台 getAnswer 虽有文档，优先处理迁移和存档。",
+      "官方公告 2026-12-31 00:00 停止运营；不新增绑定。",
+      "不影响另列之千帆和 DuMate。"
+    ]
+  },
+  {
+    "id": "cn-iflytek-xingchen",
+    "name": "讯飞星辰 / 星火工作流",
+    "type": "platform",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.xfyun.cn/doc/spark/workflow.html",
+      "https://www.xfyun.cn/doc/spark/Agent04-API%E6%8E%A5%E5%85%A5.html"
+    ],
+    "limits": [
+      "Workflow OpenAPI；鉴权和工作流 ID 依发布配置。",
+      "先创建、调试、发布工作流并绑定应用和所需模型授权；按文档配密钥。",
+      "发布的工作流；不复用星火消费端的私人对话。"
+    ]
+  },
+  {
+    "id": "cn-autoclaw",
+    "name": "AutoClaw 澳龙",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://autoclaw.zhipuai.cn/docs/advanced/mcp-connectors/",
+      "https://autoclaw.zhipuai.cn/docs/getting-started/what-is-autoclaw/"
+    ],
+    "limits": [
+      "AutoClaw 作为 MCP 客户端访问 Rivule；IM/App 为其他用户入口。",
+      "用户在桌面端为自建/第三方 MCP 填服务信息并限定工具。",
+      "本地运行器与外部模型/工具是独立边界。"
+    ]
+  },
+  {
+    "id": "cn-kimi-work",
+    "name": "Kimi / Kimi Work",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.kimi.com/help/plugins-and-skills/overview",
+      "https://www.kimi.com/help/kimi-work/plugin-center",
+      "https://www.kimi.com/features/plugins"
+    ],
+    "limits": [
+      "插件可含 MCP 与 Skills；Work 接第三方服务。",
+      "在支持插件的模式中，由用户安装或用 Plugin Builder 建个人插件、授权所需服务。",
+      "产品账号及插件；不拿开放平台模型 Key 代替 Kimi 个人席位。"
+    ]
+  },
+  {
+    "id": "cn-tencent-octop",
+    "name": "Octop",
+    "type": "self-hosted",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://github.com/TencentCloud/Octop/blob/main/docs/api.md",
+      "https://github.com/TencentCloud/Octop/blob/main/README_CN.md"
+    ],
+    "limits": [
+      "创建 session -> 指定 agent WebSocket 传 user_turn；重连可订阅当前 thread；显式 cancel。",
+      "用户自己的实例；目标 agent 所有者 JWT；独立低权限席位。",
+      "本地或自托管控制面；模型、存储后端和连接器单独登记。"
+    ]
+  },
+  {
+    "id": "cn-traework",
+    "name": "TraeWork 中国版",
+    "type": "consumer",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://docs.trae.cn/work_what-is-trae-work",
+      "https://docs.trae.cn/work_remote-mcp-server"
+    ],
+    "limits": [
+      "远程 HTTP MCP、自定义配置；桌面可选本地或云执行。",
+      "个人或企业版可用性分别核；用户或管理员配置自有远程 MCP。",
+      "中国版产品不推定全部推理及第三方 MCP 在境内。"
+    ]
+  },
+  {
+    "id": "workbuddy-managed",
+    "name": "WorkBuddy Managed Agents",
+    "type": "enterprise",
+    "market": "cn",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://cloud.tencent.com/document/product/1831/140759"
+    ],
+    "limits": [
+      "非幂等新建计费会话；不要盲重试或复用账户的最新会话。"
+    ]
+  },
+  {
+    "id": "yandex-alice",
+    "name": "Alice AI · Do it!",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.yandex.com/company/news/2026-11-13",
+      "https://alice.yandex.ru/support/ru/assistant/chat/agent-act"
+    ],
+    "limits": [
+      "11-13 首发 Do it!；自定义插件接受 MCP 地址与使用说明。",
+      "先向部分活跃 Plus 席位开放；电话、购买与预订需用户批准。不得自动跨区。",
+      "俄语生态；Alice Plus 分批"
+    ]
+  },
+  {
+    "id": "claude-cowork",
+    "name": "Claude / Cowork",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp",
+      "https://claude.com/resources/articles/skills-over-mcp-tasks-and-more"
+    ],
+    "limits": [
+      "由 Claude 或 Cowork 调用用户配置的远程 MCP。",
+      "组织需管理员放行且成员各自连接；来自 Anthropic 云端、HTTPS 443；免费仅一个自定义 connector。",
+      "受支持的 Claude 市场和套餐"
+    ]
+  },
+  {
+    "id": "claude-duet",
+    "name": "Claude Duet",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "unverified",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://claude.com/resources/articles/claude-duet"
+    ],
+    "limits": [
+      "专门的主动助理 App，沿用该用户的 Claude 记忆、Skills、已连服务；可尝试由有资格的账号使用其已授权工具。",
+      "美国 Pro/Max/Ultra 研究预览，与原账户共用使用限额；不推断已有公开的 Duet 派单 API。",
+      "美国；初期需候补"
+    ]
+  },
+  {
+    "id": "copilot-cowork-personal",
+    "name": "Copilot Cowork 个人版（承接 Copilot Tasks）",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "handoff",
+        "stage": "documented",
+        "effect": "manual-copy",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://support.microsoft.com/en-us/microsoft-365-copilot/get-started-with-cowork",
+      "https://support.microsoft.com/en-gb/microsoft-365-copilot/using-copilot-tasks"
+    ],
+    "limits": [
+      "在个人预览产品中创建任务；商业 Copilot Studio 的 agent 通道并非此账号的派单接口。",
+      "需相应产品资格；敏感动作由人批准；仅手动交接，先不连接真实邮箱与日历。",
+      "个人微软账号；分批预览"
+    ]
+  },
+  {
+    "id": "coze-global",
+    "name": "Coze 国际",
+    "type": "platform",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.coze.com/open/docs/developer_guides/coze_api_overview"
+    ],
+    "limits": [
+      "单一已发布 Bot，国际端点独立。"
+    ]
+  },
+  {
+    "id": "cursor-cloud",
+    "name": "Cursor Cloud Agents",
+    "type": "platform",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://cursor.com/docs/cloud-agent/api/endpoints",
+      "https://cursor.com/docs/cloud-agent"
+    ],
+    "limits": [
+      "v1 创建 durable agent 与独立 run；查询具体 run，不能只看 agent 回到 IDLE。",
+      "公开 beta；v1 webhook 尚未开放，轮询 run；默认不创建 PR，不启动付费任务。",
+      "已授权 Cursor 用户/服务账号与仓库"
+    ]
+  },
+  {
+    "id": "gemini-tasks",
+    "name": "Gemini Tasks（原 Spark）",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://support.google.com/gemini/answer/17209137?hl=en",
+      "https://support.google.com/gemini/answer/17094507?hl=en",
+      "https://developers.google.com/connected-apps/mcp/"
+    ],
+    "limits": [
+      "Gemini 在任务内用自定义 Connected App（远程 MCP）调用 Rivule。",
+      "自定义 app：美国18+、个人 Google 账号、开启 History；不可用工作或学校账户代替；逐端核准。",
+      "任务可用地区与自定义 MCP 地区分开；后者要求美国"
+    ]
+  },
+  {
+    "id": "glean-durable",
+    "name": "Glean Agents",
+    "type": "enterprise",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "mock-tested",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://developers.glean.com/api/platform-api/agents-overview",
+      "https://developers.glean.com/cookbook/human-in-the-loop-agent",
+      "https://developers.glean.com/api/platform-api/platform-agents-get-run"
+    ],
+    "limits": [
+      "限租户与个人 OAuth；发布专用文本 Agent；有工具审批时停，不自动批准。",
+      "创建 durable run，以 agent_id/run_id 查状态、应答审批或取消。",
+      "用户 OAuth 最小权限；只能读取归本用户且仍可访问的持久执行记录。",
+      "指定企业租户"
+    ]
+  },
+  {
+    "id": "grok-bot",
+    "name": "Grok Bot",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://docs.x.ai/grok/automations/webhooks",
+      "https://docs.x.ai/grok-bot/skills-routines-and-automations"
+    ],
+    "limits": [
+      "可将一项 routine 绑定已鉴权的入站 webhook；也可让 Bot 使用允许的 MCP，按工具审批。",
+      "事件与目标 routine 明确绑定；不把 webhook 回包当任务完成；未启用外部联系动作。",
+      "已开通 Bot 的账号/团队"
+    ]
+  },
+  {
+    "id": "hermes-agent",
+    "name": "Hermes Agent",
+    "type": "self-hosted",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server",
+      "https://hermes-agent.nousresearch.com/docs/user-guide/messaging/webhooks"
+    ],
+    "limits": [
+      "自托管 API 可创建 /v1/runs，按 run_id 拉状态和事件；有 unknown outcome 恢复规则。",
+      "绑定 API 自有会话，不能复用外部会话所有权；冻结结果未明的重试；部署与模型费独立。",
+      "部署地与模型供应地各自指定"
+    ]
+  },
+  {
+    "id": "google-jules",
+    "name": "Jules",
+    "type": "platform",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://developers.google.com/jules/api/reference/rest",
+      "https://developers.google.com/jules/api"
+    ],
+    "limits": [
+      "Alpha 支持 create/get session、activities、回发消息、approvePlan。",
+      "属于独立编程席位，不用其额度或仓库权限进行本次调研；人工审批不能自动越过。",
+      "已有 Google/Jules 账号与授权仓库"
+    ]
+  },
+  {
+    "id": "lindy-personal",
+    "name": "Lindy",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.lindy.ai/changelog",
+      "https://www.lindy.ai/blog/lindy-mcp"
+    ],
+    "limits": [
+      "官方更新记录的 MCP 入口待逐项验证；先保留产品观察，不猜工具名。",
+      "2026-11-20 发布。外部 MCP 客户端可开始任务并查进度；另一路是 Lindy 装第三方 MCP。",
+      "Settings → AI apps 选择工作区、核授权范围；实际动作的审批回 Lindy，先限定测试工作区。",
+      "海外/按用户工作区"
+    ]
+  },
+  {
+    "id": "proton-lumo",
+    "name": "Lumo Desktop",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://proton.me/support/lumo-connectors",
+      "https://proton.me/blog/lumo-desktop-features"
+    ],
+    "limits": [
+      "2026-11-17 发布桌面连接器；用户可在 Lumo Desktop 添加自定义 MCP。",
+      "逐项工具权限、运行位置、批准模式独立；第三方返回也按授权处理。",
+      "桌面 macOS/Windows/Linux；需 Proton 账号"
+    ]
+  },
+  {
+    "id": "manus-cue",
+    "name": "Manus Cue",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "mock-tested",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://open.manus.ai/docs/v2/agents-overview",
+      "https://open.manus.ai/docs/v2/agent.list"
+    ],
+    "limits": [
+      "专用 Cue 初始化，账户 Key 或 Trusted OAuth，失去回包先核查原尝试。",
+      "列出指定 Cue，定位持久主 task_id，向其发送与回读消息，追踪子任务。",
+      "agent.list 仅账号 Key 或 Trusted OAuth；关联本轮消息与工件；不用普通 OAuth 替代。",
+      "国际站"
+    ]
+  },
+  {
+    "id": "muse-personal",
+    "name": "Meta Muse",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "mock-tested",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.meta.com/en-gb/help/superintelligence/1687253048996149/",
+      "https://www.meta.com/en-gb/help/superintelligence/1331373868832401/"
+    ],
+    "limits": [
+      "单个经授权身份一个席位，按账户限流与分区可用性；不作外部唤醒。",
+      "Muse 可受指令为未内建的服务创建个人 Connector。由各自获授权的席位领单和回传。",
+      "个人凭据分席；不可等同公开模型 API、复制 Cookie 或轮换避配额。须实证 connector 实例可用。",
+      "随市场与账户资格开放"
+    ]
+  },
+  {
+    "id": "notion-custom-agents",
+    "name": "Notion Custom Agents",
+    "type": "enterprise",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.notion.com/en-gb/help/custom-agents",
+      "https://www.notion.com/en-gb/help/mcp-connections-for-custom-agents",
+      "https://www.notion.com/help/what-is-the-notion-developer-platform"
+    ],
+    "limits": [
+      "可按数据库/消息等已授权事件触发，Custom Agent 也可主动访问为该 Agent 配置的 MCP。",
+      "每个 Agent 的 MCP 连接分别授权；External Agents API 作用是把外部智能体带入 Notion。",
+      "指定 Notion 工作区"
+    ]
+  },
+  {
+    "id": "notis",
+    "name": "Notis",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "observe",
+        "stage": "unverified",
+        "effect": "manual-copy",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.notis.ai/developers/",
+      "https://www.notis.ai/for/claude/"
+    ],
+    "limits": [
+      "Rivule 可调用 Notis 的托管 MCP，在用户的授权应用中执行已发现的工具；部分功能由现有云/本地 agent 承接。",
+      "OAuth+PKCE，MCP 和 CLI 的 audience 不同；运行时发现 schema；未据此假定持久 PA 任务可轮询。",
+      "全球/实际账户与服务授权"
+    ]
+  },
+  {
+    "id": "perplexity-computer",
+    "name": "Perplexity Computer / Personal Computer",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "pull",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.perplexity.ai/changelog/what-we-shipped---march-13-2026",
+      "https://www.perplexity.ai/personal-computer-setup"
+    ],
+    "limits": [
+      "Computer 工作流可使用自定义远程 MCP；Personal Computer 能在获授权 Mac 上工作。",
+      "Computer 账户和独立开发者 Agent/Orchestrator API 分开；不向生产机开放浏览器或私人目录。",
+      "随套餐及客户端开放"
+    ]
+  },
+  {
+    "id": "poke",
+    "name": "Poke",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://poke.com/docs/api",
+      "https://poke.com/docs/mcp-servers"
+    ],
+    "limits": [
+      "入站可接收，原文会传给助手；只有入站成功不算交稿。",
+      "有 Bearer 凭证的入站消息可投到用户的 Poke；另可配 Poke → Rivule 的 MCP。",
+      "入站返回 success 不代表任务完成；不含独立回读协议。创建测试工单不发真实邮件。",
+      "国际站/渠道因账号而异"
+    ]
+  },
+  {
+    "id": "relevance-ai",
+    "name": "Relevance AI Agents",
+    "type": "enterprise",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://relevanceai.com/docs/build/agents/extend-your-agent/conversation",
+      "https://relevanceai.com/docs/get-started/core-concepts/agents"
+    ],
+    "limits": [
+      "Conversation API 可向 agent 发出异步 job，按 conversation、job 轮询。",
+      "使用该项目、地区、agent 对应令牌；不可把默认区域用作跨区容灾。",
+      "按项目 region 的服务边界"
+    ]
+  },
+  {
+    "id": "tasklet",
+    "name": "Tasklet",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://tasklet.ai/learn/mcp",
+      "https://tasklet.ai/blog/2026-10-28-tasklet-mcp"
+    ],
+    "limits": [
+      "允许所选 Agent 的 MCP OAuth；启动任务会消耗积分，工具名和 schema 待合格账户发现。",
+      "指定既有 Tasklet Agent，可开始工作、查看线程、后续追问及查结果。",
+      "只授权选定 Agent；授权也使对方能读该 Agent 下现有可见线程；用 Tasklet credits，审批留在提供方。",
+      "全球/以实际账户为准"
+    ]
+  },
+  {
+    "id": "town",
+    "name": "Town",
+    "type": "consumer",
+    "market": "global",
+    "reviewed": "2026-11-27",
+    "routes": [
+      {
+        "mode": "push",
+        "stage": "documented",
+        "effect": "research-public-text",
+        "liveTested": false
+      }
+    ],
+    "official": [
+      "https://www.town.com/docs/routines/stock-routines/webhooks",
+      "https://www.town.com/docs/integrations/mcp-servers"
+    ],
+    "limits": [
+      "已配置的 routine 可由外部认证 webhook 触发；Town 也可经 Streamable HTTP 调自定义 MCP。",
+      "每个 routine 独立 secret；注入性载荷与自动外发须隔离；旧 SSE 传输不适用其自定义 MCP。",
+      "国际站/按个人或团队范围"
+    ]
+  }
+]
