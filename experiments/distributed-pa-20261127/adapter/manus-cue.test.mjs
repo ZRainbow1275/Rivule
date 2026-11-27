@@ -1,7 +1,7 @@
 import test from 'node:test';
 import A from 'node:assert/strict';
 import {makeCueAdapter,cueCapability} from './manus-cue.mjs';
-const binding={agentId:'Agent-A',threadId:'Thread-A',dedicated:true,regionVerified:true};
+const binding={agentId:'Agent-A',threadId:'Thread-A',dedicated:true,ownedByCredential:true,regionVerified:true};
 const credential={kind:'api-key',value:'fake-credential-never-sent'};
 const work={agentId:'Agent-A',attemptRef:'job-1-attempt-1',approvedText:'对比两个公开资料的定义。只交摘要。',approval:'authorized-text-only'};
 const reply=(j,status=200)=>Response.json(j,{status});
@@ -38,6 +38,7 @@ test('cannot dispatch without authorizing exact ticket and dedicated regional bi
  await A.rejects(a.dispatch({...work,attemptRef:'anything\nforged'}),/invalid attempt/);
  await A.rejects(a.dispatch({...work,approvedText:'[rivule-attempt:fake]'}),/invalid approved/);
  A.throws(()=>makeCueAdapter({credential,fetcher:()=>{},bindings:[{...binding,regionVerified:false}]}),/region-verified/);
+ A.throws(()=>makeCueAdapter({credential,fetcher:()=>{},bindings:[{...binding,ownedByCredential:false}]}),/owned by credential/);
  A.equal(calls.length,0);
 });
 test('ambiguous dispatch does not retry; pending review remains pending; rate limits recorded separately',async()=>{
