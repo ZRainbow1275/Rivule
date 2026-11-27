@@ -34,6 +34,7 @@ const kinds = {
   add: ['capability','allowedRegions','inputDigest','requires'],
   claim: ['worker','leaseMs'], renew: ['fence','leaseMs'],
   begin: ['fence'], acknowledged: ['fence','receipt'], reported: ['fence','receipt','artifact'],
+  delivery_hold: ['fence','deliveryState','providerRequestId'],
   uncertain: ['fence'], expire: ['fence'], canceled: ['fence'], failed: ['fence','receipt','evidence'],
   reconcile: ['fence','attestation'], accept: ['fence','artifact']
 };
@@ -47,6 +48,10 @@ function normalize(raw) {
     if(k==='fence') c[k]=int(v,raw.type==='canceled'?0:1);
     else if(k==='leaseMs') c[k]=int(v,1,MAX_LEASE_MS);
     else if(k==='allowedRegions') c[k]=list(v,1,12,region);
+    else if(k==='deliveryState') {
+      requireThat(['owner_review','throttled','rejected'].includes(v),'invalid_delivery_state');
+      c[k]=v;
+    } else if(k==='providerRequestId') c[k]=v===null?null:id(v);
     else if(k==='requires') c[k]=list(v,0,24);
     else if(['inputDigest','artifact','attestation','evidence'].includes(k)) c[k]=digest(v);
     else c[k]=id(v);
@@ -70,9 +75,15 @@ function sameScope(auth, scope) {
 }
 function validAttestation(x, scope, t, c) {
   requireThat(plain(x)&&x.verified===true&&x.scope===scope&&x.task===t.task&&x.fence===t.fence&&x.worker===t.route.worker&&x.provider===t.route.provider&&x.lane===t.route.lane&&x.key===attemptKey(scope,t.task,t.fence)&&x.digest===c.attestation,'invalid_attestation');
+  if(t.providerRequestId)requireThat(x.providerRequestId===t.providerRequestId,'request_mismatch');
+  if(x.verdict==='input_verified'){
+    requireThat(t.route.provider==='cue'&&x.inputDigest===t.inputDigest&&!t.inputReceipt&&
+      ['owner_review','unknown'].includes(t.deliveryState),'input_mismatch');
+    return {verdict:x.verdict,inputReceipt:id(x.inputReceipt)};
+  }
   if(x.verdict==='closed_not_sent'){
     // A poll returning 'not found' is not a proof: the old sender may still wake.
-    requireThat(!t.receipt&&x.submitterQuiesced===true&&x.remoteRequestClosed===true,'not_proven_closed');
+    requireThat(!t.receipt&&!t.inputReceipt&&x.submitterQuiesced===true&&x.remoteRequestClosed===true,'not_proven_closed');
     return {verdict:x.verdict};
   }
   if(x.verdict==='failure_verified'){
@@ -143,6 +154,9 @@ function derive(v,scope,auth,c,at,context,replay=false) {
     requireThat(t.state==='submitting','not_submitting');
   } else if(c.type==='reported'||c.type==='failed') {
     requireThat(t.state==='running'&&c.receipt===t.receipt,'receipt_mismatch');
+  } else if(c.type==='delivery_hold') {
+    requireThat(t.route.provider==='cue'&&t.state==='submitting','not_submitting');
+    requireThat((c.deliveryState==='owner_review')===(c.providerRequestId!==null),'invalid_delivery_reference');
   } else if(c.type==='uncertain') {
     requireThat(t.state==='submitting'||t.state==='running','not_in_flight');
   } else if(c.type==='expire') {
@@ -150,7 +164,11 @@ function derive(v,scope,auth,c,at,context,replay=false) {
   } else if(c.type==='reconcile') {
     requireThat(t.state==='needs_review','not_under_review');
     const answer=replay?context.answer:validAttestation(context.attestation,scope,t,c);
-    if(answer.verdict==='closed_not_sent'){shape(answer,['verdict']);requireThat(!t.receipt,'receipt_exists');}
+    if(answer.verdict==='input_verified'){
+      shape(answer,['verdict','inputReceipt']);id(answer.inputReceipt);
+      requireThat(t.route.provider==='cue'&&!t.inputReceipt&&['owner_review','unknown'].includes(t.deliveryState),'input_mismatch');
+    }
+    else if(answer.verdict==='closed_not_sent'){shape(answer,['verdict']);requireThat(!t.receipt&&!t.inputReceipt,'receipt_exists');}
     else if(answer.verdict==='failure_verified'){shape(answer,['verdict','receipt','evidence']);requireThat(!t.receipt||t.receipt===answer.receipt,'receipt_mismatch');id(answer.receipt);digest(answer.evidence);}
     else{shape(answer,['verdict','receipt','artifact']);requireThat(answer.verdict==='result_verified'&&(!t.receipt||t.receipt===answer.receipt),'receipt_mismatch');id(answer.receipt);digest(answer.artifact);}
     return {answer};
@@ -167,20 +185,22 @@ function apply(v,scope,c,meta,version,at){
   const t=v.tasks.get(c.task);
   if(c.type==='add'){
     v.tasks.set(c.task,{task:c.task,capability:c.capability,allowedRegions:[...c.allowedRegions],inputDigest:c.inputDigest,requires:[...c.requires],
-      state:'ready',fence:0,until:0,route:null,receipt:null,artifact:null,failureDigest:null,version});
+      state:'ready',fence:0,until:0,route:null,receipt:null,artifact:null,failureDigest:null,deliveryState:null,providerRequestId:null,inputReceipt:null,version});
   }else{
     if(c.type==='claim'){
-      t.state='leased';t.route=copy(meta.route);t.fence++;t.until=at+c.leaseMs;t.receipt=null;t.artifact=null;
+      t.state='leased';t.route=copy(meta.route);t.fence++;t.until=at+c.leaseMs;t.receipt=null;t.artifact=null;t.deliveryState=null;t.providerRequestId=null;t.inputReceipt=null;
       v.lanes.set(t.route.lane,t.task);
     }else if(c.type==='renew')t.until=at+c.leaseMs;
     else if(c.type==='begin')t.state='submitting';
     else if(c.type==='acknowledged'){t.state='running';t.receipt=c.receipt;}
+    else if(c.type==='delivery_hold'){t.state='needs_review';t.deliveryState=c.deliveryState;t.providerRequestId=c.providerRequestId;}
     else if(c.type==='canceled'){t.state='canceled';if(t.route)v.lanes.delete(t.route.lane);}
     else if(c.type==='failed'){t.state='failed';t.failureDigest=c.evidence;v.lanes.delete(t.route.lane);}
     else if(c.type==='reported'){t.state='reported';t.artifact=c.artifact;v.lanes.delete(t.route.lane);}
     else if((c.type==='expire'&&t.state==='leased')||(c.type==='reconcile'&&meta.answer.verdict==='closed_not_sent')){
-      v.lanes.delete(t.route.lane);t.state='ready';t.route=null;t.until=0;
-    }else if(c.type==='expire'||c.type==='uncertain')t.state='needs_review';
+      v.lanes.delete(t.route.lane);t.state='ready';t.route=null;t.until=0;t.deliveryState=null;t.providerRequestId=null;t.inputReceipt=null;
+    }else if(c.type==='expire'||c.type==='uncertain'){t.state='needs_review';if(t.route.provider==='cue')t.deliveryState='unknown';}
+    else if(c.type==='reconcile'&&meta.answer.verdict==='input_verified'){t.inputReceipt=meta.answer.inputReceipt;t.deliveryState='input_observed';}
     else if(c.type==='reconcile'&&meta.answer.verdict==='failure_verified'){t.state='failed';t.receipt=meta.answer.receipt;t.failureDigest=meta.answer.evidence;v.lanes.delete(t.route.lane);}
     else if(c.type==='reconcile'){t.state='reported';t.receipt=meta.answer.receipt;t.artifact=meta.answer.artifact;v.lanes.delete(t.route.lane);}
     else if(c.type==='accept')t.state='accepted';
@@ -221,7 +241,7 @@ export function projectBoard(journal,{scope,selected,readable}){
     const closed=t.requires.every(k=>v.tasks.get(k).state==='accepted');
     const dependencies=t.requires.filter(k=>chosen.has(k)).map(k=>({task:k,state:v.tasks.get(k).state,version:v.tasks.get(k).version}));
     cards.push({task:t.task,capability:t.capability,state:t.state==='ready'&&!closed?'blocked':t.state,
-      worker:t.route?.worker??null,fence:t.fence,taskVersion:t.version,dependencies});
+      worker:t.route?.worker??null,fence:t.fence,taskVersion:t.version,dependencies,...(t.deliveryState&&t.state==='needs_review'?{deliveryState:t.deliveryState}:{})});
   }
   return {schema:1,scope,asOfVersion:v.rev,cards};
 }
