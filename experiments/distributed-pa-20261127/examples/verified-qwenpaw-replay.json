@@ -1,0 +1,278 @@
+[
+  {
+    "label": "主 Agent 拆出境内与海外材料。两路独立进行，合稿等待分别验收。",
+    "schema": 1,
+    "scope": "lab-room",
+    "asOfVersion": 3,
+    "cards": [
+      {
+        "task": "china-proof",
+        "capability": "public-summary",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 1,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "public-summary",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "china-proof",
+            "state": "ready",
+            "version": 1
+          },
+          {
+            "task": "overseas-proof",
+            "state": "ready",
+            "version": 2
+          }
+        ]
+      },
+      {
+        "task": "overseas-proof",
+        "capability": "public-summary",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 2,
+        "dependencies": []
+      }
+    ]
+  },
+  {
+    "label": "QwenPaw 原任务在事务里领到唯一一次派工许可；Glean 已领取另一张卡。",
+    "schema": 1,
+    "scope": "lab-room",
+    "asOfVersion": 6,
+    "cards": [
+      {
+        "task": "china-proof",
+        "capability": "public-summary",
+        "state": "submitting",
+        "worker": "qwen",
+        "fence": 1,
+        "taskVersion": 6,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "public-summary",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "china-proof",
+            "state": "submitting",
+            "version": 6
+          },
+          {
+            "task": "overseas-proof",
+            "state": "leased",
+            "version": 5
+          }
+        ]
+      },
+      {
+        "task": "overseas-proof",
+        "capability": "public-summary",
+        "state": "leased",
+        "worker": "international",
+        "fence": 1,
+        "taskVersion": 5,
+        "dependencies": []
+      }
+    ]
+  },
+  {
+    "label": "连接断开，任务留在待核查。会话身份还没绑定，既不重派，也不尝试接回陌生会话。",
+    "schema": 1,
+    "scope": "lab-room",
+    "asOfVersion": 7,
+    "cards": [
+      {
+        "task": "china-proof",
+        "capability": "public-summary",
+        "state": "needs_review",
+        "worker": "qwen",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "public-summary",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "china-proof",
+            "state": "needs_review",
+            "version": 7
+          },
+          {
+            "task": "overseas-proof",
+            "state": "leased",
+            "version": 5
+          }
+        ]
+      },
+      {
+        "task": "overseas-proof",
+        "capability": "public-summary",
+        "state": "leased",
+        "worker": "international",
+        "fence": 1,
+        "taskVersion": 5,
+        "dependencies": []
+      }
+    ]
+  },
+  {
+    "label": "海外结果先验收。境内仍不重派，合稿仍锁住。",
+    "schema": 1,
+    "scope": "lab-room",
+    "asOfVersion": 11,
+    "cards": [
+      {
+        "task": "china-proof",
+        "capability": "public-summary",
+        "state": "needs_review",
+        "worker": "qwen",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "public-summary",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "china-proof",
+            "state": "needs_review",
+            "version": 7
+          },
+          {
+            "task": "overseas-proof",
+            "state": "accepted",
+            "version": 11
+          }
+        ]
+      },
+      {
+        "task": "overseas-proof",
+        "capability": "public-summary",
+        "state": "accepted",
+        "worker": "international",
+        "fence": 1,
+        "taskVersion": 11,
+        "dependencies": []
+      }
+    ]
+  },
+  {
+    "label": "仅接回原会话并核对历史，境内结果进入待审。合稿还没解锁。",
+    "schema": 1,
+    "scope": "lab-room",
+    "asOfVersion": 12,
+    "cards": [
+      {
+        "task": "china-proof",
+        "capability": "public-summary",
+        "state": "reported",
+        "worker": "qwen",
+        "fence": 1,
+        "taskVersion": 12,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "public-summary",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "china-proof",
+            "state": "reported",
+            "version": 12
+          },
+          {
+            "task": "overseas-proof",
+            "state": "accepted",
+            "version": 11
+          }
+        ]
+      },
+      {
+        "task": "overseas-proof",
+        "capability": "public-summary",
+        "state": "accepted",
+        "worker": "international",
+        "fence": 1,
+        "taskVersion": 11,
+        "dependencies": []
+      }
+    ]
+  },
+  {
+    "label": "主 Agent 明确验收原结果后，才解锁合稿。",
+    "schema": 1,
+    "scope": "lab-room",
+    "asOfVersion": 13,
+    "cards": [
+      {
+        "task": "china-proof",
+        "capability": "public-summary",
+        "state": "accepted",
+        "worker": "qwen",
+        "fence": 1,
+        "taskVersion": 13,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "public-summary",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "china-proof",
+            "state": "accepted",
+            "version": 13
+          },
+          {
+            "task": "overseas-proof",
+            "state": "accepted",
+            "version": 11
+          }
+        ]
+      },
+      {
+        "task": "overseas-proof",
+        "capability": "public-summary",
+        "state": "accepted",
+        "worker": "international",
+        "fence": 1,
+        "taskVersion": 11,
+        "dependencies": []
+      }
+    ]
+  }
+]

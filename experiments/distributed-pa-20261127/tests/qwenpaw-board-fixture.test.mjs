@@ -57,14 +57,18 @@ function helpers(r,h,s=scope){
 }
 test('Bridge has no options for a live transport and defaults off',()=>A.throws(()=>open(':memory:',undefined,false),/not enabled/));
 test('QwenPaw loses response: Glean keeps working; exact old history alone never unlocks merge',async t=>{
- const r=set(t),h=r.open(),b=helpers(r,h);
+ const r=set(t),h=r.open(),b=helpers(r,h),frames=[];
+ const capture=(label)=>frames.push({label,...h.bridge.board.project({scope,selected:[task,intl,merge],readable:[task,intl,merge]})});
  b.add(task,'cn-mainland');b.add(intl,'us',[],intlDigest);b.add(merge,'us',[task,intl]);
+ capture('主 Agent 拆出境内与海外材料。两路独立进行，合稿等待分别验收。');
  A.throws(()=>b.claim(task,iProfile),{code:'region_mismatch'});
  b.claim(task,profile);b.claim(intl,iProfile);
  const first=b.start(),wire=structuredClone(first.mockRequest);
  A.equal(card(h,task).state,'submitting');A.equal(wire.body.input.length,1);
+ capture('QwenPaw 原任务在事务里领到唯一一次派工许可；Glean 已领取另一张卡。');
  const {proof,observation}=b.gateway(first);
  b.unknown();A.equal(card(h,task).state,'needs_review');
+ capture('连接断开，任务留在待核查。会话身份还没绑定，既不重派，也不尝试接回陌生会话。');
  A.equal(h.bridge.attach(b.tryOp('attach',{proof,expectedProviderRevision:0})).mockRequest,undefined);
  A.equal(h.bridge.start(b.tryOp('start',{approvedText})).mockRequest,undefined);
  let overseasWire=null;
@@ -79,6 +83,7 @@ test('QwenPaw loses response: Glean keeps working; exact old history alone never
  b.post({type:'reported',id:'report-intl',task:intl,fence:1,receipt:'independent',artifact:other},iProfile);
  b.post({type:'accept',id:'accept-intl',task:intl,fence:1,artifact:other});
  A.equal(card(h,merge).state,'blocked');A.equal(card(h,task).state,'needs_review');
+ capture('海外结果先验收。境内仍不重派，合稿仍锁住。');
  A(h.bridge.bind(b.tryOp('bind',{proof,expectedProviderRevision:0})).committed);
  const attach=h.bridge.attach(b.tryOp('attach',{proof,expectedProviderRevision:1}));
  A.deepEqual(attach.mockRequest.body,{reconnect:true,user_id:wire.body.user_id,channel:'console',session_id:wire.body.session_id});
@@ -87,12 +92,15 @@ test('QwenPaw loses response: Glean keeps working; exact old history alone never
  A.deepEqual(h.bridge.history(b.tryOp('history',{proof,expectedProviderRevision:2})).mockRequest,observation.request);
  const report=h.bridge.reconcile(b.tryOp('reconcile',{proof,expectedProviderRevision:2,observation}));
  A(report.committed);A.equal(card(h,task).state,'reported');A.equal(card(h,merge).state,'blocked');
+ capture('仅接回原会话并核对历史，境内结果进入待审。合稿还没解锁。');
  A.throws(()=>b.post({type:'accept',id:'accept-wrong',task,fence:1,artifact:sha('wrong')}),{code:'artifact_mismatch'});
  b.post({type:'accept',id:'accept-local',task,fence:1,artifact:report.artifact});
  A.equal(card(h,merge).state,'ready');
+ capture('主 Agent 明确验收原结果后，才解锁合稿。');
  A.equal(h.bridge.reconcile(b.tryOp('reconcile',{proof,expectedProviderRevision:3,observation})).committed,false);
  const rows=h.db.prepare('SELECT body FROM lab_coord_event').all();
  A(!JSON.stringify(rows).includes(approvedText));A(!JSON.stringify(rows).includes('Date confirmed'));
+ if(process.env.RIVULE_BOARD_REPLAY==='1')console.log('RIVULE_BOARD_REPLAY:'+JSON.stringify(frames));
 });
 test('Atomic send and report rollback preserve both journals and allow legitimate cold continuation',t=>{
  const r=set(t);let fail=false;

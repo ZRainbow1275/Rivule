@@ -1,0 +1,19 @@
+'use strict';
+const A=require('node:assert/strict'),{readFileSync}=require('node:fs'),vm=require('node:vm');
+const html=readFileSync(process.argv[2]??'Rivule-调度看板演练.html','utf8');
+A(html.includes("default-src 'none'"));
+const run=html.match(/<script>([\s\S]+)<\/script>/)[1];
+const elem=()=>({children:[],attrs:{},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x},setAttribute(k,v){this.attrs[k]=v}});
+const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join'].map(x=>[x,elem()]));
+vm.runInNewContext(run,{document:{getElementById:x=>elements[x],createElement:elem},structuredClone});
+const check=(step,cn,us,merge)=>{
+ elements.steps.children[step].onclick();
+ for(const [group,want] of [['cn',cn],['foreign',us],['join',merge]])A.equal(elements[group].children[0].className,want);
+ A.equal(elements.steps.children.filter(b=>b.attrs['aria-pressed']==='true').length,1);
+};
+check(2,'needs_review','leased','blocked');check(3,'needs_review','accepted','blocked');
+check(4,'reported','accepted','blocked');check(5,'accepted','accepted','ready');
+elements.scenario.onchange({target:{value:'muse'}});
+A.equal(elements.foreign.children.length,2);A(elements.steps.children[5].textContent.includes('验收完成'));
+elements.steps.children[5].onclick();A.equal(elements.join.children[0].className,'accepted');
+console.log(JSON.stringify({scenarios:2,browserViewNoProviderI_O:true,canonicalQwenPawReplay:true}));

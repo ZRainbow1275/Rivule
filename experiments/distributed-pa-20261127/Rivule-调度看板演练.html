@@ -1,0 +1,350 @@
+<!DOCTYPE html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+<title>Rivule · 主 Agent 调度台</title>
+<style>
+:root{color-scheme:dark;--bg:#101c1b;--paper:#172b28;--line:#395048;--mint:#b7dfad;--ink:#e9efe1;--muted:#acc1b3;--warn:#ffc479;--haze:#d1c8f0}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top right,#283d28 0,transparent 38%),var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}main{width:min(1020px,92vw);margin:auto;padding:43px 0 55px}h1,h2,p{margin:0}header p{margin-top:9px;color:var(--muted)}h1{font-size:clamp(32px,6vw,60px);line-height:1.1;letter-spacing:-.055em}h1 span{color:var(--mint)}.kicker{font-size:13px;color:var(--mint);letter-spacing:.17em;margin-bottom:12px}small{color:var(--muted)}.board{margin-top:20px;padding:22px;border:1px solid var(--line);border-radius:22px;background:rgba(23,43,40,.86)}.board>header{display:flex;justify-content:space-between;align-items:flex-start;gap:15px}.step{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin:17px 0}.step button{border:1px solid var(--line);background:#203630;color:var(--ink);font:inherit;font-size:13px;border-radius:10px;min-height:43px;cursor:pointer}.step button[aria-pressed=true]{background:var(--mint);color:#162820;font-weight:750;border-color:var(--mint)}button:focus-visible{outline:3px solid var(--warn);outline-offset:3px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:17px 0}.lane{padding:13px;border:1px solid var(--line);border-radius:16px;background:#1b2c27;min-width:0}.lane h2{font-size:14px;color:var(--muted);margin-bottom:9px}.lane article{min-height:118px;border-radius:12px;background:#233931;border:1px solid #557365;padding:10px;margin:6px 0}.lane article h3{margin:0 0 4px;font-size:16px}.lane article p{color:var(--muted);font-size:12px;overflow-wrap:anywhere}.state{display:inline-block;border-radius:25px;background:#354e40;color:var(--mint);padding:2px 9px;font-size:12px;margin:3px 0}.needs_review .state{background:#50402a;color:var(--warn)}.blocked .state,.reported .state{background:#40394c;color:var(--haze)}.footer{color:var(--muted);font-size:13px;padding-top:7px}.note{min-height:52px;color:var(--ink)}.place{color:var(--mint);border:1px solid #4a6351;padding:2px 7px;border-radius:7px;white-space:nowrap;font-size:12px}
+select{max-width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:7px 12px;margin:12px 0 2px}label{font-size:14px;color:var(--muted);margin-right:6px}select:focus-visible,button:focus-visible{outline:2px solid var(--warn);outline-offset:3px}
+@media(max-width:680px){main{padding-top:25px}.board{padding:12px}.grid{grid-template-columns:1fr}.step{grid-template-columns:repeat(3,1fr)}}
+</style>
+<main><header><p class="kicker">RIVULE / COORDINATION LAB</p><h1>一项任务，<span>各路并行。</span></h1><p>用同一份任务记录，回放地区隔离、掉线查回执和主 Agent 验收。</p></header>
+<section class="board"><header><div><h2>调度回放</h2><small id="clock"></small></div><span class="place">模拟数据 · 无联网</span></header>
+<label for="scenario">演练场景</label> <select id="scenario">
+<option value="qwen">QwenPaw 断流，Glean 继续</option>
+<option value="muse">两个独立 Muse 席位</option>
+</select>
+<nav id="steps" class="step" aria-label="回放步骤"></nav><p id="caption" class="note" aria-live="polite"></p>
+<div class="grid"><section class="lane"><h2>境内独立</h2><div id="cn"></div></section><section class="lane"><h2>海外公共材料</h2><div id="foreign"></div></section><section class="lane"><h2>主任务依赖</h2><div id="join"></div></section></div>
+<p class="footer">每一步来自同一份事件记录。席位、回执、足迹均为测试样本；没有实际派工，也没有改动现有 Rivule。</p>
+</section></main>
+<script>
+const verifiedQwenReplay=[{"label":"主 Agent 拆出境内与海外材料。两路独立进行，合稿等待分别验收。","schema":1,"scope":"lab-room","asOfVersion":3,"cards":[{"task":"china-proof","capability":"public-summary","state":"ready","worker":null,"fence":0,"taskVersion":1,"dependencies":[]},{"task":"merge","capability":"public-summary","state":"blocked","worker":null,"fence":0,"taskVersion":3,"dependencies":[{"task":"china-proof","state":"ready","version":1},{"task":"overseas-proof","state":"ready","version":2}]},{"task":"overseas-proof","capability":"public-summary","state":"ready","worker":null,"fence":0,"taskVersion":2,"dependencies":[]}]},{"label":"QwenPaw 原任务在事务里领到唯一一次派工许可；Glean 已领取另一张卡。","schema":1,"scope":"lab-room","asOfVersion":6,"cards":[{"task":"china-proof","capability":"public-summary","state":"submitting","worker":"qwen","fence":1,"taskVersion":6,"dependencies":[]},{"task":"merge","capability":"public-summary","state":"blocked","worker":null,"fence":0,"taskVersion":3,"dependencies":[{"task":"china-proof","state":"submitting","version":6},{"task":"overseas-proof","state":"leased","version":5}]},{"task":"overseas-proof","capability":"public-summary","state":"leased","worker":"international","fence":1,"taskVersion":5,"dependencies":[]}]},{"label":"连接断开，任务留在待核查。会话身份还没绑定，既不重派，也不尝试接回陌生会话。","schema":1,"scope":"lab-room","asOfVersion":7,"cards":[{"task":"china-proof","capability":"public-summary","state":"needs_review","worker":"qwen","fence":1,"taskVersion":7,"dependencies":[]},{"task":"merge","capability":"public-summary","state":"blocked","worker":null,"fence":0,"taskVersion":3,"dependencies":[{"task":"china-proof","state":"needs_review","version":7},{"task":"overseas-proof","state":"leased","version":5}]},{"task":"overseas-proof","capability":"public-summary","state":"leased","worker":"international","fence":1,"taskVersion":5,"dependencies":[]}]},{"label":"海外结果先验收。境内仍不重派，合稿仍锁住。","schema":1,"scope":"lab-room","asOfVersion":11,"cards":[{"task":"china-proof","capability":"public-summary","state":"needs_review","worker":"qwen","fence":1,"taskVersion":7,"dependencies":[]},{"task":"merge","capability":"public-summary","state":"blocked","worker":null,"fence":0,"taskVersion":3,"dependencies":[{"task":"china-proof","state":"needs_review","version":7},{"task":"overseas-proof","state":"accepted","version":11}]},{"task":"overseas-proof","capability":"public-summary","state":"accepted","worker":"international","fence":1,"taskVersion":11,"dependencies":[]}]},{"label":"仅接回原会话并核对历史，境内结果进入待审。合稿还没解锁。","schema":1,"scope":"lab-room","asOfVersion":12,"cards":[{"task":"china-proof","capability":"public-summary","state":"reported","worker":"qwen","fence":1,"taskVersion":12,"dependencies":[]},{"task":"merge","capability":"public-summary","state":"blocked","worker":null,"fence":0,"taskVersion":3,"dependencies":[{"task":"china-proof","state":"reported","version":12},{"task":"overseas-proof","state":"accepted","version":11}]},{"task":"overseas-proof","capability":"public-summary","state":"accepted","worker":"international","fence":1,"taskVersion":11,"dependencies":[]}]},{"label":"主 Agent 明确验收原结果后，才解锁合稿。","schema":1,"scope":"lab-room","asOfVersion":13,"cards":[{"task":"china-proof","capability":"public-summary","state":"accepted","worker":"qwen","fence":1,"taskVersion":13,"dependencies":[]},{"task":"merge","capability":"public-summary","state":"ready","worker":null,"fence":0,"taskVersion":3,"dependencies":[{"task":"china-proof","state":"accepted","version":13},{"task":"overseas-proof","state":"accepted","version":11}]},{"task":"overseas-proof","capability":"public-summary","state":"accepted","worker":"international","fence":1,"taskVersion":11,"dependencies":[]}]}];
+// A bounded, deterministic v1 decision log. No I/O, tokens, provider SDK or timers.
+// The store must CAS append one decision before permitting one external call.
+const MAX_EVENTS = 4096, MAX_TASKS = 128, MAX_LEASE_MS = 3600000;
+const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+const plain = v => v !== null && typeof v === 'object' && (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null);
+class BoardConflict extends Error {
+  constructor(code) { super(code); this.name = 'BoardConflict'; this.code = code; }
+}
+function requireThat(ok, code) { if (!ok) throw new BoardConflict(code); }
+function shape(o, keys) {
+  requireThat(plain(o) && Object.keys(o).length === keys.length && keys.every(k => own(o, k)), 'invalid_shape');
+}
+function id(s) { requireThat(typeof s === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,95}$/u.test(s), 'invalid_id'); return s; }
+function digest(s) { requireThat(typeof s === 'string' && /^[a-f0-9]{64}$/u.test(s), 'invalid_digest'); return s; }
+function int(n, min, max = Number.MAX_SAFE_INTEGER) { requireThat(Number.isSafeInteger(n) && n >= min && n <= max, 'invalid_integer'); return n; }
+function list(v, min, max, parse = id) {
+  requireThat(Array.isArray(v) && v.length >= min && v.length <= max, 'invalid_list');
+  const a = Array.from(v, parse);
+  requireThat(new Set(a).size === a.length, 'duplicate_list_member');
+  return a.sort();
+}
+function canonical(v) {
+  if (Array.isArray(v)) return v.map(canonical);
+  if (plain(v)) return Object.fromEntries(Object.keys(v).sort().map(k => [k, canonical(v[k])]));
+  return v;
+}
+const encode = v => JSON.stringify(canonical(v));
+const copy = v => JSON.parse(JSON.stringify(v));
+// Exact, deliberately finite egress policy vocabulary. Add a jurisdiction only
+// after the route operator can identify every processing and retention boundary.
+const supportedRegions = new Set(['cn-mainland','hk','mo','tw','us','sg','jp','kr','au','ca','gb','de','fr','ie','nl','eu-eea','ch','in','br']);
+function region(s) { requireThat(supportedRegions.has(s), 'unknown_region'); return s; }
+const kinds = {
+  add: ['capability','allowedRegions','inputDigest','requires'],
+  claim: ['worker','leaseMs'], renew: ['fence','leaseMs'],
+  begin: ['fence'], acknowledged: ['fence','receipt'], reported: ['fence','receipt','artifact'],
+  delivery_hold: ['fence','deliveryState','providerRequestId'],
+  uncertain: ['fence'], expire: ['fence'], canceled: ['fence'], failed: ['fence','receipt','evidence'],
+  reconcile: ['fence','attestation'], accept: ['fence','artifact']
+};
+function normalize(raw) {
+  requireThat(plain(raw) && own(kinds,raw.type), 'unknown_command');
+  const names = ['type','id','task',...kinds[raw.type]];
+  shape(raw, names);
+  const c = {type:raw.type,id:id(raw.id),task:id(raw.task)};
+  for (const k of kinds[c.type]) {
+    const v = raw[k];
+    if(k==='fence') c[k]=int(v,raw.type==='canceled'?0:1);
+    else if(k==='leaseMs') c[k]=int(v,1,MAX_LEASE_MS);
+    else if(k==='allowedRegions') c[k]=list(v,1,12,region);
+    else if(k==='deliveryState') {
+      requireThat(['owner_review','throttled','rejected'].includes(v),'invalid_delivery_state');
+      c[k]=v;
+    } else if(k==='providerRequestId') c[k]=v===null?null:id(v);
+    else if(k==='requires') c[k]=list(v,0,24);
+    else if(['inputDigest','artifact','attestation','evidence'].includes(k)) c[k]=digest(v);
+    else c[k]=id(v);
+  }
+  return c;
+}
+function createJournal(scope) { return {schema:1,scope:id(scope),events:[]}; }
+function sidecar() { return {tasks:new Map(),commands:new Map(),lanes:new Map(),clock:0,rev:0}; }
+function allowedRoute(profile, task, worker) {
+  // Sourced from the authenticated registry, never accepted as command input.
+  requireThat(plain(profile) && profile.worker===worker && profile.ready===true && profile.authorized===true,'worker_unavailable');
+  const lane=id(profile.lane), provider=id(profile.provider);
+  const regions=list(profile.dataRegions,1,12,region);
+  requireThat(list(profile.capabilities,1,32).includes(task.capability),'capability_mismatch');
+  requireThat(regions.every(region=>task.allowedRegions.includes(region)),'region_mismatch');
+  return {worker,lane,provider,dataRegions:regions,capability:task.capability};
+}
+function sameScope(auth, scope) {
+  requireThat(plain(auth) && auth.scope===scope && ['coordinator','worker'].includes(auth.role),'scope_or_role');
+  id(auth.subject);
+}
+function validAttestation(x, scope, t, c) {
+  requireThat(plain(x)&&x.verified===true&&x.scope===scope&&x.task===t.task&&x.fence===t.fence&&x.worker===t.route.worker&&x.provider===t.route.provider&&x.lane===t.route.lane&&x.key===attemptKey(scope,t.task,t.fence)&&x.digest===c.attestation,'invalid_attestation');
+  if(t.providerRequestId)requireThat(x.providerRequestId===t.providerRequestId,'request_mismatch');
+  if(x.verdict==='input_verified'){
+    requireThat(t.route.provider==='cue'&&x.inputDigest===t.inputDigest&&!t.inputReceipt&&
+      ['owner_review','unknown'].includes(t.deliveryState),'input_mismatch');
+    return {verdict:x.verdict,inputReceipt:id(x.inputReceipt)};
+  }
+  if(x.verdict==='closed_not_sent'){
+    // A poll returning 'not found' is not a proof: the old sender may still wake.
+    requireThat(!t.receipt&&!t.inputReceipt&&x.submitterQuiesced===true&&x.remoteRequestClosed===true,'not_proven_closed');
+    return {verdict:x.verdict};
+  }
+  if(x.verdict==='failure_verified'){
+    requireThat(!t.receipt||x.receipt===t.receipt,'receipt_mismatch');
+    return {verdict:x.verdict,receipt:id(x.receipt),evidence:digest(x.evidence)};
+  }
+  requireThat(x.verdict==='result_verified' && (!t.receipt||x.receipt===t.receipt),'receipt_mismatch');
+  return {verdict:x.verdict,receipt:id(x.receipt),artifact:digest(x.artifact)};
+}
+function attemptKey(scope, task, fence) { return [id(scope),id(task),int(fence,1)].join('/'); }
+function fold(j) {
+  shape(j,['schema','scope','events']); id(j.scope);
+  requireThat(j.schema===1 && Array.isArray(j.events) && j.events.length<=MAX_EVENTS,'invalid_journal');
+  const v=sidecar();
+  for(const e of j.events) {
+    // Replay only authority-produced, access-controlled rows. No provider action on replay.
+    requireThat(plain(e)&&e.version===v.rev+1&&e.scope===j.scope,'journal_gap');
+    int(e.at,v.clock); const c=normalize(e.command);
+    requireThat(!v.commands.has(c.id),'journal_duplicate');
+    const auth={scope:j.scope,subject:e.subject,role:e.role};sameScope(auth,j.scope);
+    const meta=derive(v,j.scope,auth,c,e.at,e.meta,true);
+    requireThat(encode(meta)===encode(e.meta),'invalid_journal_evidence');
+    apply(v,j.scope,c,meta,e.version,e.at);
+    v.commands.set(c.id,{command:c,subject:auth.subject,role:auth.role,version:e.version});
+  }
+  return v;
+}
+function derive(v,scope,auth,c,at,context,replay=false) {
+  const owner=['add','expire','reconcile','accept','canceled'].includes(c.type);
+  requireThat(auth.role===(owner?'coordinator':'worker'),'wrong_role');
+  const t=v.tasks.get(c.task);
+  if(c.type==='add') {
+    requireThat(!t&&v.tasks.size<MAX_TASKS,'task_exists_or_capacity');
+    requireThat(c.requires.every(x=>v.tasks.has(x)),'unknown_dependency');
+    return {};
+  }
+  requireThat(t,'unknown_task');
+  if(c.type==='claim') {
+    requireThat(c.worker===auth.subject && t.state==='ready','not_claimable');
+    requireThat(t.requires.every(x=>v.tasks.get(x).state==='accepted'),'dependencies_open');
+    const route=replay?context.route:allowedRoute(context.profile,t,c.worker);
+    validateStoredRoute(route,t,c.worker);
+    requireThat(!v.lanes.has(route.lane),'lane_busy');
+    int(at+c.leaseMs,at+1);
+    return {route};
+  }
+  if(c.type==='canceled'){
+    // No RPC has begun, or this path is ineligible. Never present cancellation
+    // after a remote request as confirmed without a provider-specific receipt.
+    requireThat(c.fence===t.fence,'stale_fence');
+    requireThat(t.state==='ready'||t.state==='leased','cannot_cancel');return {};
+  }
+  requireThat(c.fence===t.fence&&t.route,'stale_fence');
+  if(!owner) {
+    requireThat(auth.subject===t.route.worker,'wrong_worker');
+    requireThat(at<t.until,'lease_expired');
+  }
+  if(c.type==='renew') {
+    requireThat(['leased','submitting','running'].includes(t.state),'not_renewable');
+    int(at+c.leaseMs,t.until+1); // renewal cannot shorten the reservation
+  } else if(c.type==='begin') {
+    requireThat(t.state==='leased','not_leased');
+    if(!replay) {
+      const current=allowedRoute(context.profile,t,auth.subject);
+      requireThat(encode(current)===encode(t.route),'route_changed');
+    }
+  } else if(c.type==='acknowledged') {
+    requireThat(t.state==='submitting','not_submitting');
+  } else if(c.type==='reported'||c.type==='failed') {
+    requireThat(t.state==='running'&&c.receipt===t.receipt,'receipt_mismatch');
+  } else if(c.type==='delivery_hold') {
+    requireThat(t.route.provider==='cue'&&t.state==='submitting','not_submitting');
+    requireThat((c.deliveryState==='owner_review')===(c.providerRequestId!==null),'invalid_delivery_reference');
+  } else if(c.type==='uncertain') {
+    requireThat(t.state==='submitting'||t.state==='running','not_in_flight');
+  } else if(c.type==='expire') {
+    requireThat(at>=t.until&&['leased','submitting','running'].includes(t.state),'not_expirable');
+  } else if(c.type==='reconcile') {
+    requireThat(t.state==='needs_review','not_under_review');
+    const answer=replay?context.answer:validAttestation(context.attestation,scope,t,c);
+    if(answer.verdict==='input_verified'){
+      shape(answer,['verdict','inputReceipt']);id(answer.inputReceipt);
+      requireThat(t.route.provider==='cue'&&!t.inputReceipt&&['owner_review','unknown'].includes(t.deliveryState),'input_mismatch');
+    }
+    else if(answer.verdict==='closed_not_sent'){shape(answer,['verdict']);requireThat(!t.receipt&&!t.inputReceipt,'receipt_exists');}
+    else if(answer.verdict==='failure_verified'){shape(answer,['verdict','receipt','evidence']);requireThat(!t.receipt||t.receipt===answer.receipt,'receipt_mismatch');id(answer.receipt);digest(answer.evidence);}
+    else{shape(answer,['verdict','receipt','artifact']);requireThat(answer.verdict==='result_verified'&&(!t.receipt||t.receipt===answer.receipt),'receipt_mismatch');id(answer.receipt);digest(answer.artifact);}
+    return {answer};
+  } else if(c.type==='accept') requireThat(t.state==='reported'&&c.artifact===t.artifact,'artifact_mismatch');
+  return {};
+}
+function validateStoredRoute(r,t,worker) {
+  shape(r,['worker','provider','capability','lane','dataRegions']);
+  requireThat(r.worker===worker&&r.capability===t.capability,'route_mismatch');
+  id(r.provider); id(r.lane);list(r.dataRegions,1,12,region);
+  requireThat(r.dataRegions.every(x=>t.allowedRegions.includes(x)),'region_mismatch');
+}
+function apply(v,scope,c,meta,version,at){
+  const t=v.tasks.get(c.task);
+  if(c.type==='add'){
+    v.tasks.set(c.task,{task:c.task,capability:c.capability,allowedRegions:[...c.allowedRegions],inputDigest:c.inputDigest,requires:[...c.requires],
+      state:'ready',fence:0,until:0,route:null,receipt:null,artifact:null,failureDigest:null,deliveryState:null,providerRequestId:null,inputReceipt:null,version});
+  }else{
+    if(c.type==='claim'){
+      t.state='leased';t.route=copy(meta.route);t.fence++;t.until=at+c.leaseMs;t.receipt=null;t.artifact=null;t.deliveryState=null;t.providerRequestId=null;t.inputReceipt=null;
+      v.lanes.set(t.route.lane,t.task);
+    }else if(c.type==='renew')t.until=at+c.leaseMs;
+    else if(c.type==='begin')t.state='submitting';
+    else if(c.type==='acknowledged'){t.state='running';t.receipt=c.receipt;}
+    else if(c.type==='delivery_hold'){t.state='needs_review';t.deliveryState=c.deliveryState;t.providerRequestId=c.providerRequestId;}
+    else if(c.type==='canceled'){t.state='canceled';if(t.route)v.lanes.delete(t.route.lane);}
+    else if(c.type==='failed'){t.state='failed';t.failureDigest=c.evidence;v.lanes.delete(t.route.lane);}
+    else if(c.type==='reported'){t.state='reported';t.artifact=c.artifact;v.lanes.delete(t.route.lane);}
+    else if((c.type==='expire'&&t.state==='leased')||(c.type==='reconcile'&&meta.answer.verdict==='closed_not_sent')){
+      v.lanes.delete(t.route.lane);t.state='ready';t.route=null;t.until=0;t.deliveryState=null;t.providerRequestId=null;t.inputReceipt=null;
+    }else if(c.type==='expire'||c.type==='uncertain'){t.state='needs_review';if(t.route.provider==='cue')t.deliveryState='unknown';}
+    else if(c.type==='reconcile'&&meta.answer.verdict==='input_verified'){t.inputReceipt=meta.answer.inputReceipt;t.deliveryState='input_observed';}
+    else if(c.type==='reconcile'&&meta.answer.verdict==='failure_verified'){t.state='failed';t.receipt=meta.answer.receipt;t.failureDigest=meta.answer.evidence;v.lanes.delete(t.route.lane);}
+    else if(c.type==='reconcile'){t.state='reported';t.receipt=meta.answer.receipt;t.artifact=meta.answer.artifact;v.lanes.delete(t.route.lane);}
+    else if(c.type==='accept')t.state='accepted';
+    t.version=version;
+  }
+  v.clock=at;v.rev=version;
+}
+// A fresh begin returns only a *provisional* permit. Deliver only after a durable
+// parent-version CAS confirmed this exact, freshly inserted decision.
+function decide(journal,{auth,command,expectedVersion,at,profile,attestation}){
+  const v=fold(journal), c=normalize(command);
+  sameScope(auth,journal.scope);
+  int(expectedVersion,0);
+  const old=v.commands.get(c.id);
+  if(old){
+    requireThat(old.subject===auth.subject&&old.role===auth.role&&encode(old.command)===encode(c),'idempotency_conflict');
+    return {duplicate:true,version:old.version,event:null,permit:null};
+  }
+  requireThat(expectedVersion===v.rev,'revision_conflict');
+  requireThat(v.rev<MAX_EVENTS,'journal_capacity');
+  int(at,v.clock);
+  const meta=derive(v,journal.scope,auth,c,at,{profile,attestation});
+  const event={scope:journal.scope,version:v.rev+1,at,subject:auth.subject,role:auth.role,command:c,meta};
+  const permit=c.type==='begin'?{key:attemptKey(journal.scope,c.task,c.fence),task:c.task,fence:c.fence,worker:auth.subject,
+    provider:v.tasks.get(c.task).route.provider,lane:v.tasks.get(c.task).route.lane,expiresAt:v.tasks.get(c.task).until,
+    inputDigest:v.tasks.get(c.task).inputDigest,expectedVersion:v.rev,decisionVersion:event.version}:null;
+  return {duplicate:false,version:event.version,event,permit};
+}
+function projectBoard(journal,{scope,selected,readable}){
+  requireThat(scope===journal.scope,'scope_or_role');
+  // Both sets come from the existing owner/read-model authorization boundary.
+  const choice=list(selected,0,MAX_TASKS), access=new Set(list(readable,0,MAX_TASKS));
+  const v=fold(journal), chosen=new Set(choice.filter(x=>access.has(x)));
+  const cards=[];
+  for(const key of choice){
+    if(!chosen.has(key))continue;
+    const t=v.tasks.get(key); if(!t)continue;
+    const closed=t.requires.every(k=>v.tasks.get(k).state==='accepted');
+    const dependencies=t.requires.filter(k=>chosen.has(k)).map(k=>({task:k,state:v.tasks.get(k).state,version:v.tasks.get(k).version}));
+    cards.push({task:t.task,capability:t.capability,state:t.state==='ready'&&!closed?'blocked':t.state,
+      worker:t.route?.worker??null,fence:t.fence,taskVersion:t.version,dependencies,...(t.deliveryState&&t.state==='needs_review'?{deliveryState:t.deliveryState}:{})});
+  }
+  return {schema:1,scope,asOfVersion:v.rev,cards};
+}
+
+// Runs in a browser or Node. All accounts, tasks, artifacts and receipts are
+// fixtures. No clock, I/O, provider SDK, fetch, tokens, or account discovery.
+const hash=n=>n.repeat(64), all=['cn-notes','overseas-a','overseas-b','editorial'];
+const scope='training'; // one owner + one authority; isolated sample board
+const owner={scope,subject:'lead',role:'coordinator'};
+const catalog=Object.freeze({
+  local:{worker:'local',provider:'domestic-demo',lane:'sample.cn',dataRegions:['cn-mainland'],capabilities:['check.local'],ready:true,authorized:true},
+  seatA:{worker:'seatA',provider:'muse-demo',lane:'training.a',dataRegions:['sg'],capabilities:['check.public'],ready:true,authorized:true},
+  seatB:{worker:'seatB',provider:'muse-demo',lane:'training.b',dataRegions:['sg'],capabilities:['check.public','edit.public'],ready:true,authorized:true}
+});
+const entries=Object.freeze([
+ ['cn-notes','check.local',['cn-mainland'],hash('1'),[]],
+ ['overseas-a','check.public',['sg'],hash('2'),[]],
+ ['overseas-b','check.public',['sg'],hash('3'),[]],
+ ['editorial','edit.public',['sg'],hash('4'),['overseas-a','overseas-b']]
+]);
+function runCoordinationExample(){
+ let j=createJournal(scope),clock=1;
+ const phases=[];
+ const next=(agent,c,ctx={})=>{
+   const auth=agent==='lead'?owner:{scope,subject:agent,role:'worker'};
+   const publication=decide(j,{expectedVersion:j.events.length,at:clock++,auth,profile:catalog[agent],...ctx,command:c});
+   if(publication.event)j={...j,events:[...j.events,publication.event]};
+   return publication;
+ };
+ const frame=label=>phases.push({label,...projectBoard(j,{scope,selected:all,readable:all})});
+ const add=([task,capability,allowedRegions,inputDigest,requires])=>next('lead',{type:'add',task,capability,allowedRegions,inputDigest,requires,id:'add.'+task});
+ const claim=(task,worker)=>next(worker,{type:'claim',id:'lease.'+task,task,worker,leaseMs:100});
+ const phase=(type,worker,task,fields={})=>next(worker,{type,id:type+'.'+task,task,fence:1,...fields});
+ const result=(task,worker,receipt,artifact)=>{phase('reported',worker,task,{receipt,artifact});phase('accept','lead',task,{artifact});};
+ for(const row of entries)add(row);frame('拆分后，无依赖的任务先领；合稿等待两份公开材料');
+ for(const [task,w] of [['cn-notes','local'],['overseas-a','seatA'],['overseas-b','seatB']]){
+  claim(task,w);phase('begin',w,task);
+ }
+ frame('一条国内通道、两条独立授权的示例 Muse 通道分别领工');
+ phase('acknowledged','local','cn-notes',{receipt:'local-1'});
+ phase('acknowledged','seatB','overseas-b',{receipt:'b-1'});
+ phase('uncertain','seatA','overseas-a');result('overseas-b','seatB','b-1',hash('b'));
+ frame('A 的投递结果未知；B 已验收，合稿没有越过依赖');
+ const proof={verified:true,scope,task:'overseas-a',fence:1,worker:'seatA',provider:'muse-demo',lane:'training.a',key:'training/overseas-a/1',
+    digest:hash('e'),verdict:'result_verified',receipt:'a-1',artifact:hash('a')};
+ next('lead',{type:'reconcile',id:'resolve.a',task:'overseas-a',fence:1,attestation:hash('e')},{attestation:proof});
+ frame('用相同投递身份核回已有产物；没有重发，主 Agent 尚未验收');
+ phase('accept','lead','overseas-a',{artifact:hash('a')});
+ result('cn-notes','local','local-1',hash('c'));claim('editorial','seatB');phase('begin','seatB','editorial');
+ frame('两份公开材料均已验收，合稿被领取；国内原件仍留在原通道');
+ phase('acknowledged','seatB','editorial',{receipt:'edit-1'});result('editorial','seatB','edit-1',hash('d'));
+ frame('合稿验收完成，每张卡可按修订号重放');
+ return {synthetic:true,providerRequests:0,accountsUsed:0,phases,journal:j};
+}
+
+const tracks={
+ qwen:{phases:verifiedQwenReplay,
+  labels:['拆分','派工','断线','海外验收','核回国内','解锁合稿'],
+  names:{'china-proof':'境内公开材料','overseas-proof':'海外公开材料',merge:'两份材料合稿'},
+  workers:{qwen:'QwenPaw 境内示例',international:'Glean 海外示例'},cn:'china-proof',merge:'merge'},
+ muse:{phases:runCoordinationExample().phases,
+  labels:['拆分','领取','断线','核回','允许合稿','验收完成'],
+  names:{'cn-notes':'国内原件核对','overseas-a':'国际材料原文 A','overseas-b':'国际材料原文 B',editorial:'两份公开材料合稿'},
+  workers:{local:'境内示例端',seatA:'Muse 示例席位 A',seatB:'Muse 示例席位 B'},cn:'cn-notes',merge:'editorial'}
+};
+const statuses={ready:'待领',leased:'已领取',submitting:'派送中',running:'已收 · 执行中',reported:'已交稿 · 待验收',accepted:'已验收',needs_review:'待核回执 · 不重发',blocked:'等待前置验收',failed:'失败',canceled:'已取消'};
+const $=x=>document.getElementById(x);let track=tracks.qwen,buttons=[];
+function node(tag,text){const e=document.createElement(tag);e.textContent=text;return e}
+function loadTrack(key){
+ track=tracks[key]??tracks.qwen;
+ buttons=track.labels.map((s,i)=>{const b=node('button',String(i+1)+' · '+s);b.type='button';b.onclick=()=>render(i);return b});
+ $('steps').replaceChildren(...buttons);render(2);
+}
+function render(i){const f=track.phases[i];$('clock').textContent='记录修订 '+String(f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.label;
+ buttons.forEach((b,k)=>b.setAttribute('aria-pressed',String(i===k)));
+ for(const id of ['cn','foreign','join'])$(id).replaceChildren();
+ for(const item of f.cards){const a=node('article','');a.className=item.state;
+  a.append(node('h3',track.names[item.task]));const state=node('span',statuses[item.state]);state.className='state';a.append(state);
+  a.append(node('p',(track.workers[item.worker]||'未分配')+' · 修订 '+item.taskVersion));
+  for(const dep of item.dependencies)a.append(node('p','前置：'+track.names[dep.task]+' · '+statuses[dep.state]));
+  $(item.task===track.cn?'cn':item.task===track.merge?'join':'foreign').append(a);
+ }}
+$('scenario').onchange=e=>loadTrack(e.target.value);
+loadTrack('qwen');
+</script></html>
