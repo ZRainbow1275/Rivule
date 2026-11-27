@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
+<title>Rivule · 主 Agent 调度台</title>
+<style>
+:root{color-scheme:dark;--bg:#101c1b;--paper:#172b28;--line:#395048;--mint:#b7dfad;--ink:#e9efe1;--muted:#acc1b3;--warn:#ffc479;--haze:#d1c8f0}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top right,#283d28 0,transparent 38%),var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}main{width:min(1020px,92vw);margin:auto;padding:43px 0 55px}h1,h2,p{margin:0}header p{margin-top:9px;color:var(--muted)}h1{font-size:clamp(32px,6vw,60px);line-height:1.1;letter-spacing:-.055em}h1 span{color:var(--mint)}.kicker{font-size:13px;color:var(--mint);letter-spacing:.17em;margin-bottom:12px}small{color:var(--muted)}.board{margin-top:20px;padding:22px;border:1px solid var(--line);border-radius:22px;background:rgba(23,43,40,.86)}.board>header{display:flex;justify-content:space-between;align-items:flex-start;gap:15px}.step{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin:17px 0}.step button{border:1px solid var(--line);background:#203630;color:var(--ink);font:inherit;font-size:13px;border-radius:10px;min-height:43px;cursor:pointer}.step button[aria-pressed=true]{background:var(--mint);color:#162820;font-weight:750;border-color:var(--mint)}button:focus-visible{outline:3px solid var(--warn);outline-offset:3px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:17px 0}.lane{padding:13px;border:1px solid var(--line);border-radius:16px;background:#1b2c27;min-width:0}.lane h2{font-size:14px;color:var(--muted);margin-bottom:9px}.lane article{min-height:118px;border-radius:12px;background:#233931;border:1px solid #557365;padding:10px;margin:6px 0}.lane article h3{margin:0 0 4px;font-size:16px}.lane article p{color:var(--muted);font-size:12px;overflow-wrap:anywhere}.state{display:inline-block;border-radius:25px;background:#354e40;color:var(--mint);padding:2px 9px;font-size:12px;margin:3px 0}.needs_review .state{background:#50402a;color:var(--warn)}.blocked .state,.reported .state{background:#40394c;color:var(--haze)}.footer{color:var(--muted);font-size:13px;padding-top:7px}.note{min-height:52px;color:var(--ink)}.place{color:var(--mint);border:1px solid #4a6351;padding:2px 7px;border-radius:7px;white-space:nowrap;font-size:12px}
+@media(max-width:680px){main{padding-top:25px}.board{padding:12px}.grid{grid-template-columns:1fr}.step{grid-template-columns:repeat(3,1fr)}}
+</style>
+<main><header><p class="kicker">RIVULE / COORDINATION LAB</p><h1>一项任务，<span>各路并行。</span></h1><p>用同一份任务记录，回放地区隔离、掉线查回执和主 Agent 验收。</p></header>
+<section class="board"><header><div><h2>调度回放</h2><small id="clock"></small></div><span class="place">模拟数据 · 无联网</span></header>
+<nav id="steps" class="step" aria-label="回放步骤"></nav><p id="caption" class="note" aria-live="polite"></p>
+<div class="grid"><section class="lane"><h2>境内独立</h2><div id="cn"></div></section><section class="lane"><h2>海外公共材料</h2><div id="foreign"></div></section><section class="lane"><h2>主任务依赖</h2><div id="join"></div></section></div>
+<p class="footer">每一步来自同一份事件记录。席位、回执、足迹均为测试样本；没有实际派工，也没有改动现有 Rivule。</p>
+</section></main>
+<script>
+{{CODE}}
+const example=runCoordinationExample();
+const names={'cn-notes':'国内原件核对','overseas-a':'国际材料原文 A','overseas-b':'国际材料原文 B',editorial:'两份公开材料合稿'};
+const statuses={ready:'待领',leased:'已领取',submitting:'派送中',running:'已收 · 执行中',reported:'已交稿 · 待验收',accepted:'已验收',needs_review:'待核回执 · 不重发',blocked:'等待前置验收',failed:'失败',canceled:'已取消'};
+const workers={local:'境内示例端',seatA:'Muse 示例席位 A',seatB:'Muse 示例席位 B'};
+const labels=['拆分','领取','断线','核回','允许合稿','验收完成'];
+const $=x=>document.getElementById(x);let current=2;
+function node(tag,text){const e=document.createElement(tag);e.textContent=text;return e}
+const buttons=labels.map((s,i)=>{const b=node('button',String(i+1)+' · '+s);b.type='button';b.onclick=()=>render(i);$('steps').append(b);return b;});
+function render(i){current=i;const f=example.phases[i];$('clock').textContent='记录修订 '+String(f.asOfVersion)+' ·  '+String(i+1)+'/6';$('caption').textContent=f.label;
+buttons.forEach((b,k)=>b.setAttribute('aria-pressed',String(i===k)));
+for(const id of ['cn','foreign','join'])$(id).replaceChildren();
+for(const item of f.cards){const a=node('article','');a.className=item.state;
+a.append(node('h3',names[item.task]));const state=node('span',statuses[item.state]);state.className='state';a.append(state);
+a.append(node('p',(workers[item.worker]||'未分配')+' · 修订 '+item.taskVersion));
+for(const dep of item.dependencies)a.append(node('p','前置：'+names[dep.task]+' · '+statuses[dep.state]));
+$(item.task==='cn-notes'?'cn':item.task==='editorial'?'join':'foreign').append(a);}}
+render(current);
+</script></html>
