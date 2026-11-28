@@ -25,6 +25,11 @@ export function makeCoordinatorCatchup({enabled=false,sql,transactionSync,resolv
    'not_authorized');
   return [p.board,p.subject,p.policyEpoch,p.view];
  }
+ const release=(req,prior,value)=>{
+  const current=grant(req);
+  requireThat(prior.every((v,i)=>v===current[i]),'grant_changed');
+  return value;
+ };
  const channel=s=>digest('coord-channel',s,null);
  const cursor=(s,version)=>({version,proof:digest('coord-cursor',s,version)});
  const frame=(scope,mode,p)=>({channel:channel(scope),mode,cursor:cursor(scope,p.asOfVersion),snapshot:p});
@@ -32,7 +37,7 @@ export function makeCoordinatorCatchup({enabled=false,sql,transactionSync,resolv
   bootstrap(req){
    return atom(()=>{
     const s=grant(req);
-    return frame(s,'snapshot',journal.projectAll(s[0]));
+    return release(req,s,frame(s,'snapshot',journal.projectAll(s[0])));
    });
   },
   poll(req,previous){
@@ -43,11 +48,11 @@ export function makeCoordinatorCatchup({enabled=false,sql,transactionSync,resolv
     // A commit immediately after it remains discoverable through this cursor.
     const p=journal.projectAll(s[0]),n=p.asOfVersion,old=previous.version;
     requireThat(old<=n,'cursor_ahead');
-    if(old===n)return {channel:channel(s),mode:'unchanged',cursor:cursor(s,n)};
+    if(old===n)return release(req,s,{channel:channel(s),mode:'unchanged',cursor:cursor(s,n)});
     const rows=journal.outboxAfter(s[0],old,limit);
     const expected=Math.min(n-old,limit);
     const contiguous=rows.length===expected&&rows.every((r,i)=>r.version===old+i+1);
-    return frame(s,contiguous?(n-old>limit?'coalesced':'advanced'):'reset',p);
+    return release(req,s,frame(s,contiguous?(n-old>limit?'coalesced':'advanced'):'reset',p));
    });
   },
  });
@@ -61,4 +66,31 @@ export function receiveCoordinatorFrame(current,activeChannel,response){
  if(current&&(current.channel!==activeChannel||response.cursor.version<=current.cursor.version))return current;
  if(response.mode==='unchanged'||response.snapshot?.asOfVersion!==response.cursor.version||!Array.isArray(response.snapshot?.cards))return current;
  return {channel:activeChannel,cursor:{...response.cursor},snapshot:structuredClone(response.snapshot)};
+}
+
+
+// One lifecycle per browser window. Ignore old callbacks even if a transport
+// could not cancel them. Denial or explicit revoke clears captured UI state
+// before any re-authenticated bootstrap, never treating old data as stale cache.
+export function makeCoordinatorViewSession(){
+ let generation=Object.freeze({}),snapshot=null,phase='awaiting_bootstrap';
+ const reset=next=>{generation=Object.freeze({});snapshot=null;phase=next;};
+ return Object.freeze({
+  start(){reset('awaiting_bootstrap');return generation;},
+  revoke(){reset('revoked');},
+  pollTicket(){return phase==='active'?generation:null;},
+  current(){return {phase,board:snapshot?structuredClone(snapshot.snapshot):null};},
+  cursor(){return phase==='active'?{...snapshot.cursor}:null;},
+  receive(ticket,response){
+   if(ticket!==generation||phase==='revoked')return false;
+   if(['not_authorized','invalid_cursor','grant_changed'].includes(response?.error)){
+    reset('revoked');return true;
+   }
+   if(phase==='awaiting_bootstrap'&&response?.mode!=='snapshot')return false;
+   if(phase==='active'&&response?.mode==='snapshot')return false;
+   const next=receiveCoordinatorFrame(snapshot,snapshot?.channel??response?.channel,response);
+   if(next===snapshot)return false;
+   snapshot=next;phase='active';return true;
+  },
+ });
 }

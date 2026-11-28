@@ -5,22 +5,25 @@
 :root{color-scheme:dark;--bg:#101c1b;--paper:#172b28;--line:#395048;--mint:#b7dfad;--ink:#e9efe1;--muted:#acc1b3;--warn:#ffc479;--haze:#d1c8f0}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top right,#283d28 0,transparent 38%),var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}main{width:min(1020px,92vw);margin:auto;padding:43px 0 55px}h1,h2,p{margin:0}header p{margin-top:9px;color:var(--muted)}h1{font-size:clamp(32px,6vw,60px);line-height:1.1;letter-spacing:-.055em}h1 span{color:var(--mint)}.kicker{font-size:13px;color:var(--mint);letter-spacing:.17em;margin-bottom:12px}small{color:var(--muted)}.board{margin-top:20px;padding:22px;border:1px solid var(--line);border-radius:22px;background:rgba(23,43,40,.86)}.board>header{display:flex;justify-content:space-between;align-items:flex-start;gap:15px}.step{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin:17px 0}.step button{border:1px solid var(--line);background:#203630;color:var(--ink);font:inherit;font-size:13px;border-radius:10px;min-height:43px;cursor:pointer}.step button[aria-pressed=true]{background:var(--mint);color:#162820;font-weight:750;border-color:var(--mint)}button:focus-visible{outline:3px solid var(--warn);outline-offset:3px}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:17px 0}.lane{padding:13px;border:1px solid var(--line);border-radius:16px;background:#1b2c27;min-width:0}.lane h2{font-size:14px;color:var(--muted);margin-bottom:9px}.lane article{min-height:118px;border-radius:12px;background:#233931;border:1px solid #557365;padding:10px;margin:6px 0}.lane article h3{margin:0 0 4px;font-size:16px}.lane article p{color:var(--muted);font-size:12px;overflow-wrap:anywhere}.state{display:inline-block;border-radius:25px;background:#354e40;color:var(--mint);padding:2px 9px;font-size:12px;margin:3px 0}.needs_review .state{background:#50402a;color:var(--warn)}.blocked .state,.reported .state{background:#40394c;color:var(--haze)}.footer{color:var(--muted);font-size:13px;padding-top:7px}.note{min-height:52px;color:var(--ink)}.place{color:var(--mint);border:1px solid #4a6351;padding:2px 7px;border-radius:7px;white-space:nowrap;font-size:12px}
 select{max-width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:7px 12px;margin:12px 0 2px}label{font-size:14px;color:var(--muted);margin-right:6px}select:focus-visible,button:focus-visible{outline:2px solid var(--warn);outline-offset:3px}
-.sync-rail{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}.sync-rail[hidden]{display:none}.sync-tile{min-width:0;padding:9px 10px;background:#20342d;border:1px solid var(--line);border-radius:10px}.sync-tile strong,.sync-tile small{display:block;overflow-wrap:anywhere}.sync-tile[data-kind=lag] strong{color:var(--warn)}.sync-tile[data-kind=steady] strong{color:var(--mint)}
+.sync-rail{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}.sync-rail[hidden],.grid[hidden]{display:none}#access-lock{background:#20342d;border:1px solid var(--line);border-radius:12px;color:var(--muted);padding:14px}.sync-tile{min-width:0;padding:9px 10px;background:#20342d;border:1px solid var(--line);border-radius:10px}.sync-tile strong,.sync-tile small{display:block;overflow-wrap:anywhere}.sync-tile[data-kind=lag] strong{color:var(--warn)}.sync-tile[data-kind=steady] strong{color:var(--mint)}
 @media(max-width:680px){main{padding-top:25px}.board{padding:12px}.grid{grid-template-columns:1fr}.step{grid-template-columns:repeat(3,1fr)}}
 </style>
-<main><header><p class="kicker">RIVULE / COORDINATION LAB</p><h1>一项任务，<span>各路并行。</span></h1><p>用同一份任务记录，回放地区隔离、掉线查回执和主 Agent 验收。</p></header>
+<main><header><p class="kicker">RIVULE / COORDINATION LAB</p><h1>一项任务，<span>各路并行。</span></h1><p>用同一份任务记录，回放地区隔离、掉线查回执、撤权和主 Agent 验收。</p></header>
 <section class="board"><header><div><h2>调度回放</h2><small id="clock"></small></div><span class="place">模拟数据 · 无联网</span></header>
 <label for="scenario">演练场景</label> <select id="scenario">
 <option value="qwen">QwenPaw 断流，Glean 继续</option>
 <option value="viktor">Viktor 等补充，另一项先交付</option>
 <option value="coordinator">两个调度窗口断线后对齐</option>
+<option value="access">一个窗口撤权，另一项继续</option>
 <option value="skill">MCP 工具变更，旧批准暂停</option>
 <option value="muse">两个独立 Muse 席位</option>
 </select>
 <nav id="steps" class="step" aria-label="回放步骤"></nav><p id="caption" class="note" aria-live="polite"></p>
 <div id="sync-rail" class="sync-rail" hidden aria-label="两个窗口的同步状态"></div>
+<div id="access-rail" class="sync-rail" hidden aria-label="窗口访问状态"></div>
+<p id="access-lock" hidden role="status">窗口 A 不显示任务。等新的授权会话加载后再恢复。</p>
 <div id="skill-rail" class="sync-rail" hidden aria-label="本地工具的审核与执行状态"></div>
-<div class="grid"><section class="lane"><h2 id="first-heading">境内独立</h2><div id="cn"></div></section><section class="lane"><h2 id="second-heading">海外公共材料</h2><div id="foreign"></div></section><section class="lane"><h2>主任务依赖</h2><div id="join"></div></section></div>
+<div class="grid" id="lanes"><section class="lane"><h2 id="first-heading">境内独立</h2><div id="cn"></div></section><section class="lane"><h2 id="second-heading">海外公共材料</h2><div id="foreign"></div></section><section class="lane"><h2>主任务依赖</h2><div id="join"></div></section></div>
 <p class="footer">回放使用本地测试记录。示例席位和批准不调用外部服务，也不会改动线上 Rivule。</p>
 </section></main>
 <script>
@@ -38,6 +41,10 @@ const tracks={
   names:{'public-source':'核对公开来源','editor-note':'独立编辑任务',merge:'汇总材料'},
   workers:{helper:'原派送示例'},cn:'public-source',merge:'merge',
   headings:['窗口 A · 当前任务','窗口 A · 独立任务'],defaultStep:0},
+ access:{phases:verifiedAccessReplay,labels:['有权查看','撤销访问','独立任务完成','重新获权','重新同步'],
+  names:{'public-source':'核对公开来源','editor-note':'独立编辑任务',merge:'汇总材料'},
+  workers:{helper:'示例工作者'},cn:'public-source',merge:'merge',
+  headings:['窗口 A · 原任务','窗口 A · 独立任务'],defaultStep:0},
  skill:{phases:verifiedSkillReplay,labels:['发现工具','等待批准','格式变更','复核结果','验收通过'],
   names:{'registry-summary':'统计示例入口',peer:'独立任务',merge:'合稿'},
   workers:{'local-fixture-tool':'本地测试工具'},cn:'registry-summary',merge:'merge',
@@ -86,7 +93,17 @@ function skillRail(sample){
   railTile('本地执行',sample.runs+' 次',approval,'steady'),
   railTile('示例结果',sample.count===undefined?'未生成':sample.count+' 条',sample.phase==='accepted'?'可以合稿':'等待主 Agent 验收','steady'));
 }
-function render(i){const f=track.phases[i];syncRail(f.sync);skillRail(f.skill);$('clock').textContent='记录修订 '+String(f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.label;
+function accessRail(sample){
+ const rail=$('access-rail');rail.hidden=!sample;
+ const locked=!!sample&&sample.a.version===null;
+ $('access-lock').hidden=!locked;$('lanes').hidden=locked;
+ if(!sample){rail.replaceChildren();return;}
+ rail.replaceChildren(
+  railTile('窗口 A',sample.a.state,locked?'卡片已隐藏':'修订 '+sample.a.version,locked?'lag':'steady'),
+  railTile('窗口 B',sample.b.state,'仍有权查看','steady'),
+  railTile('独立工作',sample.independentAccepted?'已验收':'待验收','不受窗口 A 影响','steady'));
+}
+function render(i){const f=track.phases[i];syncRail(f.sync);skillRail(f.skill);accessRail(f.access);$('clock').textContent=(f.asOfVersion===null?'窗口 A 无可见修订':'记录修订 '+f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.label;
  buttons.forEach((b,k)=>b.setAttribute('aria-pressed',String(i===k)));
  for(const id of ['cn','foreign','join'])$(id).replaceChildren();
  for(const item of f.cards){const a=node('article','');a.className=item.state;

@@ -4,7 +4,7 @@ const html=readFileSync(process.argv[2]??'Rivule-调度看板演练.html','utf8'
 A(html.includes("default-src 'none'"));
 const run=html.match(/<script>([\s\S]+)<\/script>/)[1];
 const elem=()=>({children:[],attrs:{},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x},setAttribute(k,v){this.attrs[k]=v}});
-const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading','sync-rail','skill-rail'].map(x=>[x,elem()]));
+const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading','sync-rail','skill-rail','access-rail','access-lock','lanes'].map(x=>[x,elem()]));
 vm.runInNewContext(run,{document:{getElementById:x=>elements[x],createElement:elem},structuredClone});
 const check=(step,cn,us,merge)=>{
  elements.steps.children[step].onclick();
@@ -48,4 +48,21 @@ check(2,'leased','ready','blocked');
 A.equal(skill.children[0].attrs['data-kind'],'lag');
 A.equal(skill.children[1].children[2].textContent,'旧批准仍未使用');
 elements.scenario.onchange({target:{value:'muse'}});A(skill.hidden);A.equal(skill.children.length,0);
-console.log(JSON.stringify({scenarios:5,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true,canonicalCoordinatorReplay:true,canonicalMcpSkillReplay:true}));
+const access=elements['access-rail'];
+A(access.hidden);
+elements.scenario.onchange({target:{value:'access'}});
+check(0,'running','ready','blocked');
+A.equal(access.children[0].children[1].textContent,'已授权');
+for(const i of [1,2,3]){
+ elements.steps.children[i].onclick();
+ A(elements.lanes.hidden);A(!elements['access-lock'].hidden);
+ A.equal(access.children[0].children[2].textContent,'卡片已隐藏');
+ A(elements.clock.textContent.startsWith('窗口 A 无可见修订'));
+ for(const group of ['cn','foreign','join'])A.equal(elements[group].children.length,0);
+ A.equal(access.children[2].children[1].textContent,i===1?'待验收':'已验收');
+}
+check(4,'reported','accepted','blocked');
+A(!elements.lanes.hidden);A(elements['access-lock'].hidden);A(!access.hidden);
+A.equal(access.children[0].children[1].textContent,'新授权 · 已同步');
+elements.scenario.onchange({target:{value:'qwen'}});A(access.hidden);A.equal(access.children.length,0);
+console.log(JSON.stringify({scenarios:6,canonicalAccessRevocationReplay:true,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true,canonicalCoordinatorReplay:true,canonicalMcpSkillReplay:true}));

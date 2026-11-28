@@ -5,7 +5,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {makeSqlJournal} from '../storage/sql-journal.mjs';
-import {makeCoordinatorCatchup,receiveCoordinatorFrame} from '../storage/coordinator-catchup.mjs';
+import {makeCoordinatorCatchup,receiveCoordinatorFrame,makeCoordinatorViewSession} from '../storage/coordinator-catchup.mjs';
 const board='authority',key=Buffer.alloc(32,54),artifact='a'.repeat(64);
 const auth={scope:board,subject:'primary',role:'coordinator'};
 const owner=(subject='primary',view='tab-one',over={})=>({role:'coordinator',board,subject,view,policyEpoch:'grant1',
@@ -14,11 +14,11 @@ function fixture(t,limit=4){
  const dir=mkdtempSync(join(tmpdir(),'rv-coord-catchup-')),file=join(dir,'db.sqlite'),dbs=[];
  let abort=false;
  t.after(()=>{dbs.forEach(db=>db.close());rmSync(dir,{recursive:true,force:true});});
- const open=()=>{
+ const open=(resolve=x=>x)=>{
   const db=new DatabaseSync(file);dbs.push(db);db.exec('PRAGMA busy_timeout=5000');
   const sql={exec:(q,...a)=>q.startsWith('SELECT')?db.prepare(q).all(...a):(a.length?db.prepare(q).run(...a):db.exec(q),[])};
   const transactionSync=f=>{db.exec('BEGIN IMMEDIATE');try{const x=f();if(abort)throw Error('rollback');db.exec('COMMIT');return x}catch(e){db.exec('ROLLBACK');throw e}};
-  const opts={sql,transactionSync,resolve:x=>x,validatorKey:key,limit};
+  const opts={sql,transactionSync,resolve,validatorKey:key,limit};
   const stream=makeCoordinatorCatchup({...opts,enabled:true}),journal=makeSqlJournal(opts);
   return {db,stream,journal,opts};
  };
@@ -146,4 +146,88 @@ test('R06 offline board shows two coordinator views converging without repeating
  A.equal(e,8);A.equal(permits,1);
  A(!/cursor|channel|original-run|inputDigest|sv1-|providerRequestId/.test(JSON.stringify(frames)));
  if(process.env.RIVULE_COORDINATOR_REPLAY==='1')console.log('RIVULE_COORDINATOR_REPLAY:'+JSON.stringify(frames));
+});
+
+
+test('R07 projection release rechecks the current full grant for each response mode',t=>{
+ const h=fixture(t),a=owner();
+ const initial=h.stream.bootstrap(a);
+ for(const [label,issue] of [
+  ['bootstrap',v=>v.bootstrap(a)],['unchanged',v=>v.poll(a,initial.cursor)],
+ ]){
+  for(const [change,code] of [[{active:false},'not_authorized'],[{policyEpoch:'next'},'grant_changed']]){
+   let n=0;const g=h.open(req=>{n++;return n===2?{...req,...change}:req;});
+   A.throws(()=>issue(g.stream),{code},label);A.equal(n,2);
+  }
+ }
+ h.add('fresh');
+ let n=0;const g=h.open(req=>{n++;return n===2?{...req,active:false}:req;});
+ A.throws(()=>g.stream.poll(a,initial.cursor),{code:'not_authorized'});
+ A.equal(h.stream.poll(a,initial.cursor).snapshot.cards.length,1);
+});
+
+test('R08 offline revoked view hides cards, ignores old replies and rejoins independently',t=>{
+ const h=fixture(t,2),a=owner(),b=owner('peer','second-window'),frames=[];
+ const job='public-source',peer='editor-note',merge='merge';
+ const worker={scope:board,role:'worker',subject:'helper'};
+ const profile={worker:'helper',provider:'fixture',lane:'lab.public',capabilities:['research'],dataRegions:['us'],authorized:true,ready:true};
+ const act=(type,task,extra={})=>h.append({type,id:task+'-'+type,task,...extra},worker,profile);
+ h.add(job);h.add(peer);
+ h.append({type:'add',id:'new-merge',task:merge,capability:'research',allowedRegions:['us'],inputDigest:artifact,requires:[job,peer]});
+ act('claim',job,{worker:'helper',leaseMs:1000});
+ A(act('begin',job,{fence:1}).permit);
+ act('acknowledged',job,{fence:1,receipt:'initial-run'});
+ const va=makeCoordinatorViewSession(),vb=makeCoordinatorViewSession();
+ const a0=va.start(),b0=vb.start();
+ A(va.receive(a0,h.stream.bootstrap(a)));A(vb.receive(b0,h.stream.bootstrap(b)));
+ const staleCursor=va.cursor();
+ const frame=(label,displayA,displayB)=>{
+  const sa=va.current(),sb=vb.current(),snap=sa.board??sb.board;
+  const v=(s,display)=>({state:display,version:s.board?.asOfVersion??null});
+  frames.push({schema:snap.schema,scope:snap.scope,asOfVersion:sa.board?.asOfVersion??null,
+   cards:sa.board?snap.cards.map(c=>({task:c.task,state:c.state,worker:c.worker,taskVersion:c.taskVersion,
+    dependencies:c.dependencies.map(d=>({task:d.task,state:d.state}))})):[],
+   label,access:{a:v(sa,displayA),b:v(sb,displayB),independentAccepted:sb.board.cards.find(x=>x.task===peer).state==='accepted'}});
+ };
+ frame('两窗都能看任务。A 的一条旧请求尚在路上。','已授权','已授权');
+ act('reported',job,{fence:1,receipt:'initial-run',artifact});
+ const late=h.stream.poll(a,staleCursor);
+ A.throws(()=>h.stream.poll({...a,active:false},staleCursor),{code:'not_authorized'});
+ A(va.receive(a0,{error:'not_authorized'}));
+ A.deepEqual(va.current(),{phase:'revoked',board:null});A.equal(va.pollTicket(),null);A.equal(va.cursor(),null);
+ A(!va.receive(a0,late));
+ frame('A 收到撤权，立即清空卡片。随后抵达的旧结果不会重新显示。','访问已撤销','仍可访问');
+ act('claim',peer,{worker:'helper',leaseMs:1000});
+ A(act('begin',peer,{fence:1}).permit);
+ act('acknowledged',peer,{fence:1,receipt:'peer-run'});
+ act('reported',peer,{fence:1,receipt:'peer-run',artifact});
+ h.append({type:'accept',id:'accept-peer',task:peer,fence:1,artifact});
+ A(vb.receive(b0,h.open().stream.poll(b,vb.cursor())));
+ A.equal(vb.current().board.cards.find(x=>x.task===merge).state,'blocked');
+ frame('B 验收独立任务。A 仍看不到卡片；原任务未验收，合稿保持锁定。','仍未授权','独立任务已验收');
+ const a1=va.start(),newA={...a,policyEpoch:'grant2'};
+ A.throws(()=>h.stream.poll(newA,staleCursor),{code:'invalid_cursor'});
+ A(!va.receive(a0,h.stream.bootstrap(a)));A(!va.receive(a1,late));
+ frame('A 重新获权，先等新会话读入当前记录，不沿用旧游标。','等待新会话','已同步');
+ A(va.receive(a1,h.open().stream.bootstrap(newA)));
+ A(!va.receive(a0,{error:'not_authorized'}));A(!va.receive(a0,late));
+ A.deepEqual(va.current().board,vb.current().board);
+ frame('新会话读到和 B 一致的任务状态。原任务仍待验收，没有重发。','新授权 · 已同步','已同步');
+ A.equal(h.db.prepare("SELECT COUNT(*) n FROM lab_coord_outbox WHERE phase='begin'").get().n,2);
+ A(frames.slice(1,4).every(f=>f.cards.length===0));
+ A(!/cursor|channel|initial-run|peer-run|inputDigest|sv1-|providerRequestId/.test(JSON.stringify(frames)));
+ if(process.env.RIVULE_ACCESS_REPLAY==='1')console.log('RIVULE_ACCESS_REPLAY:'+JSON.stringify(frames));
+});
+
+
+test('R09 owner-lock clears the view before network returns and isolates a fresh lifecycle',t=>{
+ const h=fixture(t),a=owner(),v=makeCoordinatorViewSession(),old=v.start();
+ h.add('draft');A(v.receive(old,h.stream.bootstrap(a)));
+ const copy=v.current();copy.board.cards.length=0;A.equal(v.current().board.cards.length,1);
+ h.add('next');const delayed=h.stream.poll(a,v.cursor());
+ v.revoke();
+ A(!v.receive(old,delayed));A(!v.receive(old,h.stream.bootstrap(a)));A.equal(v.cursor(),null);
+ const next=v.start(),current=h.stream.bootstrap({...a,policyEpoch:'grant2'});
+ A(!v.receive(old,current));A(v.receive(next,current));
+ A(!v.receive(old,{error:'invalid_cursor'}));A.equal(v.current().board.cards.length,2);
 });

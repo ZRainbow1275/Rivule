@@ -1,0 +1,154 @@
+[
+  {
+    "schema": 1,
+    "scope": "authority",
+    "asOfVersion": 6,
+    "cards": [
+      {
+        "task": "editor-note",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "state": "blocked",
+        "worker": null,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "editor-note",
+            "state": "ready"
+          },
+          {
+            "task": "public-source",
+            "state": "running"
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "state": "running",
+        "worker": "helper",
+        "taskVersion": 6,
+        "dependencies": []
+      }
+    ],
+    "label": "两窗都能看任务。A 的一条旧请求尚在路上。",
+    "access": {
+      "a": {
+        "state": "已授权",
+        "version": 6
+      },
+      "b": {
+        "state": "已授权",
+        "version": 6
+      },
+      "independentAccepted": false
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "authority",
+    "asOfVersion": null,
+    "cards": [],
+    "label": "A 收到撤权，立即清空卡片。随后抵达的旧结果不会重新显示。",
+    "access": {
+      "a": {
+        "state": "访问已撤销",
+        "version": null
+      },
+      "b": {
+        "state": "仍可访问",
+        "version": 6
+      },
+      "independentAccepted": false
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "authority",
+    "asOfVersion": null,
+    "cards": [],
+    "label": "B 验收独立任务。A 仍看不到卡片；原任务未验收，合稿保持锁定。",
+    "access": {
+      "a": {
+        "state": "仍未授权",
+        "version": null
+      },
+      "b": {
+        "state": "独立任务已验收",
+        "version": 12
+      },
+      "independentAccepted": true
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "authority",
+    "asOfVersion": null,
+    "cards": [],
+    "label": "A 重新获权，先等新会话读入当前记录，不沿用旧游标。",
+    "access": {
+      "a": {
+        "state": "等待新会话",
+        "version": null
+      },
+      "b": {
+        "state": "已同步",
+        "version": 12
+      },
+      "independentAccepted": true
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "authority",
+    "asOfVersion": 12,
+    "cards": [
+      {
+        "task": "editor-note",
+        "state": "accepted",
+        "worker": "helper",
+        "taskVersion": 12,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "state": "blocked",
+        "worker": null,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "editor-note",
+            "state": "accepted"
+          },
+          {
+            "task": "public-source",
+            "state": "reported"
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "state": "reported",
+        "worker": "helper",
+        "taskVersion": 7,
+        "dependencies": []
+      }
+    ],
+    "label": "新会话读到和 B 一致的任务状态。原任务仍待验收，没有重发。",
+    "access": {
+      "a": {
+        "state": "新授权 · 已同步",
+        "version": 12
+      },
+      "b": {
+        "state": "已同步",
+        "version": 12
+      },
+      "independentAccepted": true
+    }
+  }
+]
