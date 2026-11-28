@@ -8,5 +8,7 @@
 
 - `evidence/domestic.json` 与 `evidence/international.json` 保留核验来源、具体能力、入口条件及尚未证明的能力。合并表去重的是同一入口；同品牌但授权或执行方向不同的入口保留为独立行。品牌数、产品入口数和离线验证数是三个指标。
 - 加一条记录，先证明“谁发起→什么凭据→拿到什么回执”，再注明部署和费用。数据接入、设备扩展、文本回复、触发脚本和完整任务派工不混称。
-- 重建：`node catalog/merge-evidence.mjs global:catalog/evidence/international.json cn:catalog/evidence/domestic.json && node catalog/build-catalog-view.mjs catalog/market-merged.json && node catalog/smoke-view.cjs`
+- 重建：`node catalog/merge-evidence.mjs global:catalog/evidence/international.json cn:catalog/evidence/domestic.json global:catalog/evidence/international-late-additions-20261128.json && node catalog/build-catalog-view.mjs catalog/market-merged.json && node catalog/smoke-view.cjs`
 - 实验测试：`node --test tests/*.test.mjs adapter/*.test.mjs`。此清单内无 provider token 或生产绑定，不向第三方发送请求。OpenAssistant REST 与 MCP 是两个出口；官方 CLI 派工也只表示路线存在，须独立评估执行器和原会话回执。
+
+11 月 28 日补录 3 个不同入口：inference shell 国际托管运行时（REST 和 A2A 两种协议归同条）、Poppy 企业互通规范、TaskBullet 人工交接。三条均非真实接入；Poppy 不扩大个人 Muse 直推能力。
