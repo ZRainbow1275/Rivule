@@ -1,7 +1,7 @@
 // Isolated SQL adapter for the coordination experiment. Host provides its own
 // serialized, all-or-nothing transaction implementation. No credentials, body,
 // notifications or network requests are persisted here.
-import {createJournal,decide,projectBoard} from '../src/sdk/coordination-board.mjs';
+import {createJournal,decide,projectBoard,projectDispatchPreview} from '../src/sdk/coordination-board.mjs';
 const valid=x=>typeof x==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,95}$/.test(x);
 export function makeSqlJournal({sql,transactionSync}) {
  if(typeof sql?.exec!=='function'||typeof transactionSync!=='function')throw new TypeError('transactional SQL required');
@@ -43,10 +43,13 @@ export function makeSqlJournal({sql,transactionSync}) {
   const j=read(scope),all=j.events.filter(e=>e.command.type==='add').map(e=>e.command.task);
   return projectBoard(j,{scope,selected:all,readable:all});
  });
+ // Host code must derive approved active user, task scope and seat aliases
+ // before this call. Do not expose these arguments as a client payload.
+ const preview=input=>transactionSync(()=>projectDispatchPreview(read(input.auth?.scope),input));
  const outboxAfter=(board,after=0,limit=40)=>transactionSync(()=>{
   if(!valid(board)||!Number.isSafeInteger(after)||after<0||!Number.isSafeInteger(limit)||limit<1||limit>100)throw new TypeError('invalid projection cursor');
   return [...sql.exec('SELECT v, phase, task FROM lab_coord_outbox WHERE board=? AND v>? ORDER BY v LIMIT ?',board,after,limit)]
    .map(row=>({version:row.v,phase:row.phase,task:row.task}));
  });
- return Object.freeze({prepare,append,project,projectAll,outboxAfter});
+ return Object.freeze({prepare,append,project,projectAll,preview,outboxAfter});
 }

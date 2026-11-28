@@ -1,0 +1,261 @@
+[
+  {
+    "schema": 1,
+    "scope": "seat-preview",
+    "asOfVersion": 3,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "read",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "read",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "ready",
+            "version": 2
+          },
+          {
+            "task": "public-source",
+            "state": "ready",
+            "version": 1
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "capability": "read",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 1,
+        "dependencies": []
+      }
+    ],
+    "label": "同样会做这件事，处理地区、预算和授权不同。",
+    "dispatch": {
+      "task": "public-source",
+      "asOfVersion": 3,
+      "gate": "awaiting_selection",
+      "cards": [
+        {
+          "alias": "domestic",
+          "state": "candidate_for_review"
+        },
+        {
+          "alias": "intl",
+          "state": "region_mismatch"
+        },
+        {
+          "alias": "spare",
+          "state": "budget_unreviewed"
+        },
+        {
+          "alias": "unbound",
+          "state": "worker_unavailable"
+        }
+      ]
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "seat-preview",
+    "asOfVersion": 4,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "read",
+        "state": "leased",
+        "worker": "desk-cn",
+        "fence": 1,
+        "taskVersion": 4,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "read",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "leased",
+            "version": 4
+          },
+          {
+            "task": "public-source",
+            "state": "ready",
+            "version": 1
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "capability": "read",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 1,
+        "dependencies": []
+      }
+    ],
+    "label": "境内席位正在处理独立任务；主 Agent 暂不派送。",
+    "dispatch": {
+      "task": "public-source",
+      "asOfVersion": 4,
+      "gate": "awaiting_selection",
+      "cards": [
+        {
+          "alias": "domestic",
+          "state": "lane_busy"
+        },
+        {
+          "alias": "intl",
+          "state": "region_mismatch"
+        },
+        {
+          "alias": "spare",
+          "state": "budget_unreviewed"
+        },
+        {
+          "alias": "unbound",
+          "state": "worker_unavailable"
+        }
+      ]
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "seat-preview",
+    "asOfVersion": 4,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "read",
+        "state": "leased",
+        "worker": "desk-cn",
+        "fence": 1,
+        "taskVersion": 4,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "read",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "leased",
+            "version": 4
+          },
+          {
+            "task": "public-source",
+            "state": "ready",
+            "version": 1
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "capability": "read",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 1,
+        "dependencies": []
+      }
+    ],
+    "label": "备选席位预算已核对，可交主 Agent 决定。",
+    "dispatch": {
+      "task": "public-source",
+      "asOfVersion": 4,
+      "gate": "awaiting_selection",
+      "cards": [
+        {
+          "alias": "domestic",
+          "state": "lane_busy"
+        },
+        {
+          "alias": "intl",
+          "state": "region_mismatch"
+        },
+        {
+          "alias": "spare",
+          "state": "candidate_for_review"
+        },
+        {
+          "alias": "unbound",
+          "state": "worker_unavailable"
+        }
+      ]
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "seat-preview",
+    "asOfVersion": 5,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "read",
+        "state": "leased",
+        "worker": "desk-cn",
+        "fence": 1,
+        "taskVersion": 4,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "read",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "leased",
+            "version": 4
+          },
+          {
+            "task": "public-source",
+            "state": "leased",
+            "version": 5
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "capability": "read",
+        "state": "leased",
+        "worker": "desk-spare",
+        "fence": 1,
+        "taskVersion": 5,
+        "dependencies": []
+      }
+    ],
+    "label": "主 Agent 选定了备选席位。领取后仍要另行取得派送许可。",
+    "dispatch": {
+      "task": "public-source",
+      "asOfVersion": 5,
+      "gate": "task_already_claimed_or_closed",
+      "cards": []
+    }
+  }
+]

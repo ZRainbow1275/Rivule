@@ -4,7 +4,7 @@ const html=readFileSync(process.argv[2]??'Rivule-调度看板演练.html','utf8'
 A(html.includes("default-src 'none'"));
 const run=html.match(/<script>([\s\S]+)<\/script>/)[1];
 const elem=()=>({children:[],attrs:{},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x},setAttribute(k,v){this.attrs[k]=v}});
-const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading','sync-rail','skill-rail','access-rail','settled-rail','access-lock','lanes'].map(x=>[x,elem()]));
+const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading','sync-rail','skill-rail','access-rail','settled-rail','dispatch-rail','access-lock','lanes'].map(x=>[x,elem()]));
 vm.runInNewContext(run,{document:{getElementById:x=>elements[x],createElement:elem},structuredClone});
 const check=(step,cn,us,merge)=>{
  elements.steps.children[step].onclick();
@@ -76,4 +76,14 @@ A.equal(settled.children[1].children[1].textContent,'已拒绝');
 check(3,'accepted','accepted','ready');
 elements.scenario.onchange({target:{value:'qwen'}});
 A(settled.hidden);A.equal(settled.children.length,0);
-console.log(JSON.stringify({scenarios:7,canonicalSettledDeliveryReplay:true,canonicalAccessRevocationReplay:true,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true,canonicalCoordinatorReplay:true,canonicalMcpSkillReplay:true}));
+const dispatch=elements['dispatch-rail'];
+A(dispatch.hidden);
+elements.scenario.onchange({target:{value:'dispatch'}});
+check(0,'ready','ready','blocked');A.equal(dispatch.children.length,4);
+A.equal(dispatch.children[1].children[1].textContent,'地区不符');
+check(1,'ready','leased','blocked');A.equal(dispatch.children[0].children[1].textContent,'正在占用');
+check(2,'ready','leased','blocked');A.equal(dispatch.children[2].children[1].textContent,'可供主 Agent 选择');
+check(3,'leased','leased','blocked');A.equal(dispatch.children[0].children[2].textContent,'尚未获得派送许可');
+elements.scenario.onchange({target:{value:'qwen'}});
+A(dispatch.hidden);A.equal(dispatch.children.length,0);
+console.log(JSON.stringify({scenarios:8,canonicalDispatchPreview:true,canonicalSettledDeliveryReplay:true,canonicalAccessRevocationReplay:true,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true,canonicalCoordinatorReplay:true,canonicalMcpSkillReplay:true}));

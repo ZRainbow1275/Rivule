@@ -266,3 +266,34 @@ export function projectBoard(journal,{scope,selected,readable}){
   }
   return {schema:1,scope,asOfVersion:v.rev,cards};
 }
+
+// Host-only read preview, not a grant or a route lock. Both the task allowlist
+// and the bounded list of already visible seat aliases come from host policy.
+export function projectDispatchPreview(journal,{auth,task,readable,seats}){
+  sameScope(auth,journal.scope);
+  requireThat(auth.role==='coordinator','not_authorized');
+  id(task);
+  requireThat(list(readable,0,MAX_TASKS).includes(task),'not_authorized');
+  requireThat(Array.isArray(seats)&&seats.length<=24,'invalid_seats');
+  const aliases=list(seats.map(s=>s?.alias),0,24);
+  const v=fold(journal),t=v.tasks.get(task);
+  requireThat(t,'not_authorized');
+  const gate=t.state!=='ready'?'task_already_claimed_or_closed':
+    t.requires.every(x=>v.tasks.get(x).state==='accepted')?'awaiting_selection':'dependencies_open';
+  const byAlias=new Map(seats.map(s=>[s.alias,s]));
+  const cards=gate!=='awaiting_selection'?[]:aliases.map(alias=>{
+    const seat=byAlias.get(alias);
+    let state='candidate_for_review';
+    try{
+      const route=allowedRoute(seat.profile,t,seat.profile?.worker);
+      // A busy alias discloses no information about its owning task.
+      if(v.lanes.has(route.lane))state='lane_busy';
+      else if(seat.budgetReviewed!==true)state='budget_unreviewed';
+    }catch(e){
+      if(!(e instanceof BoardConflict))throw e;
+      state=['region_mismatch','capability_mismatch','worker_unavailable'].includes(e.code)?e.code:'worker_unavailable';
+    }
+    return {alias,state};
+  });
+  return {task,asOfVersion:v.rev,gate,cards};
+}
