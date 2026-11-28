@@ -2,7 +2,7 @@
 // serialized, all-or-nothing transaction implementation. No credentials, body,
 // notifications or network requests are persisted here.
 import {BoardConflict,createJournal,decide,projectBoard,projectDispatchPreview,reviewedDispatchFacts,reviewedSubmissionFacts} from '../src/sdk/coordination-board.mjs';
-import {makeReviewedMockEgress} from './reviewed-mock-egress.mjs';
+import {makeReviewedMockEgress,isRegisteredMockEgress} from './reviewed-mock-egress.mjs';
 import {makeScopedValidator} from '../src/sdk/scoped-validator.mjs';
 const valid=x=>typeof x==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,95}$/.test(x);
 export function makeSqlJournal({sql,transactionSync,reviewedDispatch}) {
@@ -44,7 +44,13 @@ export function makeSqlJournal({sql,transactionSync,reviewedDispatch}) {
   return {...result,committed:true};
  }
  // A bare journal writer cannot supply the extra review for a pinned lease.
- const append=({review:ignored,...decision})=>transactionSync(()=>commit(decision));
+ const append=({review:ignored,mockClose:untrusted,...decision})=>transactionSync(()=>{
+  const scope=decision.auth?.scope, c=decision.command;
+  if(valid(scope)&&valid(c?.task)&&Number.isSafeInteger(c.fence)&&c.fence>0&&
+    ['acknowledged','reconcile'].includes(c.type)&&isRegisteredMockEgress(sql,scope,c.task,c.fence))
+   throw new BoardConflict('mock_outcome_requires_local_evidence');
+  return commit(decision);
+ });
 
  function identity(request,{scope,task,alias,phase}){
   if(!mark)throw new BoardConflict('reviewed_dispatch_disabled');
@@ -103,6 +109,22 @@ export function makeSqlJournal({sql,transactionSync,reviewedDispatch}) {
    readable:a.readable,profile:a.profile,review,fence:slot.fence,at:mock.clock()});
   return mock.consume(slot,row,facts);
  });
+ // Close only the original pending LOCAL record. The trusted resolver's
+ // close entitlement is separate from the now possibly revoked send budget.
+ const closeMockEgress=(request,input)=>transactionSync(()=>{
+  const {a,slot,row}=mockSlot(request,input,'mock-close');
+  if(a.canCloseMock!==true)throw new BoardConflict('mock_close_not_authorized');
+  if(!row)throw new BoardConflict('mock_egress_not_armed');
+  if(row.state==='closed_no_send')return {...mock.project(row),duplicate:true,closeVersion:row.close_v};
+  if(row.state!=='pending')throw new BoardConflict('mock_not_closable');
+  const j=read(slot.scope),begun=j.events[row.begin_v-1];
+  if(begun?.command.type!=='begin'||begun.command.task!==slot.task||begun.command.fence!==slot.fence)
+   throw new BoardConflict('mock_closure_corrupt');
+  const result=commit({auth:a.auth,command:{type:'mock_close',id:input.id,task:slot.task,fence:slot.fence},
+   at:mock.clock(),expectedVersion:input.expectedVersion,mockClose:true},j);
+  if(!result.committed)throw new BoardConflict('mock_closure_corrupt');
+  return {...mock.close(slot,row,result.version),duplicate:false,closeVersion:result.version};
+ });
  const project=input=>transactionSync(()=>projectBoard(read(input.scope),input));
  // Host-only complete projection; wrappers must explicitly authorize the
  // board and choose which (if any) readers can receive this snapshot.
@@ -118,5 +140,5 @@ export function makeSqlJournal({sql,transactionSync,reviewedDispatch}) {
   return [...sql.exec('SELECT v, phase, task FROM lab_coord_outbox WHERE board=? AND v>? ORDER BY v LIMIT ?',board,after,limit)]
    .map(row=>({version:row.v,phase:row.phase,task:row.task}));
  });
- return Object.freeze({prepare,append,project,projectAll,preview,outboxAfter,inspectChoice,claimChoice,beginChoice,inspectMockEgress,consumeMockEgress});
+ return Object.freeze({prepare,append,project,projectAll,preview,outboxAfter,inspectChoice,claimChoice,beginChoice,inspectMockEgress,consumeMockEgress,closeMockEgress});
 }

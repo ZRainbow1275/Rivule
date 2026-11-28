@@ -36,7 +36,7 @@ const kinds = {
   begin: ['fence'], acknowledged: ['fence','receipt'], reported: ['fence','receipt','artifact'],
   delivery_hold: ['fence','deliveryState','providerRequestId'],
   viktor_checkpoint: ['fence','attestation'],
-  uncertain: ['fence'], expire: ['fence'], canceled: ['fence'], failed: ['fence','receipt','evidence'],
+  mock_close: ['fence'], uncertain: ['fence'], expire: ['fence'], canceled: ['fence'], failed: ['fence','receipt','evidence'],
   reconcile: ['fence','attestation'], accept: ['fence','artifact']
 };
 function normalize(raw) {
@@ -119,7 +119,7 @@ function fold(j) {
   return v;
 }
 function derive(v,scope,auth,c,at,context,replay=false) {
-  const owner=['add','expire','reconcile','accept','canceled','viktor_checkpoint'].includes(c.type);
+  const owner=['add','expire','reconcile','accept','canceled','viktor_checkpoint','mock_close'].includes(c.type);
   requireThat(auth.role===(owner?'coordinator':'worker'),'wrong_role');
   const t=v.tasks.get(c.task);
   if(c.type==='add') {
@@ -147,6 +147,11 @@ function derive(v,scope,auth,c,at,context,replay=false) {
   if(!owner) {
     requireThat(auth.subject===t.route.worker,'wrong_worker');
     requireThat(at<t.until,'lease_expired');
+  }
+  if(c.type==='mock_close'){
+    requireThat(context.mockClose===true&&t.review?.reviewer===auth.subject,'mock_closure_required');
+    requireThat(['submitting','needs_review'].includes(t.state)&&!t.receipt&&!t.inputReceipt,'mock_not_closable');
+    return {mockClose:true};
   }
   if(c.type==='renew') {
     requireThat(['leased','submitting','running'].includes(t.state),'not_renewable');
@@ -228,7 +233,7 @@ function apply(v,scope,c,meta,version,at){
     else if(c.type==='canceled'){t.state='canceled';if(t.route)v.lanes.delete(t.route.lane);}
     else if(c.type==='failed'){t.state='failed';t.failureDigest=c.evidence;v.lanes.delete(t.route.lane);}
     else if(c.type==='reported'){t.state='reported';t.artifact=c.artifact;v.lanes.delete(t.route.lane);}
-    else if((c.type==='expire'&&t.state==='leased')||(c.type==='reconcile'&&meta.answer.verdict==='closed_not_sent')){
+    else if(c.type==='mock_close'||(c.type==='expire'&&t.state==='leased')||(c.type==='reconcile'&&meta.answer.verdict==='closed_not_sent')){
       v.lanes.delete(t.route.lane);t.state='ready';t.route=null;t.review=null;t.until=0;t.deliveryState=null;t.providerRequestId=null;t.inputReceipt=null;
     }else if(c.type==='expire'||c.type==='uncertain'){t.state='needs_review';if(t.route.provider==='cue')t.deliveryState='unknown';}
     else if(c.type==='reconcile'&&meta.answer.verdict==='input_verified'){t.inputReceipt=meta.answer.inputReceipt;t.deliveryState='input_observed';}
@@ -241,7 +246,7 @@ function apply(v,scope,c,meta,version,at){
 }
 // A fresh begin returns only a *provisional* permit. Deliver only after a durable
 // parent-version CAS confirmed this exact, freshly inserted decision.
-export function decide(journal,{auth,command,expectedVersion,at,profile,attestation,review}){
+export function decide(journal,{auth,command,expectedVersion,at,profile,attestation,review,mockClose}){
   const v=fold(journal), c=normalize(command);
   sameScope(auth,journal.scope);
   int(expectedVersion,0);
@@ -253,7 +258,7 @@ export function decide(journal,{auth,command,expectedVersion,at,profile,attestat
   requireThat(expectedVersion===v.rev,'revision_conflict');
   requireThat(v.rev<MAX_EVENTS,'journal_capacity');
   int(at,v.clock);
-  const meta=derive(v,journal.scope,auth,c,at,{profile,attestation,review});
+  const meta=derive(v,journal.scope,auth,c,at,{profile,attestation,review,mockClose});
   const event={scope:journal.scope,version:v.rev+1,at,subject:auth.subject,role:auth.role,command:c,meta};
   const permit=c.type==='begin'?{key:attemptKey(journal.scope,c.task,c.fence),task:c.task,fence:c.fence,worker:auth.subject,
     provider:v.tasks.get(c.task).route.provider,lane:v.tasks.get(c.task).route.lane,expiresAt:v.tasks.get(c.task).until,

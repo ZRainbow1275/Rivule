@@ -18,6 +18,7 @@ select{max-width:100%;font:inherit;color:var(--ink);background:var(--bg);border:
 <option value="dispatch">同样会做，该派给谁？</option>
 <option value="reviewed">预算变了，另一项照走</option>
 <option value="egress">按下派送后，授权撤回了</option>
+<option value="closure">确认没发，才开新一单</option>
 <option value="settled">迟到的失败回包</option>
 <option value="skill">MCP 工具变更，旧批准暂停</option>
 <option value="muse">两个独立 Muse 席位</option>
@@ -26,6 +27,7 @@ select{max-width:100%;font:inherit;color:var(--ink);background:var(--bg);border:
 <div id="sync-rail" class="sync-rail" hidden aria-label="两个窗口的同步状态"></div>
 <div id="access-rail" class="sync-rail" hidden aria-label="窗口访问状态"></div>
 <p id="access-lock" hidden role="status">窗口 A 不显示任务。等新的授权会话加载后再恢复。</p>
+<div id="closure-rail" class="sync-rail" hidden aria-label="原尝试与重新派送"></div>
 <div id="egress-rail" class="sync-rail" hidden aria-label="发送边界与回执"></div>
 <div id="reviewed-rail" class="sync-rail" hidden aria-label="派送前复核与执行状态"></div>
 <div id="dispatch-rail" class="sync-rail" hidden aria-label="派工前核对席位"></div>
@@ -65,6 +67,10 @@ const tracks={
   names:{prepared:'原任务',parallel:'另一项独立核对',merge:'汇总材料'},
   workers:{'first-demo':'原示例席位','second-demo':'独立示例席位'},cn:'prepared',merge:'merge',
   headings:['原任务 · 发送前','独立任务 · 另一席位'],defaultStep:1},
+ closure:{phases:verifiedClosureReplay,labels:['分清两种结果','关掉旧尝试','重新核选','新尝试收到'],
+  names:{prepared:'可核对未发送的任务',parallel:'结果未知的独立任务',merge:'汇总材料'},
+  workers:{'first-demo':'原示例席位','second-demo':'独立示例席位'},cn:'prepared',merge:'merge',
+  headings:['原记录 · 有无发送','另一项 · 等回执'],defaultStep:0},
  settled:{phases:verifiedSettledReplay,labels:['交稿','验收并换任务','旧失败抵达','解锁合稿'],
   names:{'public-source':'核对公开来源',independent:'独立编辑任务',merge:'汇总材料'},
   workers:{helper:'Glean 示例席位'},cn:'public-source',merge:'merge',
@@ -185,11 +191,29 @@ function egressRail(sample){
   railTile('原任务','未发送',sample.phase==='armed'?'等待最后授权核验':'原授权已经失效','lag'),
   railTile('独立任务',sample.second==='accepted'?'有模拟回执':'未开始',sample.phase==='readback'?'沿用原尝试，仅核回执':'独立席位','steady'));
 }
-function render(i){const f=track.phases[i];syncRail(f.sync);skillRail(f.skill);accessRail(f.access);settledRail(f.settled,f.cards);dispatchRail(f.dispatch);reviewedRail(f.reviewed);egressRail(f.egress);$('clock').textContent=(f.asOfVersion===null?'窗口 A 无可见修订':'记录修订 '+f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.egress?egressCopy[f.egress.phase][1]:f.reviewed?reviewedText[f.reviewed.phase][2]:f.label;
+const closureCopy={
+ separate:['两种状态','本地原记录还没发送；另一项已经给不出确定回执。'],
+ closed:['旧尝试已关闭','只关闭能确认没发出的那一单；结果未知的另一单不动。'],
+ fresh:['重新核选','重新确认授权和预算后，才可领取新的尝试。'],
+ replaced:['新尝试收到','新尝试有模拟回执；另一项继续待核，不自动重发。']
+};
+function closureRail(sample){
+ const rail=$('closure-rail');rail.hidden=!sample;
+ if(!sample){rail.replaceChildren();return;}
+ rail.replaceChildren(
+  railTile('原尝试',sample.original==='closed_no_send'?'已关闭 · 未发送':'登记中 · 未发送','本地演练','steady'),
+  railTile('新尝试',sample.replacement==='accepted'?'有模拟回执':sample.phase==='fresh'?'已重新领取':'尚未派送','重新核对后以新编号开始','steady'),
+  railTile('另一项','结果未知','等待原回执 · 不重发','lag'));
+}
+function render(i){const f=track.phases[i];syncRail(f.sync);skillRail(f.skill);accessRail(f.access);settledRail(f.settled,f.cards);dispatchRail(f.dispatch);reviewedRail(f.reviewed);egressRail(f.egress);closureRail(f.closure);$('clock').textContent=(f.asOfVersion===null?'窗口 A 无可见修订':'记录修订 '+f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.closure?closureCopy[f.closure.phase][1]:f.egress?egressCopy[f.egress.phase][1]:f.reviewed?reviewedText[f.reviewed.phase][2]:f.label;
  buttons.forEach((b,k)=>b.setAttribute('aria-pressed',String(i===k)));
  for(const id of ['cn','foreign','join'])$(id).replaceChildren();
  for(const item of f.cards){const a=node('article','');a.className=item.state;
-  a.append(node('h3',track.names[item.task]));const label=f.egress&&item.task==='prepared'?'已登记 · 未发送':f.egress&&item.task==='parallel'&&f.egress.second==='accepted'?'有模拟回执':cardStatus(item);const state=node('span',label);state.className='state';a.append(state);
+  a.append(node('h3',track.names[item.task]));const label=f.closure&&item.task==='parallel'?'结果未知 · 不重发':
+   f.closure&&item.task==='prepared'&&f.closure.phase==='separate'?'已登记 · 未发送':
+   f.closure&&item.task==='prepared'&&f.closure.phase==='replaced'?'有模拟回执':
+   f.egress&&item.task==='prepared'?'已登记 · 未发送':
+   f.egress&&item.task==='parallel'&&f.egress.second==='accepted'?'有模拟回执':cardStatus(item);const state=node('span',label);state.className='state';a.append(state);
   a.append(node('p',(track.workers[item.worker]||'未分配')+' · 修订 '+item.taskVersion));
   for(const dep of item.dependencies)a.append(node('p','前置：'+track.names[dep.task]+' · '+statuses[dep.state]));
   $(item.task===track.cn?'cn':item.task===track.merge?'join':'foreign').append(a);

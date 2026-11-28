@@ -1,0 +1,206 @@
+[
+  {
+    "schema": 1,
+    "scope": "boundary-fixture",
+    "asOfVersion": 7,
+    "cards": [
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "parallel",
+            "state": "submitting",
+            "version": 7
+          },
+          {
+            "task": "prepared",
+            "state": "submitting",
+            "version": 5
+          }
+        ]
+      },
+      {
+        "task": "parallel",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "second-demo",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": []
+      },
+      {
+        "task": "prepared",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "first-demo",
+        "fence": 1,
+        "taskVersion": 5,
+        "dependencies": []
+      }
+    ],
+    "closure": {
+      "phase": "separate",
+      "original": "pending",
+      "unknown": "unknown",
+      "replacement": null
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "boundary-fixture",
+    "asOfVersion": 8,
+    "cards": [
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "parallel",
+            "state": "submitting",
+            "version": 7
+          },
+          {
+            "task": "prepared",
+            "state": "ready",
+            "version": 8
+          }
+        ]
+      },
+      {
+        "task": "parallel",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "second-demo",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": []
+      },
+      {
+        "task": "prepared",
+        "capability": "text",
+        "state": "ready",
+        "worker": null,
+        "fence": 1,
+        "taskVersion": 8,
+        "dependencies": []
+      }
+    ],
+    "closure": {
+      "phase": "closed",
+      "original": "closed_no_send",
+      "unknown": "unknown",
+      "replacement": null
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "boundary-fixture",
+    "asOfVersion": 9,
+    "cards": [
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "parallel",
+            "state": "submitting",
+            "version": 7
+          },
+          {
+            "task": "prepared",
+            "state": "leased",
+            "version": 9
+          }
+        ]
+      },
+      {
+        "task": "parallel",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "second-demo",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": []
+      },
+      {
+        "task": "prepared",
+        "capability": "text",
+        "state": "leased",
+        "worker": "first-demo",
+        "fence": 2,
+        "taskVersion": 9,
+        "dependencies": []
+      }
+    ],
+    "closure": {
+      "phase": "fresh",
+      "original": "closed_no_send",
+      "unknown": "unknown",
+      "replacement": null
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "boundary-fixture",
+    "asOfVersion": 10,
+    "cards": [
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "parallel",
+            "state": "submitting",
+            "version": 7
+          },
+          {
+            "task": "prepared",
+            "state": "submitting",
+            "version": 10
+          }
+        ]
+      },
+      {
+        "task": "parallel",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "second-demo",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": []
+      },
+      {
+        "task": "prepared",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "first-demo",
+        "fence": 2,
+        "taskVersion": 10,
+        "dependencies": []
+      }
+    ],
+    "closure": {
+      "phase": "replaced",
+      "original": "closed_no_send",
+      "unknown": "unknown",
+      "replacement": "accepted"
+    }
+  }
+]

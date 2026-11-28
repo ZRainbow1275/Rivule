@@ -10,7 +10,7 @@ const scope='boundary-fixture',name='prepared',alias='selected',other='parallel'
 const lead={scope,subject:'lead',role:'coordinator'};
 const inputDigest='1'.repeat(64);
 const slot=n=>({scope,task:n,alias,fence:1});
-const base=n=>({auth:lead,alias,readable:[n],budgetReviewed:true,authorityEpoch:'auth-1',budgetEpoch:'budget-1',inputDigest,
+const base=n=>({auth:lead,alias,readable:[n],budgetReviewed:true,canCloseMock:true,authorityEpoch:'auth-1',budgetEpoch:'budget-1',inputDigest,
  profile:{worker:'worker-'+n,provider:'mock-local',lane:'lane-'+n,authorized:true,ready:true,dataRegions:['cn-mainland'],capabilities:['text']}});
 function setup({withMerge=false}={}){
  const dir=mkdtempSync(join(tmpdir(),'rivule-mock-boundary-')),file=join(dir,'synthetic.sqlite');
@@ -59,10 +59,11 @@ function setup({withMerge=false}={}){
  const begin=(n,v,j=two.j)=>j.beginChoice('host',{...slot(n),id:'begin-'+n,at:v+1,expectedVersion:v});
  const read=(n,j=two.j,opt={})=>j.inspectMockEgress('host',{...slot(n),...opt});
  const consume=(n,j=two.j,opt={})=>j.consumeMockEgress('host',{...slot(n),...opt});
+ const closeAttempt=(n,expectedVersion,j=two.j,opt={})=>j.closeMockEgress('host',{...slot(n),id:'close-'+n,expectedVersion,...opt});
  const count=()=>one.db.prepare('SELECT COUNT(*) AS n FROM lab_coord_mock_egress').get().n;
  const visible=withMerge?[name,other,'merge']:[name,other];
  const project=()=>two.j.project({scope,selected:visible,readable:visible});
- return {one,two,host,policy,claim,begin,read,consume,count,project,time:n=>{now=n;},
+ return {one,two,host,policy,claim,begin,read,consume,closeAttempt,count,project,time:n=>{now=n;},
   fault:f=>{fault=f;},close(){for(const db of connections)db.close();rmSync(dir,{recursive:true,force:true});}};
 }
 const pending={state:'pending',receipt:null,simulation:true};
@@ -202,5 +203,105 @@ test('mock egress offline board demonstrates revocation after begin and original
   A.deepEqual(frames.map(x=>x.egress.second),[null,null,'accepted','accepted']);
   A(!JSON.stringify(frames).includes(read.receipt));
   if(process.env.RIVULE_MOCK_EGRESS_REPLAY==='1')console.log('RIVULE_MOCK_EGRESS_REPLAY:'+JSON.stringify(frames));
+ }finally{f.close();}
+});
+
+
+test('explicit closure unlocks a new fenced attempt only when atomic local storage proves no receive',()=>{
+ const f=setup();
+ try{
+  const n=name, stale=f.one.j.inspectChoice('host',slot(n)).selection;
+  f.claim(n,2);f.begin(n,3);
+  f.policy(n,{budgetReviewed:false,authorityEpoch:'auth-2',canCloseMock:false});
+  A.throws(()=>f.consume(n),{code:'budget_unreviewed'});
+  A.throws(()=>f.closeAttempt(n,4),{code:'mock_close_not_authorized'});
+  f.policy(n,{budgetReviewed:false,authorityEpoch:'auth-2'});
+  A.throws(()=>f.closeAttempt(n,3),{code:'revision_conflict'});
+  const raw={auth:lead,mockClose:true,expectedVersion:4,at:10,command:{type:'mock_close',id:'bogus',task:n,fence:1}};
+  A.throws(()=>f.two.j.append(raw),{code:'mock_closure_required'});
+  const close=f.closeAttempt(n,4);
+  A.deepEqual(close,{state:'closed_no_send',receipt:null,simulation:true,duplicate:false,closeVersion:5});
+  A.equal(f.project().cards.find(c=>c.task===n).state,'ready');
+  A.deepEqual(f.consume(n),{state:'closed_no_send',receipt:null,simulation:true,duplicate:true});
+  A.deepEqual(f.closeAttempt(n,4),{...close,duplicate:true});
+  A.throws(()=>f.claim(n,5),{code:'budget_unreviewed'});
+  f.policy(n,{budgetEpoch:'budget-2',authorityEpoch:'auth-2'});
+  A.throws(()=>f.two.j.claimChoice('host',{...slot(n),selection:stale,id:'stale',at:11,leaseMs:50,expectedVersion:5}),{code:'dispatch_review_changed'});
+  f.time(13);
+  A(f.claim(n,5,{id:'claim-fresh',at:11}).committed);
+  A.throws(()=>f.two.j.beginChoice('host',{...slot(n),id:'attempt-begin',at:12,expectedVersion:6}),{code:'stale_fence'});
+  A(f.two.j.beginChoice('host',{...slot(n),fence:2,id:'attempt-begin',at:12,expectedVersion:6}).committed);
+  A.equal(f.consume(n,f.two.j,{fence:2}).state,'accepted');
+  A.equal(f.count(),2);A.equal(f.read(n).state,'closed_no_send');
+  const closedOutbox=f.two.j.outboxAfter(scope,4).filter(x=>x.phase==='mock_close');
+  A.deepEqual(closedOutbox,[{version:5,phase:'mock_close',task:n}]);
+ }finally{f.close();}
+});
+
+test('unknown and accepted mock outcomes never turn into unsent, even with a legacy facade or a closed provider assertion',()=>{
+ for(const outcome of ['unknown','accepted']){
+  const f=setup();
+  try{
+   const n=name, second=f.host(outcome),legacy=f.host(null);
+   f.claim(n,2);f.begin(n,3,second.j);f.consume(n,second.j);
+   A.throws(()=>f.closeAttempt(n,4),{code:'mock_not_closable'});
+   A.throws(()=>legacy.j.closeMockEgress('host',{...slot(n),id:'legacy-close',expectedVersion:4}),{code:'mock_egress_disabled'});
+   const worker={scope,role:'worker',subject:base(n).profile.worker};
+   A.throws(()=>legacy.j.append({auth:worker,at:7,expectedVersion:4,command:{type:'acknowledged',id:'fakeAck',task:n,fence:1,receipt:'fake-receipt'}}),{code:'mock_outcome_requires_local_evidence'});
+   A(legacy.j.append({auth:worker,at:7,expectedVersion:4,command:{type:'uncertain',id:'hold',task:n,fence:1}}).committed);
+   const digest='2'.repeat(64);
+   const forged={verified:true,scope,task:n,fence:1,worker:worker.subject,provider:'mock-local',lane:'lane-'+n,
+    key:scope+'/'+n+'/1',digest,verdict:'closed_not_sent',submitterQuiesced:true,remoteRequestClosed:true};
+   A.throws(()=>legacy.j.append({auth:lead,at:8,expectedVersion:5,attestation:forged,command:{type:'reconcile',id:'fake-close',task:n,fence:1,attestation:digest}}),{code:'mock_outcome_requires_local_evidence'});
+   A.equal(f.read(n).state,outcome);
+   A.equal(f.project().cards.find(c=>c.task===n).state,'needs_review');
+  }finally{f.close();}
+ }
+});
+
+test('closure write failure rolls back the board and outbox as well; the old fixture table upgrades in place',()=>{
+ const f=setup();
+ try{
+  f.one.db.exec('DROP TABLE lab_coord_mock_closure');
+  f.claim(name,2);f.begin(name,3);
+  f.one.j.prepare();A.deepEqual(f.read(name),pending);
+  f.fault({sql:'INSERT INTO lab_coord_mock_closure (board,task,fence,close_v) VALUES (?,?,?,?)',after:true});
+  A.throws(()=>f.closeAttempt(name,4),/fixture SQL interrupt/);
+  A.equal(f.project().asOfVersion,4);A.deepEqual(f.read(name),pending);
+  A.deepEqual(f.two.j.outboxAfter(scope,4),[]);
+  f.fault(null);A.equal(f.closeAttempt(name,4).state,'closed_no_send');
+  const reopen=f.host('unknown');reopen.j.prepare();A.equal(f.read(name,reopen.j).state,'closed_no_send');
+ }finally{f.close();}
+});
+
+test('mock closure offline board contrasts confirmed not sent and unknown response',()=>{
+ const f=setup({withMerge:true});
+ try{
+  const frame=phase=>{
+   const {cards,...board}=f.project();
+   return {...board,cards:cards.map(c=>({...c,worker:({'worker-prepared':'first-demo','worker-parallel':'second-demo'})[c.worker]??null})),
+    closure:{phase,original:f.read(name)?.state??null,unknown:f.read(other)?.state??null,replacement:f.read(name,f.two.j,{fence:2})?.state??null}};
+  };
+  f.claim(name,3);f.begin(name,4);
+  f.claim(other,5);f.begin(other,6);
+  const remoteLookalike=f.host('unknown');
+  A.equal(f.consume(other,remoteLookalike.j).state,'unknown');
+  f.policy(name,{budgetReviewed:false,authorityEpoch:'auth-2'});
+  A.throws(()=>f.consume(name),{code:'budget_unreviewed'});
+  const frames=[frame('separate')];
+  A.throws(()=>f.closeAttempt(other,7),{code:'mock_not_closable'});
+  A.equal(f.closeAttempt(name,7).state,'closed_no_send');
+  frames.push(frame('closed'));
+  A.throws(()=>f.claim(name,8,{id:'new-claim',at:11}),{code:'budget_unreviewed'});
+  f.policy(name,{budgetEpoch:'budget-2',authorityEpoch:'auth-2'});
+  A(f.claim(name,8,{id:'new-claim',at:11}).committed);
+  frames.push(frame('fresh'));
+  A(f.two.j.beginChoice('host',{...slot(name),fence:2,id:'new-begin',at:12,expectedVersion:9}).committed);
+  f.time(13);A.equal(f.consume(name,f.two.j,{fence:2}).state,'accepted');
+  A.equal(f.consume(other).state,'unknown');
+  frames.push(frame('replaced'));
+  A.deepEqual(frames.map(x=>x.asOfVersion),[7,8,9,10]);
+  A(frames.every(x=>x.cards.find(c=>c.task==='merge').state==='blocked'));
+  if(process.env.RIVULE_MOCK_CLOSURE_REPLAY==='1')console.log('RIVULE_MOCK_CLOSURE_REPLAY:'+JSON.stringify(frames));
  }finally{f.close();}
 });

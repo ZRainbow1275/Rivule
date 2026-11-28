@@ -11,6 +11,7 @@ const code=replayCode('verifiedQwenReplay','qwenpaw','lab-room',6)+
  replayCode('verifiedCoordinatorReplay','coordinator','authority',5)+
  replayCode('verifiedReviewedReplay','reviewed','review-sandbox',5)+
  replayCode('verifiedEgressReplay','egress','boundary-fixture',4)+
+ replayCode('verifiedClosureReplay','closure','boundary-fixture',4)+
  replayCode('verifiedDispatchReplay','dispatch','seat-preview',4)+
  replayCode('verifiedSettledReplay','settled','delivery-order',4)+
  replayCode('verifiedAccessReplay','access','authority',5)+
