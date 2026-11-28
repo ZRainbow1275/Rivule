@@ -17,3 +17,14 @@
 
 ## 离线预算门测试
 `storage/model-budget-fixture.mjs` 默认关闭，输入必须是可信宿主核算的上界，固定本地模拟模型，禁止工具和回退；要求独立权限才能读取前次调用的用量。SQLite 在队列写入一次性名额，按原看板和原任务识别，因此重启、换账号、换授权纪元、换远端运行别名都不重置。账单回执未到、没计入推理用量、超预算都不允许再投；只有同一调用的确切合规回执才进主 Agent 复核。表只有作用域标记、上限和状态，无正文、模型密钥和远端数据。此夹具没有计价或网络传输功能；仓库未接入实际计量、输出截断、模型请求发送和自动扣费。
+
+## 本地模型线级复演（未接真实运行时）
+
+QwenPaw v2.3.0.post1 的 [Ollama provider](https://raw.githubusercontent.com/agentscope-ai/QwenPaw/v2.3.0.post1/src/qwenpaw/providers/ollama_provider.py) 向 [AgentScope 2.0.10](https://raw.githubusercontent.com/agentscope-ai/agentscope/v2.0.10/src/agentscope/model/_openai_chat/_model.py) 传入类型化生成限制。后者的基类使用 `max_completion_tokens`，Ollama [兼容文档](https://docs.ollama.com/api/openai-compatibility#v1chatcompletions) 和[映射代码](https://github.com/ollama/ollama/blob/main/openai/openai.go#L693-L709) 则列出 `max_tokens` → `num_predict`。这是待实装版本抓包核对的拼写风险。不要将“界面已填 1000”当作运行时截断证明。[Ollama 的 SSE 实现](https://github.com/ollama/ollama/blob/main/middleware/openai.go#L126-L150) 将停止、用量和 `[DONE]` 分开发送。
+
+- 本实验使用按上述源码手写的最小入站 JSON 和真实的本机假 HTTP 服务，不是 QwenPaw / AgentScope 进程抓包。宿主仅允许写死的公开摘要、固定假模型和一个上限字段；把列入许可的字段重组为 `max_tokens`，发送前将规范正文哈希和输出上限绑定同一个 SQLite 原任务许可。
+- 同一个原任务和授权窗口最多发一个实际 POST。503、重定向、停止帧后断开或额度不明都不重发、不退款、不转其他模型。取得同一模型、同一流 ID 的正常停止、合规终止用量、`[DONE]` 和可见答案，且账号仍有原任务权限后才将结果交给主 Agent；不会向外发布。实测包含两条相互独立的 SQLite 连接、延迟回复时撤销、另一任务正常完成。这里只解析假服务给出的用量；真正的模板分词和推理用量校验尚未实现。
+- 等用户选择真实本地实例时，核对 [禁云启动日志](https://docs.ollama.com/faq#how-do-i-disable-ollamas-cloud-features)、[/api/tags 的模型摘要](https://docs.ollama.com/api/tags)、服务及模型精确版本、渲染后提示词实测分词和上下文余量。空工作区、无工具、无回退，先抓确切客户端请求和上限字段，再做一次真实本地摘要；仅有 127.0.0.1 不足以证明模型未走云端。若找不到隔离实例，不改 V388、不装供应商依赖、不调用真实账户。
+- 公开验收题：[TPS 起航事实](https://www.tps.cl/tps-inicio-servicio-cherry-express-con-12-900-toneladas-de-cerezas)及 [ProChile 深圳活动](https://www.prochile.gob.cl/noticias/detalle-noticia/2026/11/18/dan-inicio-a-nueva-temporada-de-cerezas-en-china-en-chileweek-2026)。验收两句：11 月 14 日瓦尔帕莱索启航，388 箱、8,500 吨；11 月 18 日深圳另有新季启动活动。不推断到港。此题是一个人工验收样本，代码不自动判内容。
+
+运行：`node --test tests/qwenpaw-ollama-wire-fixture.test.mjs tests/model-budget-fixture.test.mjs`。

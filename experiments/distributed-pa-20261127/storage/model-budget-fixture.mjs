@@ -29,7 +29,7 @@ export function makeModelBudgetFixture({enabled=false,sql,transactionSync,resolv
    p.source==='fixture-bounded-tokenizer'&&p.model===MODEL&&typeof p.payloadDigest==='string'&&/^[0-9a-f]{64}$/.test(p.payloadDigest)&&
    count(p.inputUpperBound,1,INPUT)&&count(p.maxBillableOutput,1,OUTPUT)&&p.tools===0&&p.fallback===false;
  }
- function reserve(request){
+ function reserve(request,expectedWire){
   return transactionSync(()=>{
    const a=resolve(request);
    if(!grant(a))return hold('binding_required');
@@ -37,6 +37,9 @@ export function makeModelBudgetFixture({enabled=false,sql,transactionSync,resolv
    if(row(k))return hold('original_call_already_reserved');
    const p=planFor(a);
    if(!validPlan(p))return hold('model_plan_out_of_bounds');
+   if(expectedWire!==undefined&&(!shape(expectedWire,['payloadDigest','maxBillableOutput'])||
+     p.payloadDigest!==expectedWire.payloadDigest||p.maxBillableOutput!==expectedWire.maxBillableOutput))
+      return hold('wire_plan_mismatch');
    const s=auth(a),pin=stamp('model-plan',[k,s],[p.model,p.payloadDigest,p.inputUpperBound,p.maxBillableOutput]);
    const call=stamp('model-call',[k,s],pin);
    // One irreversible reservation in this drill. Unknown or failed inbound
