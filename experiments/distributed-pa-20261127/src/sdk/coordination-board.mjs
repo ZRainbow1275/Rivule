@@ -320,3 +320,22 @@ export function reviewedDispatchFacts(journal,{auth,task,readable,profile,review
   requireThat(!v.lanes.has(route.lane),'lane_busy');
   return {task,fence:t.fence,route,review:reviewedSelection(review,t)};
 }
+
+// Host-only, read immediately before the isolated mock boundary. A successful
+// check neither sends a payload nor mutates the journal.
+export function reviewedSubmissionFacts(journal,{auth,task,readable,profile,review,fence,at}) {
+  sameScope(auth,journal.scope);
+  requireThat(auth.role==='coordinator'&&list(readable,0,MAX_TASKS).includes(id(task)),'not_authorized');
+  const v=fold(journal),t=v.tasks.get(task);
+  requireThat(t,'not_authorized');
+  requireThat(t.fence===int(fence,1)&&t.route,'stale_fence');
+  requireThat(t.state==='submitting'&&v.lanes.get(t.route.lane)===task,'not_submitting');
+  int(at,v.clock);
+  requireThat(at<t.until,'lease_expired');
+  requireThat(encode(allowedRoute(profile,t,profile?.worker))===encode(t.route),'route_changed');
+  requireThat(t.review!==null,'dispatch_review_required');
+  requireThat(encode(reviewedSelection(review,t))===encode(t.review),'dispatch_review_changed');
+  const begin=journal.events.findLast(e=>e.command.task===task&&e.command.fence===fence&&e.command.type==='begin');
+  requireThat(begin,'not_submitting');
+  return {key:attemptKey(journal.scope,task,fence),beginVersion:begin.version};
+}

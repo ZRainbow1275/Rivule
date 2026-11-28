@@ -1,0 +1,202 @@
+[
+  {
+    "schema": 1,
+    "scope": "boundary-fixture",
+    "asOfVersion": 5,
+    "cards": [
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "parallel",
+            "state": "ready",
+            "version": 2
+          },
+          {
+            "task": "prepared",
+            "state": "submitting",
+            "version": 5
+          }
+        ]
+      },
+      {
+        "task": "parallel",
+        "capability": "text",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "prepared",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "first-demo",
+        "fence": 1,
+        "taskVersion": 5,
+        "dependencies": []
+      }
+    ],
+    "egress": {
+      "phase": "armed",
+      "first": "pending",
+      "second": null
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "boundary-fixture",
+    "asOfVersion": 5,
+    "cards": [
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "parallel",
+            "state": "ready",
+            "version": 2
+          },
+          {
+            "task": "prepared",
+            "state": "submitting",
+            "version": 5
+          }
+        ]
+      },
+      {
+        "task": "parallel",
+        "capability": "text",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "prepared",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "first-demo",
+        "fence": 1,
+        "taskVersion": 5,
+        "dependencies": []
+      }
+    ],
+    "egress": {
+      "phase": "revoked",
+      "first": "pending",
+      "second": null
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "boundary-fixture",
+    "asOfVersion": 7,
+    "cards": [
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "parallel",
+            "state": "submitting",
+            "version": 7
+          },
+          {
+            "task": "prepared",
+            "state": "submitting",
+            "version": 5
+          }
+        ]
+      },
+      {
+        "task": "parallel",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "second-demo",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": []
+      },
+      {
+        "task": "prepared",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "first-demo",
+        "fence": 1,
+        "taskVersion": 5,
+        "dependencies": []
+      }
+    ],
+    "egress": {
+      "phase": "parallel",
+      "first": "pending",
+      "second": "accepted"
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "boundary-fixture",
+    "asOfVersion": 7,
+    "cards": [
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "parallel",
+            "state": "submitting",
+            "version": 7
+          },
+          {
+            "task": "prepared",
+            "state": "submitting",
+            "version": 5
+          }
+        ]
+      },
+      {
+        "task": "parallel",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "second-demo",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": []
+      },
+      {
+        "task": "prepared",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "first-demo",
+        "fence": 1,
+        "taskVersion": 5,
+        "dependencies": []
+      }
+    ],
+    "egress": {
+      "phase": "readback",
+      "first": "pending",
+      "second": "accepted"
+    }
+  }
+]

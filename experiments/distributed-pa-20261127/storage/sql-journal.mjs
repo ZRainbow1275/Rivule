@@ -1,7 +1,8 @@
 // Isolated SQL adapter for the coordination experiment. Host provides its own
 // serialized, all-or-nothing transaction implementation. No credentials, body,
 // notifications or network requests are persisted here.
-import {BoardConflict,createJournal,decide,projectBoard,projectDispatchPreview,reviewedDispatchFacts} from '../src/sdk/coordination-board.mjs';
+import {BoardConflict,createJournal,decide,projectBoard,projectDispatchPreview,reviewedDispatchFacts,reviewedSubmissionFacts} from '../src/sdk/coordination-board.mjs';
+import {makeReviewedMockEgress} from './reviewed-mock-egress.mjs';
 import {makeScopedValidator} from '../src/sdk/scoped-validator.mjs';
 const valid=x=>typeof x==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,95}$/.test(x);
 export function makeSqlJournal({sql,transactionSync,reviewedDispatch}) {
@@ -9,11 +10,13 @@ export function makeSqlJournal({sql,transactionSync,reviewedDispatch}) {
  const resolver=reviewedDispatch?.resolve;
  if(reviewedDispatch!==undefined&&typeof resolver!=='function')throw TypeError('host dispatch resolver required');
  const mark=reviewedDispatch===undefined?null:makeScopedValidator(reviewedDispatch.validatorKey);
+ const mock=makeReviewedMockEgress(sql,mark,reviewedDispatch?.mockEgress);
  // Explicit setup only in a sandbox or by a separately reviewed migration.
  function prepare(){
   return transactionSync(()=>{
    sql.exec('CREATE TABLE IF NOT EXISTS lab_coord_event (board TEXT NOT NULL, v INTEGER NOT NULL, event_id TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(board,v), UNIQUE(board,event_id))');
    sql.exec('CREATE TABLE IF NOT EXISTS lab_coord_outbox (board TEXT NOT NULL, v INTEGER NOT NULL, phase TEXT NOT NULL, task TEXT NOT NULL, PRIMARY KEY(board,v))');
+   mock?.prepare();
   });
  }
  function read(board){
@@ -43,7 +46,7 @@ export function makeSqlJournal({sql,transactionSync,reviewedDispatch}) {
  // A bare journal writer cannot supply the extra review for a pinned lease.
  const append=({review:ignored,...decision})=>transactionSync(()=>commit(decision));
 
- function current(request,{scope,task,alias,phase}){
+ function identity(request,{scope,task,alias,phase}){
   if(!mark)throw new BoardConflict('reviewed_dispatch_disabled');
   if(![scope,task,alias].every(valid))throw new BoardConflict('not_authorized');
   // The resolver belongs to the host and must use the same transactional
@@ -52,6 +55,9 @@ export function makeSqlJournal({sql,transactionSync,reviewedDispatch}) {
   if(a?.auth?.scope!==scope||a.auth.role!=='coordinator'||!valid(a.auth.subject)||
      !Array.isArray(a.readable)||!a.readable.includes(task)||a.alias!==alias)
    throw new BoardConflict('not_authorized');
+  return a;
+ }
+ function current(a,alias){
   if(a.budgetReviewed!==true)throw new BoardConflict('budget_unreviewed');
   const review={alias,reviewer:a.auth.subject,authorityEpoch:a.authorityEpoch,budgetEpoch:a.budgetEpoch,inputDigest:a.inputDigest};
   return {a,review};
@@ -61,19 +67,41 @@ export function makeSqlJournal({sql,transactionSync,reviewedDispatch}) {
   return mark('dispatch-choice',[journal.scope,a.auth.subject],facts);
  }
  const inspectChoice=(request,{scope,task,alias})=>transactionSync(()=>{
-  const {a,review}=current(request,{scope,task,alias,phase:'inspect'});
+  const {a,review}=current(identity(request,{scope,task,alias,phase:'inspect'}),alias);
   return {task,alias,selection:reviewPin(read(scope),task,a,review)};
  });
  const claimChoice=(request,{scope,task,alias,selection,id,at,expectedVersion,leaseMs})=>transactionSync(()=>{
-  const {a,review}=current(request,{scope,task,alias,phase:'claim'}),j=read(scope);
+  const {a,review}=current(identity(request,{scope,task,alias,phase:'claim'}),alias),j=read(scope);
   if(reviewPin(j,task,a,review)!==selection)throw new BoardConflict('dispatch_review_changed');
   const auth={scope,role:'worker',subject:a.profile.worker};
   return commit({auth,command:{type:'claim',id,task,worker:auth.subject,leaseMs},at,expectedVersion,profile:a.profile,review},j);
  });
  const beginChoice=(request,{scope,task,alias,id,at,expectedVersion,fence})=>transactionSync(()=>{
-  const {a,review}=current(request,{scope,task,alias,phase:'begin'});
-  return commit({auth:{scope,role:'worker',subject:a.profile?.worker},command:{type:'begin',id,task,fence},
+  const {a,review}=current(identity(request,{scope,task,alias,phase:'begin'}),alias);
+  const result=commit({auth:{scope,role:'worker',subject:a.profile?.worker},command:{type:'begin',id,task,fence},
    at,expectedVersion,profile:a.profile,review});
+  if(!mock||!result.committed)return result;
+  mock.arm({scope,task,fence,alias,reviewer:a.auth.subject,beginVersion:result.version});
+  return {...result,permit:null,simulation:'pending'};
+ });
+ function mockSlot(request,{scope,task,alias,fence},phase){
+  if(!mock)throw new BoardConflict('mock_egress_disabled');
+  const a=identity(request,{scope,task,alias,phase});
+  const slot={scope,task,alias,fence,reviewer:a.auth.subject};
+  return {a,slot,row:mock.read(slot)};
+ }
+ const inspectMockEgress=(request,input)=>transactionSync(()=>{
+  const {row}=mockSlot(request,input,'mock-readback');
+  return mock.project(row);
+ });
+ const consumeMockEgress=(request,input)=>transactionSync(()=>{
+  const {a,slot,row}=mockSlot(request,input,'mock-consume');
+  if(!row)throw new BoardConflict('mock_egress_not_armed');
+  if(row.state!=='pending')return {...mock.project(row),duplicate:true};
+  const {review}=current(a,slot.alias);
+  const facts=reviewedSubmissionFacts(read(slot.scope),{auth:a.auth,task:slot.task,
+   readable:a.readable,profile:a.profile,review,fence:slot.fence,at:mock.clock()});
+  return mock.consume(slot,row,facts);
  });
  const project=input=>transactionSync(()=>projectBoard(read(input.scope),input));
  // Host-only complete projection; wrappers must explicitly authorize the
@@ -90,5 +118,5 @@ export function makeSqlJournal({sql,transactionSync,reviewedDispatch}) {
   return [...sql.exec('SELECT v, phase, task FROM lab_coord_outbox WHERE board=? AND v>? ORDER BY v LIMIT ?',board,after,limit)]
    .map(row=>({version:row.v,phase:row.phase,task:row.task}));
  });
- return Object.freeze({prepare,append,project,projectAll,preview,outboxAfter,inspectChoice,claimChoice,beginChoice});
+ return Object.freeze({prepare,append,project,projectAll,preview,outboxAfter,inspectChoice,claimChoice,beginChoice,inspectMockEgress,consumeMockEgress});
 }

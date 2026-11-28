@@ -4,7 +4,7 @@ const html=readFileSync(process.argv[2]??'Rivule-调度看板演练.html','utf8'
 A(html.includes("default-src 'none'"));
 const run=html.match(/<script>([\s\S]+)<\/script>/)[1];
 const elem=()=>({children:[],attrs:{},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x},setAttribute(k,v){this.attrs[k]=v}});
-const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading','sync-rail','skill-rail','access-rail','settled-rail','dispatch-rail','reviewed-rail','access-lock','lanes'].map(x=>[x,elem()]));
+const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading','sync-rail','skill-rail','access-rail','settled-rail','dispatch-rail','reviewed-rail','egress-rail','access-lock','lanes'].map(x=>[x,elem()]));
 vm.runInNewContext(run,{document:{getElementById:x=>elements[x],createElement:elem},structuredClone});
 const check=(step,cn,us,merge)=>{
  elements.steps.children[step].onclick();
@@ -98,4 +98,14 @@ check(3,'ready','running','blocked');A.equal(reviewed.children[0].children[1].te
 check(4,'submitting','running','blocked');A.equal(reviewed.children[1].children[2].textContent,'模拟派送 1 次');
 check(1,'leased','ready','blocked');A(!reviewed.hidden);
 elements.scenario.onchange({target:{value:'qwen'}});A(reviewed.hidden);A.equal(reviewed.children.length,0);
-console.log(JSON.stringify({scenarios:9,canonicalReviewedDispatch:true,canonicalDispatchPreview:true,canonicalSettledDeliveryReplay:true,canonicalAccessRevocationReplay:true,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true,canonicalCoordinatorReplay:true,canonicalMcpSkillReplay:true}));
+const egress=elements['egress-rail'];A(egress.hidden);
+elements.scenario.onchange({target:{value:'egress'}});
+check(0,'submitting','ready','blocked');A.equal(egress.children[0].children[1].textContent,'已登记');
+check(1,'submitting','ready','blocked');A.equal(elements.cn.children[0].children[1].textContent,'已登记 · 未发送');
+A.equal(egress.children[0].children[1].textContent,'发送前拦截');
+check(2,'submitting','submitting','blocked');A.equal(egress.children[2].children[1].textContent,'有模拟回执');
+check(3,'submitting','submitting','blocked');A.equal(egress.children[2].children[2].textContent,'沿用原尝试，仅核回执');
+A.match(elements.caption.textContent,/没有发第二次/);
+check(0,'submitting','ready','blocked');A.equal(egress.children[2].children[1].textContent,'未开始');
+elements.scenario.onchange({target:{value:'qwen'}});A(egress.hidden);A.equal(egress.children.length,0);
+console.log(JSON.stringify({scenarios:10,canonicalMockEgressReplay:true,canonicalReviewedDispatch:true,canonicalDispatchPreview:true,canonicalSettledDeliveryReplay:true,canonicalAccessRevocationReplay:true,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true,canonicalCoordinatorReplay:true,canonicalMcpSkillReplay:true}));
