@@ -1,0 +1,17 @@
+[
+  {
+    "case": "original",
+    "fileOnly": "artifact_matches_unverified_record",
+    "ledger": "acceptance_verified_in_ledger"
+  },
+  {
+    "case": "same_name_changed",
+    "fileOnly": "artifact_mismatch",
+    "ledger": null
+  },
+  {
+    "case": "provider_complete_only",
+    "fileOnly": null,
+    "ledger": "delivered_only"
+  }
+]

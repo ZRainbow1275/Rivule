@@ -15,6 +15,6 @@ const code=replayCode('verifiedQwenReplay','qwenpaw','lab-room',6)+
  replayCode('verifiedSettledReplay','settled','delivery-order',4)+
  replayCode('verifiedAccessReplay','access','authority',5)+
  replayCode('verifiedSkillReplay','skill','skill-rehearsal',5)+
- cut(get('../src/sdk/coordination-board.mjs'))+'\n'+cut(get('./coordination-board-demo.mjs'));
+ cut(get('../src/sdk/coordination-board.mjs').split('\n// Historical facts are scoped')[0])+'\n'+cut(get('./coordination-board-demo.mjs'));
 if(/<\/script/i.test(code))throw new Error('unsafe inline literal');
 process.stdout.write(get('./board-shell.html').replace('{{CODE}}',()=>code));

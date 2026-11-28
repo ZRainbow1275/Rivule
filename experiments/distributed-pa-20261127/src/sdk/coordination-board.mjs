@@ -339,3 +339,20 @@ export function reviewedSubmissionFacts(journal,{auth,task,readable,profile,revi
   requireThat(begin,'not_submitting');
   return {key:attemptKey(journal.scope,task,fence),beginVersion:begin.version};
 }
+
+// Historical facts are scoped by the host's CURRENT read policy. Only an
+// actual accepted state at the specified revision is eligible; a delivered
+// artifact or provider-complete flag is insufficient.
+export function acceptanceFacts(journal,{auth,readable,task,atVersion}) {
+  sameScope(auth,journal.scope);
+  requireThat(auth.role==='coordinator'&&list(readable,0,MAX_TASKS).includes(id(task)),'not_authorized');
+  const asOf=int(atVersion,1,MAX_EVENTS);
+  const full=fold(journal);
+  requireThat(asOf<=full.rev,'revision_conflict');
+  const event=journal.events[asOf-1];
+  requireThat(event.command.task===task&&event.command.type==='accept','no_acceptance_at_revision');
+  const state=asOf===full.rev?full:fold({...journal,events:journal.events.slice(0,asOf)});
+  const entry=state.tasks.get(task);
+  requireThat(entry?.state==='accepted'&&entry.version===asOf&&entry.artifact===event.command.artifact,'no_acceptance_at_revision');
+  return {fence:entry.fence,artifactSha256:entry.artifact,acceptedAt:event.at,acceptanceVersion:asOf};
+}

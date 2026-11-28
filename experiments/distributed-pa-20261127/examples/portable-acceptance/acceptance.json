@@ -1,0 +1,10 @@
+{
+  "schema": "rivule.synthetic-acceptance/1",
+  "synthetic": true,
+  "taskAlias": "sample-summary",
+  "attemptAlias": "sample-attempt-1",
+  "acceptedByRole": "coordinator",
+  "acceptedAt": 1700000000500,
+  "acceptanceVersion": 6,
+  "artifactSha256": "03a12c18ee6aee810ab0e6180888d933c502b0c0eea6becd94525b63bed956bf"
+}
