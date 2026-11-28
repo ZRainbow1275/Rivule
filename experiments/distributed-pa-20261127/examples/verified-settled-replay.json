@@ -1,0 +1,198 @@
+[
+  {
+    "schema": 1,
+    "scope": "delivery-order",
+    "asOfVersion": 7,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "text",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "ready",
+            "version": 2
+          },
+          {
+            "task": "public-source",
+            "state": "reported",
+            "version": 7
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "capability": "text",
+        "state": "reported",
+        "worker": "helper",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": []
+      }
+    ],
+    "label": "来源已交稿，主 Agent 还未验收。",
+    "settled": {
+      "failedIgnored": 0
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "delivery-order",
+    "asOfVersion": 11,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "text",
+        "state": "running",
+        "worker": "helper",
+        "fence": 1,
+        "taskVersion": 11,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "running",
+            "version": 11
+          },
+          {
+            "task": "public-source",
+            "state": "accepted",
+            "version": 8
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "capability": "text",
+        "state": "accepted",
+        "worker": "helper",
+        "fence": 1,
+        "taskVersion": 8,
+        "dependencies": []
+      }
+    ],
+    "label": "来源已验收。同一个席位已经在处理独立任务。",
+    "settled": {
+      "failedIgnored": 0
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "delivery-order",
+    "asOfVersion": 11,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "text",
+        "state": "running",
+        "worker": "helper",
+        "fence": 1,
+        "taskVersion": 11,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "running",
+            "version": 11
+          },
+          {
+            "task": "public-source",
+            "state": "accepted",
+            "version": 8
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "capability": "text",
+        "state": "accepted",
+        "worker": "helper",
+        "fence": 1,
+        "taskVersion": 8,
+        "dependencies": []
+      }
+    ],
+    "label": "旧失败回包被拒，来源仍是已验收，独立任务继续执行。",
+    "settled": {
+      "failedIgnored": 1
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "delivery-order",
+    "asOfVersion": 13,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "text",
+        "state": "accepted",
+        "worker": "helper",
+        "fence": 1,
+        "taskVersion": 13,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "accepted",
+            "version": 13
+          },
+          {
+            "task": "public-source",
+            "state": "accepted",
+            "version": 8
+          }
+        ]
+      },
+      {
+        "task": "public-source",
+        "capability": "text",
+        "state": "accepted",
+        "worker": "helper",
+        "fence": 1,
+        "taskVersion": 8,
+        "dependencies": []
+      }
+    ],
+    "label": "独立任务也通过验收，两份结果才一起解锁合稿。",
+    "settled": {
+      "failedIgnored": 1
+    }
+  }
+]

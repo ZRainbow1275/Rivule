@@ -4,7 +4,7 @@ const html=readFileSync(process.argv[2]??'Rivule-调度看板演练.html','utf8'
 A(html.includes("default-src 'none'"));
 const run=html.match(/<script>([\s\S]+)<\/script>/)[1];
 const elem=()=>({children:[],attrs:{},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x},setAttribute(k,v){this.attrs[k]=v}});
-const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading','sync-rail','skill-rail','access-rail','access-lock','lanes'].map(x=>[x,elem()]));
+const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading','sync-rail','skill-rail','access-rail','settled-rail','access-lock','lanes'].map(x=>[x,elem()]));
 vm.runInNewContext(run,{document:{getElementById:x=>elements[x],createElement:elem},structuredClone});
 const check=(step,cn,us,merge)=>{
  elements.steps.children[step].onclick();
@@ -65,4 +65,15 @@ check(4,'reported','accepted','blocked');
 A(!elements.lanes.hidden);A(elements['access-lock'].hidden);A(!access.hidden);
 A.equal(access.children[0].children[1].textContent,'新授权 · 已同步');
 elements.scenario.onchange({target:{value:'qwen'}});A(access.hidden);A.equal(access.children.length,0);
-console.log(JSON.stringify({scenarios:6,canonicalAccessRevocationReplay:true,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true,canonicalCoordinatorReplay:true,canonicalMcpSkillReplay:true}));
+const settled=elements['settled-rail'];
+A(settled.hidden);
+elements.scenario.onchange({target:{value:'settled'}});
+check(0,'reported','ready','blocked');check(1,'accepted','running','blocked');
+const oldRevision=elements.clock.textContent.split(' · ')[0];
+check(2,'accepted','running','blocked');
+A.equal(elements.clock.textContent.split(' · ')[0],oldRevision);
+A.equal(settled.children[1].children[1].textContent,'已拒绝');
+check(3,'accepted','accepted','ready');
+elements.scenario.onchange({target:{value:'qwen'}});
+A(settled.hidden);A.equal(settled.children.length,0);
+console.log(JSON.stringify({scenarios:7,canonicalSettledDeliveryReplay:true,canonicalAccessRevocationReplay:true,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true,canonicalCoordinatorReplay:true,canonicalMcpSkillReplay:true}));

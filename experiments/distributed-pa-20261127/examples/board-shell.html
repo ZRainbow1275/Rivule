@@ -15,6 +15,7 @@ select{max-width:100%;font:inherit;color:var(--ink);background:var(--bg);border:
 <option value="viktor">Viktor 等补充，另一项先交付</option>
 <option value="coordinator">两个调度窗口断线后对齐</option>
 <option value="access">一个窗口撤权，另一项继续</option>
+<option value="settled">迟到的失败回包</option>
 <option value="skill">MCP 工具变更，旧批准暂停</option>
 <option value="muse">两个独立 Muse 席位</option>
 </select>
@@ -22,6 +23,7 @@ select{max-width:100%;font:inherit;color:var(--ink);background:var(--bg);border:
 <div id="sync-rail" class="sync-rail" hidden aria-label="两个窗口的同步状态"></div>
 <div id="access-rail" class="sync-rail" hidden aria-label="窗口访问状态"></div>
 <p id="access-lock" hidden role="status">窗口 A 不显示任务。等新的授权会话加载后再恢复。</p>
+<div id="settled-rail" class="sync-rail" hidden aria-label="回包与交付状态"></div>
 <div id="skill-rail" class="sync-rail" hidden aria-label="本地工具的审核与执行状态"></div>
 <div class="grid" id="lanes"><section class="lane"><h2 id="first-heading">境内独立</h2><div id="cn"></div></section><section class="lane"><h2 id="second-heading">海外公共材料</h2><div id="foreign"></div></section><section class="lane"><h2>主任务依赖</h2><div id="join"></div></section></div>
 <p class="footer">回放使用本地测试记录。示例席位和批准不调用外部服务，也不会改动线上 Rivule。</p>
@@ -45,6 +47,10 @@ const tracks={
   names:{'public-source':'核对公开来源','editor-note':'独立编辑任务',merge:'汇总材料'},
   workers:{helper:'示例工作者'},cn:'public-source',merge:'merge',
   headings:['窗口 A · 原任务','窗口 A · 独立任务'],defaultStep:0},
+ settled:{phases:verifiedSettledReplay,labels:['交稿','验收并换任务','旧失败抵达','解锁合稿'],
+  names:{'public-source':'核对公开来源',independent:'独立编辑任务',merge:'汇总材料'},
+  workers:{helper:'Glean 示例席位'},cn:'public-source',merge:'merge',
+  headings:['原任务','同一席位的新任务'],defaultStep:2},
  skill:{phases:verifiedSkillReplay,labels:['发现工具','等待批准','格式变更','复核结果','验收通过'],
   names:{'registry-summary':'统计示例入口',peer:'独立任务',merge:'合稿'},
   workers:{'local-fixture-tool':'本地测试工具'},cn:'registry-summary',merge:'merge',
@@ -103,7 +109,16 @@ function accessRail(sample){
   railTile('窗口 B',sample.b.state,'仍有权查看','steady'),
   railTile('独立工作',sample.independentAccepted?'已验收':'待验收','不受窗口 A 影响','steady'));
 }
-function render(i){const f=track.phases[i];syncRail(f.sync);skillRail(f.skill);accessRail(f.access);$('clock').textContent=(f.asOfVersion===null?'窗口 A 无可见修订':'记录修订 '+f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.label;
+function settledRail(sample,cards){
+ const rail=$('settled-rail');rail.hidden=!sample;
+ if(!sample){rail.replaceChildren();return;}
+ const state=id=>cardStatus(cards.find(c=>c.task===id));
+ rail.replaceChildren(
+  railTile('原任务',state('public-source'),'主 Agent 验收','steady'),
+  railTile('旧失败回包',sample.failedIgnored?'已拒绝':'未到达',sample.failedIgnored?'看板修订不变':'只显示有效交付',sample.failedIgnored?'lag':'steady'),
+  railTile('独立任务',state('independent'),'同一席位 · 不受影响','steady'));
+}
+function render(i){const f=track.phases[i];syncRail(f.sync);skillRail(f.skill);accessRail(f.access);settledRail(f.settled,f.cards);$('clock').textContent=(f.asOfVersion===null?'窗口 A 无可见修订':'记录修订 '+f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.label;
  buttons.forEach((b,k)=>b.setAttribute('aria-pressed',String(i===k)));
  for(const id of ['cn','foreign','join'])$(id).replaceChildren();
  for(const item of f.cards){const a=node('article','');a.className=item.state;

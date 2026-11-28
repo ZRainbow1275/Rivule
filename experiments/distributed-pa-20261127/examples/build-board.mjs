@@ -9,6 +9,7 @@ const replayCode=(name,file,scope,count)=>{
 const code=replayCode('verifiedQwenReplay','qwenpaw','lab-room',6)+
  replayCode('verifiedViktorReplay','viktor','rivule-lab-us',4)+
  replayCode('verifiedCoordinatorReplay','coordinator','authority',5)+
+ replayCode('verifiedSettledReplay','settled','delivery-order',4)+
  replayCode('verifiedAccessReplay','access','authority',5)+
  replayCode('verifiedSkillReplay','skill','skill-rehearsal',5)+
  cut(get('../src/sdk/coordination-board.mjs'))+'\n'+cut(get('./coordination-board-demo.mjs'));
