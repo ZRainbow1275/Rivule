@@ -7,6 +7,7 @@ for(const [file,pattern,marker,target,count] of [
  ['qwenpaw-board-fixture','QwenPaw loses response','RIVULE_BOARD_REPLAY','qwenpaw',6],
  ['viktor-board-fixture','A question survives cold restart','RIVULE_VIKTOR_REPLAY','viktor',4],
  ['coordinator-catchup','R06 offline board','RIVULE_COORDINATOR_REPLAY','coordinator',5],
+ ['mcp-skill-board-fixture','MCP offline board replay','RIVULE_SKILL_REPLAY','skill',5],
 ]){
  const source=fileURLToPath(new URL('../tests/'+file+'.test.mjs',import.meta.url));
  const t=spawnSync(process.execPath,['--no-warnings','--test','--test-name-pattern='+pattern,source],

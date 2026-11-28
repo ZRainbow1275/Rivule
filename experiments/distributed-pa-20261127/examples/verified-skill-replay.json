@@ -1,0 +1,195 @@
+[
+  {
+    "schema": 1,
+    "scope": "skill-rehearsal",
+    "asOfVersion": 4,
+    "cards": [
+      {
+        "task": "merge",
+        "state": "blocked",
+        "worker": null,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "registry-summary",
+            "state": "leased"
+          }
+        ]
+      },
+      {
+        "task": "peer",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "registry-summary",
+        "state": "leased",
+        "worker": "local-fixture-tool",
+        "taskVersion": 4,
+        "dependencies": []
+      }
+    ],
+    "label": "发现本地测试工具和已固定版本的 Skill。此时尚未批准执行。",
+    "skill": {
+      "phase": "reviewed_discovery",
+      "runs": 0
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "skill-rehearsal",
+    "asOfVersion": 4,
+    "cards": [
+      {
+        "task": "merge",
+        "state": "blocked",
+        "worker": null,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "registry-summary",
+            "state": "leased"
+          }
+        ]
+      },
+      {
+        "task": "peer",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "registry-summary",
+        "state": "leased",
+        "worker": "local-fixture-tool",
+        "taskVersion": 4,
+        "dependencies": []
+      }
+    ],
+    "label": "主 Agent 核对工具、Skill 版本和这次输入；合稿仍等待。",
+    "skill": {
+      "phase": "awaiting_approval",
+      "runs": 0
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "skill-rehearsal",
+    "asOfVersion": 4,
+    "cards": [
+      {
+        "task": "merge",
+        "state": "blocked",
+        "worker": null,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "registry-summary",
+            "state": "leased"
+          }
+        ]
+      },
+      {
+        "task": "peer",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "registry-summary",
+        "state": "leased",
+        "worker": "local-fixture-tool",
+        "taskVersion": 4,
+        "dependencies": []
+      }
+    ],
+    "label": "工具的结果格式变了，旧批准没有被消费。这一次不运行。",
+    "skill": {
+      "phase": "holding",
+      "reason": "tool_review_required",
+      "runs": 0
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "skill-rehearsal",
+    "asOfVersion": 7,
+    "cards": [
+      {
+        "task": "merge",
+        "state": "blocked",
+        "worker": null,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "registry-summary",
+            "state": "reported"
+          }
+        ]
+      },
+      {
+        "task": "peer",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "registry-summary",
+        "state": "reported",
+        "worker": "local-fixture-tool",
+        "taskVersion": 7,
+        "dependencies": []
+      }
+    ],
+    "label": "原审核版本执行一次。示例结果是 2 条，正等主 Agent 验收。",
+    "skill": {
+      "phase": "result_for_review",
+      "count": 2,
+      "runs": 1
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "skill-rehearsal",
+    "asOfVersion": 8,
+    "cards": [
+      {
+        "task": "merge",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "registry-summary",
+            "state": "accepted"
+          }
+        ]
+      },
+      {
+        "task": "peer",
+        "state": "ready",
+        "worker": null,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "registry-summary",
+        "state": "accepted",
+        "worker": "local-fixture-tool",
+        "taskVersion": 8,
+        "dependencies": []
+      }
+    ],
+    "label": "主 Agent 验收本次结果，后续合稿解锁。",
+    "skill": {
+      "phase": "accepted",
+      "count": 2,
+      "runs": 1
+    }
+  }
+]

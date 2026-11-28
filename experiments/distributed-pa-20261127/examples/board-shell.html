@@ -14,12 +14,14 @@ select{max-width:100%;font:inherit;color:var(--ink);background:var(--bg);border:
 <option value="qwen">QwenPaw 断流，Glean 继续</option>
 <option value="viktor">Viktor 等补充，另一项先交付</option>
 <option value="coordinator">两个调度窗口断线后对齐</option>
+<option value="skill">MCP 工具变更，旧批准暂停</option>
 <option value="muse">两个独立 Muse 席位</option>
 </select>
 <nav id="steps" class="step" aria-label="回放步骤"></nav><p id="caption" class="note" aria-live="polite"></p>
 <div id="sync-rail" class="sync-rail" hidden aria-label="两个窗口的同步状态"></div>
+<div id="skill-rail" class="sync-rail" hidden aria-label="本地工具的审核与执行状态"></div>
 <div class="grid"><section class="lane"><h2 id="first-heading">境内独立</h2><div id="cn"></div></section><section class="lane"><h2 id="second-heading">海外公共材料</h2><div id="foreign"></div></section><section class="lane"><h2>主任务依赖</h2><div id="join"></div></section></div>
-<p class="footer">每一步来自同一份事件记录。席位、回执、足迹均为测试样本；没有实际派工，也没有改动现有 Rivule。</p>
+<p class="footer">回放使用本地测试记录。示例席位和批准不调用外部服务，也不会改动线上 Rivule。</p>
 </section></main>
 <script>
 {{CODE}}
@@ -36,6 +38,10 @@ const tracks={
   names:{'public-source':'核对公开来源','editor-note':'独立编辑任务',merge:'汇总材料'},
   workers:{helper:'原派送示例'},cn:'public-source',merge:'merge',
   headings:['窗口 A · 当前任务','窗口 A · 独立任务'],defaultStep:0},
+ skill:{phases:verifiedSkillReplay,labels:['发现工具','等待批准','格式变更','复核结果','验收通过'],
+  names:{'registry-summary':'统计示例入口',peer:'独立任务',merge:'合稿'},
+  workers:{'local-fixture-tool':'本地测试工具'},cn:'registry-summary',merge:'merge',
+  headings:['MCP 工具与 Skill','独立任务'],defaultStep:0},
  muse:{phases:runCoordinationExample().phases,
   labels:['拆分','领取','断线','核回','允许合稿','验收完成'],
   names:{'cn-notes':'国内原件核对','overseas-a':'国际材料原文 A','overseas-b':'国际材料原文 B',editorial:'两份公开材料合稿'},
@@ -52,19 +58,35 @@ function loadTrack(key){
  $('first-heading').textContent=first;$('second-heading').textContent=second;
  $('steps').replaceChildren(...buttons);render(track.defaultStep??2);
 }
+function railTile(title,value,detail,kind){
+ const x=node('div','');x.className='sync-tile';x.setAttribute('data-kind',kind);
+ x.append(node('small',title),node('strong',value),node('small',detail));return x;
+}
 function syncRail(sample){
  const rail=$('sync-rail');rail.hidden=!sample;
  if(!sample){rail.replaceChildren();return;}
- const tile=(title,value,detail,kind)=>{
-  const x=node('div','');x.className='sync-tile';x.setAttribute('data-kind',kind);
-  x.append(node('small',title),node('strong',value),node('small',detail));return x;
- };
  rail.replaceChildren(
-  tile('窗口 A',sample.a.state,'修订 '+sample.a.version,sample.a.version<sample.b.version?'lag':'steady'),
-  tile('窗口 B',sample.b.state,'修订 '+sample.b.version,'steady'),
-  tile('派送凭证',sample.permits+' 次','重连只读记录','steady'));
+  railTile('窗口 A',sample.a.state,'修订 '+sample.a.version,sample.a.version<sample.b.version?'lag':'steady'),
+  railTile('窗口 B',sample.b.state,'修订 '+sample.b.version,'steady'),
+  railTile('派送凭证',sample.permits+' 次','重连只读记录','steady'));
 }
-function render(i){const f=track.phases[i];syncRail(f.sync);$('clock').textContent='记录修订 '+String(f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.label;
+const skillStates={
+ reviewed_discovery:['已识别','固定工具与 Skill','未批准'],
+ awaiting_approval:['待批准','核对本次输入','未批准'],
+ holding:['待重新审核','结果格式已变更','旧批准仍未使用'],
+ result_for_review:['待验收','仅运行已审核版本','批准已使用'],
+ accepted:['已验收','主 Agent 已复核','批准已使用']
+};
+function skillRail(sample){
+ const rail=$('skill-rail');rail.hidden=!sample;
+ if(!sample){rail.replaceChildren();return;}
+ const [title,detail,approval]=skillStates[sample.phase];
+ rail.replaceChildren(
+  railTile('审核状态',title,detail,sample.phase==='holding'?'lag':'steady'),
+  railTile('本地执行',sample.runs+' 次',approval,'steady'),
+  railTile('示例结果',sample.count===undefined?'未生成':sample.count+' 条',sample.phase==='accepted'?'可以合稿':'等待主 Agent 验收','steady'));
+}
+function render(i){const f=track.phases[i];syncRail(f.sync);skillRail(f.skill);$('clock').textContent='记录修订 '+String(f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.label;
  buttons.forEach((b,k)=>b.setAttribute('aria-pressed',String(i===k)));
  for(const id of ['cn','foreign','join'])$(id).replaceChildren();
  for(const item of f.cards){const a=node('article','');a.className=item.state;

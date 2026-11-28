@@ -11,3 +11,10 @@
 官方材料：[MCP tools 请求示例](https://ts.sdk.modelcontextprotocol.io/v2/get-started/first-client)、[MCP Skills 实验性扩展](https://skills.extensions.modelcontextprotocol.io/specification/beta/skills)。后者可用于列出 Skill 和它的文件清单；这个实验未实现扩展或协议传输。批准、去重、能力隔离是 Rivule 层的规则，不能由工具注解替代。
 
 待接看板：将「发现 → 待批准 → 待复核」接到协调者的实际事件，每次只显示当前任务可见字段；将变更后的版本差异直接呈现给审批人。真实 PA 仅在绑定、范围、数据驻留与实际授权都明确之后，另跑独立联调。
+
+### 看板演练
+离线看板第五个情景由 `tests/mcp-skill-board-fixture.test.mjs` 的 SQLite 真实投影生成：
+发现 → 等待批准 → 工具结果格式变化被拦截 → 已审核版本执行一次、结果待验收 → 合稿解锁。
+看板只展示阶段、合成计数、版本与依赖，不嵌入批准 ID、凭证、来源提示或输入摘要。
+仅限本地固定角色、看板、任务、参数、席位和能力；不启用外部派送。
+最后三条执行事件与批准消费位于同一事务；冲突或中断均回滚。接受结果必须另由主 Agent 提交当前产物摘要。用 `node examples/rebuild-verified-replay.mjs --check` 可从原测试复核所有帧。

@@ -4,7 +4,7 @@ const html=readFileSync(process.argv[2]??'Rivule-调度看板演练.html','utf8'
 A(html.includes("default-src 'none'"));
 const run=html.match(/<script>([\s\S]+)<\/script>/)[1];
 const elem=()=>({children:[],attrs:{},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x},setAttribute(k,v){this.attrs[k]=v}});
-const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading','sync-rail'].map(x=>[x,elem()]));
+const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading','sync-rail','skill-rail'].map(x=>[x,elem()]));
 vm.runInNewContext(run,{document:{getElementById:x=>elements[x],createElement:elem},structuredClone});
 const check=(step,cn,us,merge)=>{
  elements.steps.children[step].onclick();
@@ -35,4 +35,17 @@ syncStep(0,4,4,0,'leased','blocked');syncStep(1,4,5,1,'leased','blocked');syncSt
 syncStep(3,8,8,1,'accepted','ready');syncStep(4,8,8,1,'accepted','ready');syncStep(1,4,5,1,'leased','blocked');
 A.equal(elements['first-heading'].textContent,'窗口 A · 当前任务');
 elements.scenario.onchange({target:{value:'qwen'}});A(rails.hidden);A.equal(rails.children.length,0);
-console.log(JSON.stringify({scenarios:4,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true,canonicalCoordinatorReplay:true}));
+const skill=elements['skill-rail'];
+A(skill.hidden);
+elements.scenario.onchange({target:{value:'skill'}});
+for(const [i,state,runs,n,task,merge] of [[0,'已识别',0,'未生成','leased','blocked'],[1,'待批准',0,'未生成','leased','blocked'],
+ [2,'待重新审核',0,'未生成','leased','blocked'],[3,'待验收',1,'2 条','reported','blocked'],[4,'已验收',1,'2 条','accepted','ready']]){
+ check(i,task,'ready',merge);A(!skill.hidden);A(rails.hidden);
+ A.equal(skill.children[0].children[1].textContent,state);
+ A.equal(skill.children[1].children[1].textContent,runs+' 次');A.equal(skill.children[2].children[1].textContent,n);
+}
+check(2,'leased','ready','blocked');
+A.equal(skill.children[0].attrs['data-kind'],'lag');
+A.equal(skill.children[1].children[2].textContent,'旧批准仍未使用');
+elements.scenario.onchange({target:{value:'muse'}});A(skill.hidden);A.equal(skill.children.length,0);
+console.log(JSON.stringify({scenarios:5,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true,canonicalCoordinatorReplay:true,canonicalMcpSkillReplay:true}));
