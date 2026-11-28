@@ -114,6 +114,12 @@ function sameScope(auth, scope) {
   requireThat(plain(auth) && auth.scope===scope && ['coordinator','worker'].includes(auth.role),'scope_or_role');
   id(auth.subject);
 }
+function reviewedSelection(review,t) {
+  shape(review,['alias','reviewer','authorityEpoch','budgetEpoch','inputDigest']);
+  requireThat(digest(review.inputDigest)===t.inputDigest,'review_input_changed');
+  return {alias:id(review.alias),reviewer:id(review.reviewer),authorityEpoch:id(review.authorityEpoch),
+    budgetEpoch:id(review.budgetEpoch),inputDigest:t.inputDigest};
+}
 function validAttestation(x, scope, t, c) {
   requireThat(plain(x)&&x.verified===true&&x.scope===scope&&x.task===t.task&&x.fence===t.fence&&x.worker===t.route.worker&&x.provider===t.route.provider&&x.lane===t.route.lane&&x.key===attemptKey(scope,t.task,t.fence)&&x.digest===c.attestation,'invalid_attestation');
   if(t.providerRequestId)requireThat(x.providerRequestId===t.providerRequestId,'request_mismatch');
@@ -169,7 +175,7 @@ function derive(v,scope,auth,c,at,context,replay=false) {
     validateStoredRoute(route,t,c.worker);
     requireThat(!v.lanes.has(route.lane),'lane_busy');
     int(at+c.leaseMs,at+1);
-    return {route};
+    return context.review===undefined?{route}:{route,review:reviewedSelection(context.review,t)};
   }
   if(c.type==='canceled'){
     // No RPC has begun, or this path is ineligible. Never present cancellation
@@ -190,6 +196,10 @@ function derive(v,scope,auth,c,at,context,replay=false) {
     if(!replay) {
       const current=allowedRoute(context.profile,t,auth.subject);
       requireThat(encode(current)===encode(t.route),'route_changed');
+      if(t.review!==null||context.review!==undefined){
+        requireThat(t.review!==null&&context.review!==undefined,'dispatch_review_required');
+        requireThat(encode(reviewedSelection(context.review,t))===encode(t.review),'dispatch_review_changed');
+      }
     }
   } else if(c.type==='acknowledged') {
     requireThat(t.state==='submitting','not_submitting');
@@ -242,10 +252,10 @@ function apply(v,scope,c,meta,version,at){
   const t=v.tasks.get(c.task);
   if(c.type==='add'){
     v.tasks.set(c.task,{task:c.task,capability:c.capability,allowedRegions:[...c.allowedRegions],inputDigest:c.inputDigest,requires:[...c.requires],
-      state:'ready',fence:0,until:0,route:null,receipt:null,artifact:null,failureDigest:null,deliveryState:null,providerRequestId:null,inputReceipt:null,version});
+      state:'ready',fence:0,until:0,route:null,review:null,receipt:null,artifact:null,failureDigest:null,deliveryState:null,providerRequestId:null,inputReceipt:null,version});
   }else{
     if(c.type==='claim'){
-      t.state='leased';t.route=copy(meta.route);t.fence++;t.until=at+c.leaseMs;t.receipt=null;t.artifact=null;t.deliveryState=null;t.providerRequestId=null;t.inputReceipt=null;
+      t.state='leased';t.route=copy(meta.route);t.review=meta.review?copy(meta.review):null;t.fence++;t.until=at+c.leaseMs;t.receipt=null;t.artifact=null;t.deliveryState=null;t.providerRequestId=null;t.inputReceipt=null;
       v.lanes.set(t.route.lane,t.task);
     }else if(c.type==='renew')t.until=at+c.leaseMs;
     else if(c.type==='begin')t.state='submitting';
@@ -259,7 +269,7 @@ function apply(v,scope,c,meta,version,at){
     else if(c.type==='failed'){t.state='failed';t.failureDigest=c.evidence;v.lanes.delete(t.route.lane);}
     else if(c.type==='reported'){t.state='reported';t.artifact=c.artifact;v.lanes.delete(t.route.lane);}
     else if((c.type==='expire'&&t.state==='leased')||(c.type==='reconcile'&&meta.answer.verdict==='closed_not_sent')){
-      v.lanes.delete(t.route.lane);t.state='ready';t.route=null;t.until=0;t.deliveryState=null;t.providerRequestId=null;t.inputReceipt=null;
+      v.lanes.delete(t.route.lane);t.state='ready';t.route=null;t.review=null;t.until=0;t.deliveryState=null;t.providerRequestId=null;t.inputReceipt=null;
     }else if(c.type==='expire'||c.type==='uncertain'){t.state='needs_review';if(t.route.provider==='cue')t.deliveryState='unknown';}
     else if(c.type==='reconcile'&&meta.answer.verdict==='input_verified'){t.inputReceipt=meta.answer.inputReceipt;t.deliveryState='input_observed';}
     else if(c.type==='reconcile'&&meta.answer.verdict==='failure_verified'){t.state='failed';t.receipt=meta.answer.receipt;t.failureDigest=meta.answer.evidence;v.lanes.delete(t.route.lane);}
@@ -271,7 +281,7 @@ function apply(v,scope,c,meta,version,at){
 }
 // A fresh begin returns only a *provisional* permit. Deliver only after a durable
 // parent-version CAS confirmed this exact, freshly inserted decision.
-function decide(journal,{auth,command,expectedVersion,at,profile,attestation}){
+function decide(journal,{auth,command,expectedVersion,at,profile,attestation,review}){
   const v=fold(journal), c=normalize(command);
   sameScope(auth,journal.scope);
   int(expectedVersion,0);
@@ -283,7 +293,7 @@ function decide(journal,{auth,command,expectedVersion,at,profile,attestation}){
   requireThat(expectedVersion===v.rev,'revision_conflict');
   requireThat(v.rev<MAX_EVENTS,'journal_capacity');
   int(at,v.clock);
-  const meta=derive(v,journal.scope,auth,c,at,{profile,attestation});
+  const meta=derive(v,journal.scope,auth,c,at,{profile,attestation,review});
   const event={scope:journal.scope,version:v.rev+1,at,subject:auth.subject,role:auth.role,command:c,meta};
   const permit=c.type==='begin'?{key:attemptKey(journal.scope,c.task,c.fence),task:c.task,fence:c.fence,worker:auth.subject,
     provider:v.tasks.get(c.task).route.provider,lane:v.tasks.get(c.task).route.lane,expiresAt:v.tasks.get(c.task).until,
@@ -336,6 +346,19 @@ function projectDispatchPreview(journal,{auth,task,readable,seats}){
     return {alias,state};
   });
   return {task,asOfVersion:v.rev,gate,cards};
+}
+
+// Host-only comparison facts. Never persist or send from this read.
+function reviewedDispatchFacts(journal,{auth,task,readable,profile,review}) {
+  sameScope(auth,journal.scope);
+  requireThat(auth.role==='coordinator'&&list(readable,0,MAX_TASKS).includes(id(task)),'not_authorized');
+  const v=fold(journal), t=v.tasks.get(task);
+  requireThat(t,'not_authorized');
+  requireThat(t.state==='ready','not_claimable');
+  requireThat(t.requires.every(x=>v.tasks.get(x).state==='accepted'),'dependencies_open');
+  const route=allowedRoute(profile,t,profile?.worker);
+  requireThat(!v.lanes.has(route.lane),'lane_busy');
+  return {task,fence:t.fence,route,review:reviewedSelection(review,t)};
 }
 
 // Runs in a browser or Node. All accounts, tasks, artifacts and receipts are

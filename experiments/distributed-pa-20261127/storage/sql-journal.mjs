@@ -1,10 +1,14 @@
 // Isolated SQL adapter for the coordination experiment. Host provides its own
 // serialized, all-or-nothing transaction implementation. No credentials, body,
 // notifications or network requests are persisted here.
-import {createJournal,decide,projectBoard,projectDispatchPreview} from '../src/sdk/coordination-board.mjs';
+import {BoardConflict,createJournal,decide,projectBoard,projectDispatchPreview,reviewedDispatchFacts} from '../src/sdk/coordination-board.mjs';
+import {makeScopedValidator} from '../src/sdk/scoped-validator.mjs';
 const valid=x=>typeof x==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,95}$/.test(x);
-export function makeSqlJournal({sql,transactionSync}) {
+export function makeSqlJournal({sql,transactionSync,reviewedDispatch}) {
  if(typeof sql?.exec!=='function'||typeof transactionSync!=='function')throw new TypeError('transactional SQL required');
+ const resolver=reviewedDispatch?.resolve;
+ if(reviewedDispatch!==undefined&&typeof resolver!=='function')throw TypeError('host dispatch resolver required');
+ const mark=reviewedDispatch===undefined?null:makeScopedValidator(reviewedDispatch.validatorKey);
  // Explicit setup only in a sandbox or by a separately reviewed migration.
  function prepare(){
   return transactionSync(()=>{
@@ -24,9 +28,9 @@ export function makeSqlJournal({sql,transactionSync}) {
   }
   return j;
  }
- const append=decision=>transactionSync(()=>{
-  const {scope}=decision.auth??{};
-  const result=decide(read(scope),decision);
+ function commit(decision,journal=read(decision.auth?.scope)){
+  const scope=journal.scope;
+  const result=decide(journal,decision);
   if(!result.event)return {...result,committed:false};
   const e=result.event;
   sql.exec('INSERT INTO lab_coord_event (board, v, event_id, body) VALUES (?,?,?,?)',scope,e.version,e.command.id,JSON.stringify(e));
@@ -35,6 +39,41 @@ export function makeSqlJournal({sql,transactionSync}) {
   // manufactures a new post permission from this row.
   sql.exec('INSERT INTO lab_coord_outbox (board, v, phase, task) VALUES (?,?,?,?)',scope,e.version,e.command.type,e.command.task);
   return {...result,committed:true};
+ }
+ // A bare journal writer cannot supply the extra review for a pinned lease.
+ const append=({review:ignored,...decision})=>transactionSync(()=>commit(decision));
+
+ function current(request,{scope,task,alias,phase}){
+  if(!mark)throw new BoardConflict('reviewed_dispatch_disabled');
+  if(![scope,task,alias].every(valid))throw new BoardConflict('not_authorized');
+  // The resolver belongs to the host and must use the same transactional
+  // authority as this journal, not an HTTP cache or client-supplied profile.
+  const a=resolver(request,{scope,task,alias,phase});
+  if(a?.auth?.scope!==scope||a.auth.role!=='coordinator'||!valid(a.auth.subject)||
+     !Array.isArray(a.readable)||!a.readable.includes(task)||a.alias!==alias)
+   throw new BoardConflict('not_authorized');
+  if(a.budgetReviewed!==true)throw new BoardConflict('budget_unreviewed');
+  const review={alias,reviewer:a.auth.subject,authorityEpoch:a.authorityEpoch,budgetEpoch:a.budgetEpoch,inputDigest:a.inputDigest};
+  return {a,review};
+ }
+ function reviewPin(journal,task,a,review){
+  const facts=reviewedDispatchFacts(journal,{auth:a.auth,task,readable:a.readable,profile:a.profile,review});
+  return mark('dispatch-choice',[journal.scope,a.auth.subject],facts);
+ }
+ const inspectChoice=(request,{scope,task,alias})=>transactionSync(()=>{
+  const {a,review}=current(request,{scope,task,alias,phase:'inspect'});
+  return {task,alias,selection:reviewPin(read(scope),task,a,review)};
+ });
+ const claimChoice=(request,{scope,task,alias,selection,id,at,expectedVersion,leaseMs})=>transactionSync(()=>{
+  const {a,review}=current(request,{scope,task,alias,phase:'claim'}),j=read(scope);
+  if(reviewPin(j,task,a,review)!==selection)throw new BoardConflict('dispatch_review_changed');
+  const auth={scope,role:'worker',subject:a.profile.worker};
+  return commit({auth,command:{type:'claim',id,task,worker:auth.subject,leaseMs},at,expectedVersion,profile:a.profile,review},j);
+ });
+ const beginChoice=(request,{scope,task,alias,id,at,expectedVersion,fence})=>transactionSync(()=>{
+  const {a,review}=current(request,{scope,task,alias,phase:'begin'});
+  return commit({auth:{scope,role:'worker',subject:a.profile?.worker},command:{type:'begin',id,task,fence},
+   at,expectedVersion,profile:a.profile,review});
  });
  const project=input=>transactionSync(()=>projectBoard(read(input.scope),input));
  // Host-only complete projection; wrappers must explicitly authorize the
@@ -51,5 +90,5 @@ export function makeSqlJournal({sql,transactionSync}) {
   return [...sql.exec('SELECT v, phase, task FROM lab_coord_outbox WHERE board=? AND v>? ORDER BY v LIMIT ?',board,after,limit)]
    .map(row=>({version:row.v,phase:row.phase,task:row.task}));
  });
- return Object.freeze({prepare,append,project,projectAll,preview,outboxAfter});
+ return Object.freeze({prepare,append,project,projectAll,preview,outboxAfter,inspectChoice,claimChoice,beginChoice});
 }
