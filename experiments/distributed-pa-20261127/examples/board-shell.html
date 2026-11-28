@@ -16,6 +16,7 @@ select{max-width:100%;font:inherit;color:var(--ink);background:var(--bg);border:
 <option value="coordinator">两个调度窗口断线后对齐</option>
 <option value="access">一个窗口撤权，另一项继续</option>
 <option value="dispatch">同样会做，该派给谁？</option>
+<option value="reviewed">预算变了，另一项照走</option>
 <option value="settled">迟到的失败回包</option>
 <option value="skill">MCP 工具变更，旧批准暂停</option>
 <option value="muse">两个独立 Muse 席位</option>
@@ -24,6 +25,7 @@ select{max-width:100%;font:inherit;color:var(--ink);background:var(--bg);border:
 <div id="sync-rail" class="sync-rail" hidden aria-label="两个窗口的同步状态"></div>
 <div id="access-rail" class="sync-rail" hidden aria-label="窗口访问状态"></div>
 <p id="access-lock" hidden role="status">窗口 A 不显示任务。等新的授权会话加载后再恢复。</p>
+<div id="reviewed-rail" class="sync-rail" hidden aria-label="派送前复核与执行状态"></div>
 <div id="dispatch-rail" class="sync-rail" hidden aria-label="派工前核对席位"></div>
 <div id="settled-rail" class="sync-rail" hidden aria-label="回包与交付状态"></div>
 <div id="skill-rail" class="sync-rail" hidden aria-label="本地工具的审核与执行状态"></div>
@@ -53,6 +55,10 @@ const tracks={
   names:{'public-source':'整理境内公开来源',independent:'独立核对任务',merge:'汇总材料'},
   workers:{'desk-cn':'境内示例席位','desk-spare':'境内备选席位'},cn:'public-source',merge:'merge',
   headings:['本次拟派任务','独立任务'],defaultStep:0},
+ reviewed:{phases:verifiedReviewedReplay,labels:['已领取','预算变动','另一项照走','重新选择','重新核准'],
+  names:{original:'核对国内公开资料',independent:'独立编辑任务',merge:'汇总材料'},
+  workers:{'selected-seat':'境内示例席位','independent-seat':'独立示例席位'},cn:'original',merge:'merge',
+  headings:['等待预算复核的任务','独立任务'],defaultStep:1},
  settled:{phases:verifiedSettledReplay,labels:['交稿','验收并换任务','旧失败抵达','解锁合稿'],
   names:{'public-source':'核对公开来源',independent:'独立编辑任务',merge:'汇总材料'},
   workers:{helper:'Glean 示例席位'},cn:'public-source',merge:'merge',
@@ -143,7 +149,23 @@ function dispatchRail(sample){
  if(!seats.length)seats.push(railTile('当前任务','已领取','尚未获得派送许可','steady'));
  rail.replaceChildren(...seats);
 }
-function render(i){const f=track.phases[i];syncRail(f.sync);skillRail(f.skill);accessRail(f.access);settledRail(f.settled,f.cards);dispatchRail(f.dispatch);$('clock').textContent=(f.asOfVersion===null?'窗口 A 无可见修订':'记录修订 '+f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.label;
+const reviewedText={
+ leased:['已领取，未发送','发送前再核对预算','原任务已领取，独立任务还未开始。'],
+ held:['预算待复核','账本修订未变，派送已拦下','预算变了。旧租约还在，原任务没有发送。'],
+ independent:['原任务仍待复核','独立席位照常执行','原任务没发出，另一项已接收并执行。'],
+ reselect:['租约已到期','旧选择失效，需重新核对','旧租约到期，新预算已核对。主 Agent 重新选席位。'],
+ begun:['已重新核准','原任务只产生一次派送记录','新租约经复核，原任务进入模拟派送；合稿仍要等两份验收。']
+};
+function reviewedRail(sample){
+ const rail=$('reviewed-rail');rail.hidden=!sample;
+ if(!sample){rail.replaceChildren();return;}
+ const [title,note]=reviewedText[sample.phase];
+ rail.replaceChildren(
+  railTile('预算与租约',title,note,sample.phase==='held'||sample.phase==='independent'?'lag':'steady'),
+  railTile('原任务',sample.currentBegins===1?'派送中':'未发送','模拟派送 '+sample.currentBegins+' 次','steady'),
+  railTile('独立任务',sample.independentBegins===1?'执行中':'未开始','模拟派送 '+sample.independentBegins+' 次','steady'));
+}
+function render(i){const f=track.phases[i];syncRail(f.sync);skillRail(f.skill);accessRail(f.access);settledRail(f.settled,f.cards);dispatchRail(f.dispatch);reviewedRail(f.reviewed);$('clock').textContent=(f.asOfVersion===null?'窗口 A 无可见修订':'记录修订 '+f.asOfVersion)+' · '+String(i+1)+'/'+track.phases.length;$('caption').textContent=f.reviewed?reviewedText[f.reviewed.phase][2]:f.label;
  buttons.forEach((b,k)=>b.setAttribute('aria-pressed',String(i===k)));
  for(const id of ['cn','foreign','join'])$(id).replaceChildren();
  for(const item of f.cards){const a=node('article','');a.className=item.state;

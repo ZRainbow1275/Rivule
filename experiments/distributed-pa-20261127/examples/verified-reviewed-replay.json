@@ -1,0 +1,252 @@
+[
+  {
+    "schema": 1,
+    "scope": "review-sandbox",
+    "asOfVersion": 4,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "text",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "ready",
+            "version": 2
+          },
+          {
+            "task": "original",
+            "state": "leased",
+            "version": 4
+          }
+        ]
+      },
+      {
+        "task": "original",
+        "capability": "text",
+        "state": "leased",
+        "worker": "selected-seat",
+        "fence": 1,
+        "taskVersion": 4,
+        "dependencies": []
+      }
+    ],
+    "reviewed": {
+      "phase": "leased",
+      "currentBegins": 0,
+      "independentBegins": 0
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "review-sandbox",
+    "asOfVersion": 4,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "text",
+        "state": "ready",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 2,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "ready",
+            "version": 2
+          },
+          {
+            "task": "original",
+            "state": "leased",
+            "version": 4
+          }
+        ]
+      },
+      {
+        "task": "original",
+        "capability": "text",
+        "state": "leased",
+        "worker": "selected-seat",
+        "fence": 1,
+        "taskVersion": 4,
+        "dependencies": []
+      }
+    ],
+    "reviewed": {
+      "phase": "held",
+      "currentBegins": 0,
+      "independentBegins": 0
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "review-sandbox",
+    "asOfVersion": 7,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "text",
+        "state": "running",
+        "worker": "independent-seat",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "running",
+            "version": 7
+          },
+          {
+            "task": "original",
+            "state": "leased",
+            "version": 4
+          }
+        ]
+      },
+      {
+        "task": "original",
+        "capability": "text",
+        "state": "leased",
+        "worker": "selected-seat",
+        "fence": 1,
+        "taskVersion": 4,
+        "dependencies": []
+      }
+    ],
+    "reviewed": {
+      "phase": "independent",
+      "currentBegins": 0,
+      "independentBegins": 1
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "review-sandbox",
+    "asOfVersion": 8,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "text",
+        "state": "running",
+        "worker": "independent-seat",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "running",
+            "version": 7
+          },
+          {
+            "task": "original",
+            "state": "ready",
+            "version": 8
+          }
+        ]
+      },
+      {
+        "task": "original",
+        "capability": "text",
+        "state": "ready",
+        "worker": null,
+        "fence": 1,
+        "taskVersion": 8,
+        "dependencies": []
+      }
+    ],
+    "reviewed": {
+      "phase": "reselect",
+      "currentBegins": 0,
+      "independentBegins": 1
+    }
+  },
+  {
+    "schema": 1,
+    "scope": "review-sandbox",
+    "asOfVersion": 10,
+    "cards": [
+      {
+        "task": "independent",
+        "capability": "text",
+        "state": "running",
+        "worker": "independent-seat",
+        "fence": 1,
+        "taskVersion": 7,
+        "dependencies": []
+      },
+      {
+        "task": "merge",
+        "capability": "text",
+        "state": "blocked",
+        "worker": null,
+        "fence": 0,
+        "taskVersion": 3,
+        "dependencies": [
+          {
+            "task": "independent",
+            "state": "running",
+            "version": 7
+          },
+          {
+            "task": "original",
+            "state": "submitting",
+            "version": 10
+          }
+        ]
+      },
+      {
+        "task": "original",
+        "capability": "text",
+        "state": "submitting",
+        "worker": "selected-seat",
+        "fence": 2,
+        "taskVersion": 10,
+        "dependencies": []
+      }
+    ],
+    "reviewed": {
+      "phase": "begun",
+      "currentBegins": 1,
+      "independentBegins": 1
+    }
+  }
+]

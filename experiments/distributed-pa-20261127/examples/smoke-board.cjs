@@ -4,7 +4,7 @@ const html=readFileSync(process.argv[2]??'Rivule-调度看板演练.html','utf8'
 A(html.includes("default-src 'none'"));
 const run=html.match(/<script>([\s\S]+)<\/script>/)[1];
 const elem=()=>({children:[],attrs:{},append(...x){this.children.push(...x)},replaceChildren(...x){this.children=x},setAttribute(k,v){this.attrs[k]=v}});
-const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading','sync-rail','skill-rail','access-rail','settled-rail','dispatch-rail','access-lock','lanes'].map(x=>[x,elem()]));
+const elements=Object.fromEntries(['scenario','steps','clock','caption','cn','foreign','join','first-heading','second-heading','sync-rail','skill-rail','access-rail','settled-rail','dispatch-rail','reviewed-rail','access-lock','lanes'].map(x=>[x,elem()]));
 vm.runInNewContext(run,{document:{getElementById:x=>elements[x],createElement:elem},structuredClone});
 const check=(step,cn,us,merge)=>{
  elements.steps.children[step].onclick();
@@ -86,4 +86,16 @@ check(2,'ready','leased','blocked');A.equal(dispatch.children[2].children[1].tex
 check(3,'leased','leased','blocked');A.equal(dispatch.children[0].children[2].textContent,'尚未获得派送许可');
 elements.scenario.onchange({target:{value:'qwen'}});
 A(dispatch.hidden);A.equal(dispatch.children.length,0);
-console.log(JSON.stringify({scenarios:8,canonicalDispatchPreview:true,canonicalSettledDeliveryReplay:true,canonicalAccessRevocationReplay:true,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true,canonicalCoordinatorReplay:true,canonicalMcpSkillReplay:true}));
+const reviewed=elements['reviewed-rail'];
+A(reviewed.hidden);
+elements.scenario.onchange({target:{value:'reviewed'}});
+A(elements.caption.textContent.includes('预算变了'));
+check(0,'leased','ready','blocked');const before=elements.clock.textContent.split(' · ')[0];
+check(1,'leased','ready','blocked');A.equal(elements.clock.textContent.split(' · ')[0],before);
+A.equal(reviewed.children[1].children[2].textContent,'模拟派送 0 次');
+check(2,'leased','running','blocked');A.equal(reviewed.children[2].children[1].textContent,'执行中');
+check(3,'ready','running','blocked');A.equal(reviewed.children[0].children[1].textContent,'租约已到期');
+check(4,'submitting','running','blocked');A.equal(reviewed.children[1].children[2].textContent,'模拟派送 1 次');
+check(1,'leased','ready','blocked');A(!reviewed.hidden);
+elements.scenario.onchange({target:{value:'qwen'}});A(reviewed.hidden);A.equal(reviewed.children.length,0);
+console.log(JSON.stringify({scenarios:9,canonicalReviewedDispatch:true,canonicalDispatchPreview:true,canonicalSettledDeliveryReplay:true,canonicalAccessRevocationReplay:true,noProviderIO:true,canonicalQwenPawReplay:true,canonicalViktorReplay:true,canonicalCoordinatorReplay:true,canonicalMcpSkillReplay:true}));

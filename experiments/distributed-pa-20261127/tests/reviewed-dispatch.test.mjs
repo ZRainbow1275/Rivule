@@ -14,7 +14,7 @@ const baseline={auth:owner,readable:[task],alias,budgetReviewed:true,
  authorityEpoch:'authority-1',budgetEpoch:'budget-1',inputDigest,
  profile:{worker:'worker-cn',provider:'mock-cn',lane:'lane-1',dataRegions:['cn-mainland'],
   capabilities:['text'],authorized:true,ready:true}};
-function fixture(){
+function fixture({withMerge=false}={}){
  const dir=mkdtempSync(join(tmpdir(),'rivule-choice-')),path=join(dir,'mock.sqlite');
  const writer=new DatabaseSync(path),reader=new DatabaseSync(path);
  let failOutbox=false;
@@ -42,9 +42,10 @@ function fixture(){
  writer.prepare('INSERT INTO local_mock_review VALUES (?)').run(JSON.stringify(baseline));
  const policy=(patch={})=>writer.prepare('UPDATE local_mock_review SET body=?').run(JSON.stringify({...baseline,...patch}));
  const add=(name,expectedVersion)=>one.append({auth:owner,at:expectedVersion+1,expectedVersion,command:{
-  id:'add-'+name,type:'add',task:name,inputDigest,allowedRegions:['cn-mainland'],capability:'text',requires:[]}});
- add(task,0);add(other,1);
- const project=()=>two.project({scope,selected:[task,other],readable:[task,other]});
+  id:'add-'+name,type:'add',task:name,inputDigest,allowedRegions:['cn-mainland'],capability:'text',requires:name==='merge'?[task,other]:[]}});
+ add(task,0);add(other,1);if(withMerge)add('merge',2);
+ const visible=withMerge?[task,other,'merge']:[task,other];
+ const project=()=>two.project({scope,selected:visible,readable:visible});
  const spec={scope,task,alias};
  const inspect=()=>one.inspectChoice('host-session',spec);
  const claim=(selection,extra={})=>two.claimChoice('host-session',{...spec,selection,id:'claim',at:3,leaseMs:100,expectedVersion:2,...extra});
@@ -145,5 +146,49 @@ test('lease expiration and fresh review can unblock the original task without ac
   f.claim(f.inspect().selection,{id:'claim2',at:104,expectedVersion:4});
   A.throws(()=>f.begin({at:105,expectedVersion:5}),{code:'stale_fence'});
   A(f.begin({at:105,expectedVersion:5,fence:2}).committed);
+ }finally{f.close();}
+});
+
+
+test('reviewed dispatch budget change board replay',()=>{
+ const f=fixture({withMerge:true});
+ try{
+  const snapshot=(phase)=>{
+   const view=f.project(),out=f.two.outboxAfter(scope);
+   const cards=view.cards.map(c=>({...c,worker:({[baseline.profile.worker]:'selected-seat',second:'independent-seat'})[c.worker]??null}));
+   return {...view,cards,reviewed:{phase,currentBegins:out.filter(r=>r.phase==='begin'&&r.task===task).length,
+    independentBegins:out.filter(r=>r.phase==='begin'&&r.task===other).length}};
+  };
+  const choice=f.inspect();
+  A(f.claim(choice.selection,{at:4,expectedVersion:3}).committed);
+  const frames=[snapshot('leased')],rev=frames[0].asOfVersion;
+  f.policy({budgetReviewed:false,budgetEpoch:'budget-2'});
+  A.throws(()=>f.begin({at:5,expectedVersion:rev}),{code:'budget_unreviewed'});
+  frames.push(snapshot('held'));
+  A.equal(frames[1].asOfVersion,rev);
+  A.deepEqual(frames[1].cards,frames[0].cards);
+  A.equal(frames[1].reviewed.currentBegins,0);
+
+  const profile={...baseline.profile,worker:'second',lane:'second-lane'};
+  const auth={scope,role:'worker',subject:profile.worker};
+  const cmd=(at,type,id,o={})=>f.legacy.append({auth,profile,at,expectedVersion:f.project().asOfVersion,command:{type,id,task:other,...o}});
+  A(cmd(6,'claim','second-claim',{worker:profile.worker,leaseMs:180}).committed);
+  A(cmd(7,'begin','second-begin',{fence:1}).permit);
+  A(cmd(8,'acknowledged','second-ack',{fence:1,receipt:'synthetic-confirm'}).committed);
+  A.throws(()=>f.begin({at:9,expectedVersion:7}),{code:'budget_unreviewed'});
+  frames.push(snapshot('independent'));
+  A.deepEqual(frames[2].reviewed,{phase:'independent',currentBegins:0,independentBegins:1});
+
+  f.one.append({auth:owner,at:104,expectedVersion:7,command:{id:'expire',type:'expire',task,fence:1}});
+  f.policy({budgetEpoch:'budget-2'});
+  A.throws(()=>f.claim(choice.selection,{id:'reclaim',at:105,expectedVersion:8}),{code:'dispatch_review_changed'});
+  frames.push(snapshot('reselect'));
+  A(f.claim(f.inspect().selection,{id:'reclaim',at:105,expectedVersion:8}).committed);
+  A(f.begin({at:106,expectedVersion:9,fence:2}).permit);
+  const replay=f.begin({at:106,expectedVersion:9,fence:2});A(replay.duplicate&&!replay.permit);
+  frames.push(snapshot('begun'));
+  A.equal(frames[4].reviewed.currentBegins,1);
+  A(frames.every(x=>x.cards.find(c=>c.task==='merge').state==='blocked'));
+  if(process.env.RIVULE_REVIEWED_REPLAY==='1')console.log('RIVULE_REVIEWED_REPLAY:'+JSON.stringify(frames));
  }finally{f.close();}
 });

@@ -9,6 +9,7 @@ const replayCode=(name,file,scope,count)=>{
 const code=replayCode('verifiedQwenReplay','qwenpaw','lab-room',6)+
  replayCode('verifiedViktorReplay','viktor','rivule-lab-us',4)+
  replayCode('verifiedCoordinatorReplay','coordinator','authority',5)+
+ replayCode('verifiedReviewedReplay','reviewed','review-sandbox',5)+
  replayCode('verifiedDispatchReplay','dispatch','seat-preview',4)+
  replayCode('verifiedSettledReplay','settled','delivery-order',4)+
  replayCode('verifiedAccessReplay','access','authority',5)+

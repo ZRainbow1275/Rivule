@@ -7,6 +7,7 @@ for(const [file,pattern,marker,target,count] of [
  ['qwenpaw-board-fixture','QwenPaw loses response','RIVULE_BOARD_REPLAY','qwenpaw',6],
  ['viktor-board-fixture','A question survives cold restart','RIVULE_VIKTOR_REPLAY','viktor',4],
  ['coordinator-catchup','R06 offline board','RIVULE_COORDINATOR_REPLAY','coordinator',5],
+ ['reviewed-dispatch','reviewed dispatch budget change board replay','RIVULE_REVIEWED_REPLAY','reviewed',5],
  ['dispatch-preview','offline seat preview','RIVULE_DISPATCH_PREVIEW','dispatch',4],
  ['settled-delivery','settled offline board','RIVULE_SETTLED_REPLAY','settled',4],
  ['coordinator-catchup','R08 offline revoked view','RIVULE_ACCESS_REPLAY','access',5],
